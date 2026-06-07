@@ -7,10 +7,9 @@
   "costMode": "bring_your_own_account",
   "authType": "oauth_or_token_future",
   "privacyClass": "external_account",
-  "dataAccess": "none_in_v0.1A",
+  "dataAccess": "none_in_current_v0.1",
   "approvalRequired": true,
   "tokenStorage": "not_implemented",
   "dataRetention": "none",
-  "notes": "Placeholder only. No GitHub API integration is implemented in v0.1A."
+  "notes": "Placeholder only. No GitHub API integration is implemented in current v0.1 scope."
 }
-

@@ -7,10 +7,9 @@
   "costMode": "disabled",
   "authType": "not_implemented",
   "privacyClass": "sensitive_personal",
-  "dataAccess": "none_in_v0.1A",
+  "dataAccess": "none_in_current_v0.1",
   "approvalRequired": true,
   "tokenStorage": "not_implemented",
   "dataRetention": "none",
-  "notes": "Placeholder only. Health data access is excluded from v0.1A."
+  "notes": "Placeholder only. Health data access is excluded from current v0.1 scope."
 }
-

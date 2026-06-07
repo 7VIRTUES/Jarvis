@@ -1,0 +1,652 @@
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import sqlite3
+import subprocess
+from pathlib import Path
+from typing import Any, Callable
+from uuid import uuid4
+
+from .approvals import ApprovalQueue
+from .codex_constants import ALLOWED_SANDBOX_MODE
+from .codex_paths import validate_codex_project_paths
+from .codex_plans import CodexPlanService
+from .events import EventBus
+from .inspector import CHECK_ORDER, inspect_project
+from .permissions import check_action, check_command
+from .post_execution_review import review_post_codex_diff, safe_check_argv, safe_check_command
+from .project_registry import ProjectRegistry
+from .risk import DEFAULT_RISK_BUDGET
+from .runtime import ActionRequest, SafeActionRuntime
+from .time_utils import utc_now
+
+
+EXECUTION_STATUSES = {"blocked", "running", "succeeded", "failed", "canceled"}
+MAX_EXCERPT_CHARS = 2000
+
+
+class CodexExecutionService:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        events: EventBus,
+        runtime: SafeActionRuntime,
+        approvals: ApprovalQueue,
+        projects: ProjectRegistry,
+        plans: CodexPlanService,
+        codex_detector: Callable[[], str | None] | None = None,
+        runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+        check_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+    ):
+        self.conn = conn
+        self.events = events
+        self.runtime = runtime
+        self.approvals = approvals
+        self.projects = projects
+        self.plans = plans
+        self.codex_detector = codex_detector or (lambda: shutil.which("codex"))
+        self.runner = runner or subprocess.run
+        self.check_runner = check_runner or subprocess.run
+
+    def execute_plan(self, plan_id: str) -> dict[str, Any]:
+        execution_id = str(uuid4())
+        started_at = utc_now()
+        plan = self.plans.get_plan(plan_id)
+        task_id = str(plan["task_id"]) if plan else ""
+        project_name = str(plan["project_name"]) if plan else ""
+        self.events.emit("codex.execution_requested", task_id or None, {"plan_id": plan_id, "execution_id": execution_id})
+
+        validation = self._validate_plan(plan)
+        if validation:
+            receipt = self.runtime.validate(ActionRequest("coding_agent", "codex.execute", validation, task_id or None, "codex_tool", "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, validation, None)
+
+        assert plan is not None
+        project_path = Path(str(plan["project_path"])).resolve()
+        prompt_path = Path(str(plan["prompt_path"])).resolve()
+        output_path = Path(str(plan["output_path"])).resolve()
+        argv = list(plan["command_preview"]["argv"])
+        policy = check_action("codex.execute_approved_plan", plan_id)
+        command_policy = check_command(" ".join(argv))
+        if policy.status == "blocked" or command_policy.status == "blocked":
+            reason = policy.reason if policy.status == "blocked" else command_policy.reason
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", reason, str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
+            return self._record_execution(execution_id, plan_id, str(plan["task_id"]), str(plan["project_name"]), "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, reason, None)
+
+        lock_allowed, lock_inserted = self._acquire_execution_lock(str(plan["project_name"]), str(plan["task_id"]))
+        if not lock_allowed:
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", "project is locked", str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
+            return self._record_execution(execution_id, plan_id, str(plan["task_id"]), str(plan["project_name"]), "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, "project is locked", None)
+
+        receipt_id = None
+        try:
+            prompt_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            prompt_path.write_text(self._execution_prompt(plan), encoding="utf-8")
+            self.events.emit("codex.prompt_prepared", str(plan["task_id"]), {"plan_id": plan_id, "prompt_path": str(prompt_path)})
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute_approved_plan", plan_id, str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
+            receipt_id = receipt.receipt_id
+            self.events.emit("codex.execution_receipt_created", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "receipt_id": receipt_id})
+            self._insert_running(execution_id, plan, started_at, receipt_id)
+            self.events.emit("codex.execution_started", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id})
+            completed = self.runner(
+                argv,
+                cwd=str(project_path),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+            finished_at = utc_now()
+            stdout_excerpt = redact_output(completed.stdout)
+            stderr_excerpt = redact_output(completed.stderr)
+            inspection = inspect_project(project_path)
+            package_scripts = inspection.get("packageScripts", {})
+            review = review_post_codex_diff(project_path, package_scripts)
+            blocked_reason = None
+            status = "succeeded" if completed.returncode == 0 else "failed"
+            check_results = {"status": "skipped", "reason": "Codex execution failed before checks", "checks": []}
+            repair_results = {"status": "skipped", "reason": "repair not needed", "attempts": []}
+            if completed.returncode == 0 and review["requiresUserReview"]:
+                status = "blocked"
+                blocked_reason = "; ".join(review["reasons"])
+                check_results = {"status": "skipped", "reason": "post-Codex review requires user review", "checks": []}
+                repair_results = {"status": "skipped", "reason": "post-Codex review requires user review", "attempts": []}
+            elif completed.returncode == 0:
+                check_results = self._run_check_plan(project_path, plan, review["checkPlan"], package_scripts)
+                if check_results["status"] == "failed":
+                    repair_results = self._run_repair_loop(project_path, prompt_path, output_path, plan, check_results)
+                    check_results = repair_results.get("final_check_results", check_results)
+                    status = "succeeded" if repair_results["status"] == "succeeded" else "failed"
+                elif check_results["status"] == "blocked":
+                    status = "blocked"
+                    blocked_reason = str(check_results["reason"])
+                    repair_results = {"status": "skipped", "reason": "blocked check was not repairable", "attempts": []}
+            self._finish_execution(
+                execution_id,
+                status,
+                finished_at,
+                completed.returncode,
+                stdout_excerpt,
+                stderr_excerpt,
+                blocked_reason,
+                None,
+                review,
+                review["checkPlan"],
+                check_results,
+                repair_results,
+            )
+            if status == "blocked":
+                if review["requiresUserReview"]:
+                    self.events.emit("codex.post_review_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reasons": review["reasons"]})
+                self.events.emit("codex.execution_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
+            else:
+                event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
+                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review, "checkResults": check_results, "repairResults": repair_results})
+                if status == "succeeded":
+                    self.events.emit("codex.check_plan_generated", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkPlan": review["checkPlan"]})
+            if completed.returncode == 0 and not review["requiresUserReview"]:
+                self.events.emit("codex.checks_completed", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkResults": check_results})
+            return self.get_execution(execution_id)  # type: ignore[return-value]
+        except Exception as exc:  # noqa: BLE001 - store safe error summary for local diagnostics.
+            finished_at = utc_now()
+            self._finish_execution(execution_id, "failed", finished_at, None, "", "", None, redact_output(str(exc)))
+            self.events.emit("codex.execution_failed", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "error": type(exc).__name__})
+            return self.get_execution(execution_id)  # type: ignore[return-value]
+        finally:
+            if lock_inserted:
+                self._release_lock(str(plan["project_name"]), str(plan["task_id"]))
+
+    def get_execution(self, execution_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(self._select_sql() + " where execution_id = ?", (execution_id,)).fetchone()
+        return self._row(row) if row else None
+
+    def list_executions(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(self._select_sql() + " order by started_at").fetchall()
+        return [self._row(row) for row in rows]
+
+    def _validate_plan(self, plan: dict[str, Any] | None) -> str | None:
+        if not plan:
+            return "codex plan not found"
+        if plan["status"] != "approved_for_future_execution":
+            return "codex plan must be approved_for_future_execution"
+        approval_id = plan.get("approval_id")
+        approval = self.approvals.get_approval(str(approval_id)) if approval_id else None
+        if not approval or approval["status"] != "approved":
+            return "approved approval record is required"
+        project = self.projects.get_project(str(plan["project_name"]))
+        if not project:
+            return "registered project is required"
+        registered_path = Path(str(project["path"])).resolve()
+        project_path = Path(str(plan["project_path"])).resolve()
+        if not project_path.is_relative_to(registered_path):
+            return "project path must stay inside registered project"
+        validation, _, prompt_path, output_path = validate_codex_project_paths(
+            registered_path,
+            str(Path(str(plan["prompt_path"])).relative_to(registered_path)) if Path(str(plan["prompt_path"])).is_absolute() and Path(str(plan["prompt_path"])).is_relative_to(registered_path) else str(plan["prompt_path"]),
+            str(Path(str(plan["output_path"])).relative_to(registered_path)) if Path(str(plan["output_path"])).is_absolute() and Path(str(plan["output_path"])).is_relative_to(registered_path) else str(plan["output_path"]),
+            str(plan["sandbox_mode"]),
+        )
+        if validation:
+            return validation
+        assert prompt_path is not None and output_path is not None
+        if plan["sandbox_mode"] != ALLOWED_SANDBOX_MODE:
+            return "sandbox mode must be workspace-write"
+        rebuilt = self.plans.build_command_preview(project_path, prompt_path, output_path, str(plan["sandbox_mode"]))
+        if plan["command_preview"] != rebuilt:
+            return "approved command preview does not match rebuilt template"
+        if self._codex_runs_for_task(str(plan["task_id"])) >= int(DEFAULT_RISK_BUDGET["maxCodexRunsPerTask"]):
+            return "maxCodexRunsPerTask exceeded"
+        if not self.codex_detector():
+            return "official Codex CLI was not detected"
+        return None
+
+    def _insert_running(self, execution_id: str, plan: dict[str, Any], started_at: str, receipt_id: str) -> None:
+        self.conn.execute(
+            """
+            insert into codex_executions (
+              execution_id, plan_id, task_id, project_name, status, started_at,
+              codex_command_preview, output_path, receipt_id
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (execution_id, plan["plan_id"], plan["task_id"], plan["project_name"], "running", started_at, plan["command_preview"]["preview"], plan["output_path"], receipt_id),
+        )
+        self.conn.commit()
+
+    def _record_execution(
+        self,
+        execution_id: str,
+        plan_id: str,
+        task_id: str,
+        project_name: str,
+        status: str,
+        started_at: str,
+        finished_at: str | None,
+        command_preview: str,
+        exit_code: int | None,
+        stdout_excerpt: str,
+        stderr_excerpt: str,
+        output_path: str | None,
+        receipt_id: str | None,
+        blocked_reason: str | None,
+        error: str | None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            insert into codex_executions (
+              execution_id, plan_id, task_id, project_name, status, started_at, finished_at,
+              codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path,
+              receipt_id, blocked_reason, error
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (execution_id, plan_id, task_id, project_name, status, started_at, finished_at, command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error),
+        )
+        self.conn.commit()
+        self.events.emit("codex.execution_blocked", task_id or None, {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason}) if status == "blocked" else None
+        return self.get_execution(execution_id)  # type: ignore[return-value]
+
+    def _finish_execution(
+        self,
+        execution_id: str,
+        status: str,
+        finished_at: str,
+        exit_code: int | None,
+        stdout_excerpt: str,
+        stderr_excerpt: str,
+        blocked_reason: str | None,
+        error: str | None,
+        post_review: dict[str, Any] | None = None,
+        check_plan: dict[str, Any] | None = None,
+        check_results: dict[str, Any] | None = None,
+        repair_results: dict[str, Any] | None = None,
+    ) -> None:
+        self.conn.execute(
+            """
+            update codex_executions
+            set status = ?, finished_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?,
+                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?, check_results = ?, repair_results = ?
+            where execution_id = ?
+            """,
+            (
+                status,
+                finished_at,
+                exit_code,
+                stdout_excerpt,
+                stderr_excerpt,
+                blocked_reason,
+                error,
+                json.dumps(post_review or {}),
+                json.dumps(check_plan or {}),
+                json.dumps(check_results or {}),
+                json.dumps(repair_results or {}),
+                execution_id,
+            ),
+        )
+        self.conn.commit()
+
+    def _run_repair_loop(self, project_path: Path, prompt_path: Path, output_path: Path, plan: dict[str, Any], initial_check_results: dict[str, Any]) -> dict[str, Any]:
+        attempts: list[dict[str, Any]] = []
+        previous_failure = self._failure_signature(initial_check_results)
+        current_failure = self._failed_check(initial_check_results)
+        if not current_failure:
+            return {"status": "skipped", "reason": "no failed check to repair", "attempts": [], "final_check_results": initial_check_results}
+
+        max_attempts = int(DEFAULT_RISK_BUDGET["maxRepairAttempts"])
+        max_codex_runs = int(DEFAULT_RISK_BUDGET["maxCodexRunsPerTask"])
+        for attempt_number in range(1, max_attempts + 1):
+            if self._codex_runs_for_task(str(plan["task_id"])) + len(attempts) >= max_codex_runs:
+                return {"status": "stopped", "reason": "maxCodexRunsPerTask reached before repair", "attempts": attempts, "final_check_results": initial_check_results}
+
+            started_at = utc_now()
+            repair_prompt_path = prompt_path.with_name(f"repair-attempt-{attempt_number}.md")
+            repair_output_path = output_path.with_name(f"repair-attempt-{attempt_number}.md")
+            validation = validate_codex_project_paths(
+                project_path,
+                str(repair_prompt_path.relative_to(project_path)),
+                str(repair_output_path.relative_to(project_path)),
+                str(plan["sandbox_mode"]),
+            )[0]
+            attempt: dict[str, Any] = {
+                "attempt_number": attempt_number,
+                "started_at": started_at,
+                "finished_at": "",
+                "status": "failed",
+                "codex_return_code": None,
+                "output_path": str(repair_output_path),
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+                "failed_check": current_failure,
+                "post_review": {},
+                "check_results": {},
+                "reason": "",
+            }
+            if validation:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "stopped"
+                attempt["reason"] = validation
+                attempts.append(attempt)
+                return {"status": "stopped", "reason": validation, "attempts": attempts, "final_check_results": initial_check_results}
+
+            repair_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+            repair_output_path.parent.mkdir(parents=True, exist_ok=True)
+            repair_prompt_path.write_text(self._repair_prompt(plan, current_failure), encoding="utf-8")
+            self.events.emit("codex.repair_started", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number})
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute_approved_plan", str(plan["plan_id"]), str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
+            if receipt.blocked or receipt.approval_required:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "stopped"
+                attempt["reason"] = receipt.reason
+                attempts.append(attempt)
+                return {"status": "stopped", "reason": receipt.reason, "attempts": attempts, "final_check_results": initial_check_results}
+
+            completed = self.runner(
+                self._repair_argv(project_path, repair_prompt_path, repair_output_path, str(plan["sandbox_mode"])),
+                cwd=str(project_path),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+            attempt["codex_return_code"] = completed.returncode
+            attempt["stdout_excerpt"] = redact_output(completed.stdout)
+            attempt["stderr_excerpt"] = redact_output(completed.stderr)
+            if completed.returncode != 0:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "failed"
+                attempt["reason"] = "Codex repair run failed"
+                attempts.append(attempt)
+                return {"status": "failed", "reason": "Codex repair run failed", "attempts": attempts, "final_check_results": initial_check_results}
+
+            inspection = inspect_project(project_path)
+            package_scripts = inspection.get("packageScripts", {})
+            review = review_post_codex_diff(project_path, package_scripts)
+            attempt["post_review"] = review
+            if review["requiresUserReview"]:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "review_required"
+                attempt["reason"] = "; ".join(review["reasons"])
+                attempts.append(attempt)
+                return {"status": "review_required", "reason": attempt["reason"], "attempts": attempts, "final_check_results": initial_check_results}
+
+            check_results = self._run_check_plan(project_path, plan, review["checkPlan"], package_scripts)
+            attempt["check_results"] = check_results
+            attempt["finished_at"] = utc_now()
+            if check_results["status"] == "succeeded":
+                attempt["status"] = "succeeded"
+                attempt["reason"] = "checks passed after repair"
+                attempts.append(attempt)
+                self.events.emit("codex.repair_completed", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number, "status": "succeeded"})
+                return {"status": "succeeded", "reason": "checks passed after repair", "attempts": attempts, "final_check_results": check_results}
+
+            next_failure = self._failure_signature(check_results)
+            attempt["status"] = "failed" if check_results["status"] == "failed" else "stopped"
+            attempt["reason"] = str(check_results.get("reason") or "checks failed after repair")
+            attempts.append(attempt)
+            self.events.emit("codex.repair_completed", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number, "status": attempt["status"]})
+            if next_failure == previous_failure:
+                return {"status": "stopped", "reason": "same check failure repeated", "attempts": attempts, "final_check_results": check_results}
+            previous_failure = next_failure
+            current_failure = self._failed_check(check_results)
+            if not current_failure:
+                return {"status": "stopped", "reason": "repair checks did not produce a repairable failure", "attempts": attempts, "final_check_results": check_results}
+
+        return {"status": "stopped", "reason": "max repair attempts reached", "attempts": attempts, "final_check_results": attempts[-1].get("check_results", initial_check_results) if attempts else initial_check_results}
+
+    def _run_check_plan(self, project_path: Path, plan: dict[str, Any], check_plan: dict[str, Any], package_scripts: dict[str, str]) -> dict[str, Any]:
+        checks = check_plan.get("checks", [])
+        if not isinstance(checks, list) or not checks:
+            return {"status": "skipped", "reason": str(check_plan.get("reason") or "no checks planned"), "checks": []}
+
+        results: list[dict[str, Any]] = []
+        for check in checks:
+            started_at = utc_now()
+            name = str(check.get("name", ""))
+            command = str(check.get("command", ""))
+            argv = list(check.get("argv", [])) if isinstance(check.get("argv"), list) else []
+            result: dict[str, Any] = {
+                "name": name,
+                "command": command,
+                "argv": argv,
+                "started_at": started_at,
+                "finished_at": "",
+                "exit_code": None,
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+                "status": "blocked",
+                "receipt_id": None,
+                "reason": "",
+            }
+            receipt = self.runtime.validate(
+                ActionRequest(
+                    str(plan["agent_id"]),
+                    "command",
+                    command,
+                    str(plan["task_id"]),
+                    "check_runner",
+                    str(plan["risk_level"]),
+                )
+            )
+            result["receipt_id"] = receipt.receipt_id
+            if receipt.blocked or receipt.approval_required:
+                result["finished_at"] = utc_now()
+                result["reason"] = receipt.reason
+                results.append(result)
+                return {"status": "blocked", "reason": receipt.reason, "checks": results}
+
+            expected_command = safe_check_command(name)
+            expected_argv = safe_check_argv(name)
+            if name not in CHECK_ORDER or name not in package_scripts or command != expected_command or argv != expected_argv:
+                result["finished_at"] = utc_now()
+                result["reason"] = "check plan entry does not match a detected safe script"
+                results.append(result)
+                return {"status": "blocked", "reason": result["reason"], "checks": results}
+
+            try:
+                completed = self.check_runner(
+                    argv,
+                    cwd=str(project_path),
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+                result["exit_code"] = completed.returncode
+                result["stdout_excerpt"] = redact_output(completed.stdout)
+                result["stderr_excerpt"] = redact_output(completed.stderr)
+                result["status"] = "succeeded" if completed.returncode == 0 else "failed"
+                result["reason"] = "check succeeded" if completed.returncode == 0 else "check failed"
+            except Exception as exc:  # noqa: BLE001 - keep execution result safe and local.
+                result["status"] = "failed"
+                result["reason"] = redact_output(str(exc))
+            result["finished_at"] = utc_now()
+            results.append(result)
+            if result["status"] != "succeeded":
+                return {"status": "failed", "reason": str(result["reason"]), "checks": results}
+
+        return {"status": "succeeded", "reason": "all planned checks succeeded", "checks": results}
+
+    def _failed_check(self, check_results: dict[str, Any]) -> dict[str, Any] | None:
+        for check in check_results.get("checks", []):
+            if isinstance(check, dict) and check.get("status") in {"failed", "blocked"} and check.get("command"):
+                return check
+        return None
+
+    def _failure_signature(self, check_results: dict[str, Any]) -> dict[str, Any] | None:
+        failed = self._failed_check(check_results)
+        if not failed:
+            return None
+        return {
+            "name": failed.get("name"),
+            "command": failed.get("command"),
+            "argv": failed.get("argv"),
+            "stdout_excerpt": failed.get("stdout_excerpt"),
+            "stderr_excerpt": failed.get("stderr_excerpt"),
+            "reason": failed.get("reason"),
+        }
+
+    def _repair_argv(self, project_path: Path, repair_prompt_path: Path, repair_output_path: Path, sandbox_mode: str) -> list[str]:
+        return [
+            "codex",
+            "exec",
+            "--cd",
+            str(project_path),
+            "--sandbox",
+            sandbox_mode,
+            "--ask-for-approval",
+            "never",
+            "--output-last-message",
+            str(repair_output_path),
+            f"Read {repair_prompt_path} and complete the repair task exactly.",
+        ]
+
+    def _repair_prompt(self, plan: dict[str, Any], failed_check: dict[str, Any]) -> str:
+        approved_prompt = str(plan.get("prompt_content") or "").strip()
+        return "\n".join(
+            [
+                "# Jarvis Controlled Codex Repair",
+                "",
+                f"Plan ID: {plan['plan_id']}",
+                f"Task ID: {plan['task_id']}",
+                "",
+                "## Original Approved Plan",
+                approved_prompt or "No persisted approved prompt content was available.",
+                "",
+                "## Failed Check",
+                f"Name: {failed_check.get('name')}",
+                f"Command: {failed_check.get('command')}",
+                f"Argv: {json.dumps(failed_check.get('argv', []))}",
+                f"Exit code: {failed_check.get('exit_code')}",
+                "",
+                "## Redacted Output",
+                "Stdout excerpt:",
+                str(failed_check.get("stdout_excerpt") or ""),
+                "",
+                "Stderr excerpt:",
+                str(failed_check.get("stderr_excerpt") or ""),
+                "",
+                "## Repair Boundary",
+                "Fix only the failed check above. Do not broaden scope, refactor unrelated code, read secrets, push, merge, reset hard, delete files destructively, send email, post publicly, make purchases, automate browsers, use paid APIs, or access future connectors.",
+                "Do not modify protected files or dependency/package files unless the original approved plan already allowed that exact change.",
+                "After the repair, stop and report what changed.",
+            ]
+        ) + "\n"
+
+    def _codex_runs_for_task(self, task_id: str) -> int:
+        return int(
+            self.conn.execute(
+                "select count(*) from codex_executions where task_id = ? and status in ('running', 'succeeded', 'failed')",
+                (task_id,),
+            ).fetchone()[0]
+        )
+
+    def _acquire_lock(self, project_name: str, task_id: str) -> bool:
+        return self._acquire_execution_lock(project_name, task_id)[0]
+
+    def _acquire_execution_lock(self, project_name: str, task_id: str) -> tuple[bool, bool]:
+        try:
+            self.conn.execute(
+                "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
+                (project_name, task_id, "codex-execution", utc_now()),
+            )
+            self.conn.commit()
+            return True, True
+        except sqlite3.IntegrityError:
+            row = self.conn.execute("select task_id from project_locks where project_name = ?", (project_name,)).fetchone()
+            return bool(row and row[0] == task_id), False
+
+    def _release_lock(self, project_name: str, task_id: str) -> None:
+        self.conn.execute("delete from project_locks where project_name = ? and task_id = ?", (project_name, task_id))
+        self.conn.commit()
+
+    def _execution_prompt(self, plan: dict[str, Any]) -> str:
+        approved_prompt = str(plan.get("prompt_content") or "")
+        if approved_prompt:
+            return "\n".join(
+                [
+                    "# Jarvis Controlled Codex Execution",
+                    "",
+                    f"Plan ID: {plan['plan_id']}",
+                    "Execute only the approved plan represented by this prompt and command preview.",
+                    "",
+                    "## Approved Plan Prompt",
+                    approved_prompt.rstrip(),
+                    "",
+                    "## Execution Boundary",
+                    "Do not drift from the approved plan. Do not expand scope, read secrets, run destructive commands, push, merge, reset hard, send email, post publicly, make purchases, automate browsers, use paid APIs, or access future connectors.",
+                ]
+            ) + "\n"
+        return "\n".join(
+            [
+                "# Jarvis Controlled Codex Execution",
+                "",
+                f"Plan ID: {plan['plan_id']}",
+                f"Project: {plan['project_name']}",
+                "",
+                "## Exact Scope",
+                "Execute only the approved Codex plan represented by this prompt and command preview.",
+                "",
+                "## Non-Goals",
+                "Do not run unrelated repair loops, review loops, browser automation, external connectors, or paid APIs.",
+                "",
+                "## Safety Boundaries",
+                "Do not read secrets, push, merge, reset hard, delete files destructively, send email, post publicly, make purchases, or access browser sessions.",
+                "",
+                "## Allowed Files/Folders",
+                "Stay inside the registered project workspace and the scope described by the approved plan.",
+                "",
+                "## Blocked Actions",
+                "git push; git merge; git reset --hard; rm -rf; del /s; format; diskpart; reg delete; secret reads; browser sessions; email; public posting; payments; connector execution.",
+                "",
+                "## Tests",
+                "Jarvis may run detected safe checks and bounded repairs only through the controlled local workflow.",
+                "",
+                "## Final Report Requirements",
+                "Summarize changed files, commands run by Codex, tests attempted, blocked actions, risks, and recommended next task.",
+            ]
+        ) + "\n"
+
+    def _select_sql(self) -> str:
+        return (
+            "select execution_id, plan_id, task_id, project_name, status, started_at, finished_at, "
+            "codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error, "
+            "post_review, check_plan, check_results, repair_results from codex_executions"
+        )
+
+    def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
+        return {
+            "execution_id": row[0],
+            "plan_id": row[1],
+            "task_id": row[2],
+            "project_name": row[3],
+            "status": row[4],
+            "started_at": row[5],
+            "finished_at": row[6],
+            "codex_command_preview": row[7],
+            "exit_code": row[8],
+            "stdout_excerpt": row[9],
+            "stderr_excerpt": row[10],
+            "output_path": row[11],
+            "receipt_id": row[12],
+            "blocked_reason": row[13],
+            "error": row[14],
+            "post_review": json.loads(row[15] or "{}"),
+            "check_plan": json.loads(row[16] or "{}"),
+            "check_results": json.loads(row[17] or "{}"),
+            "repair_results": json.loads(row[18] or "{}"),
+        }
+
+
+def redact_output(value: str | None) -> str:
+    if not value:
+        return ""
+    redacted = value[:MAX_EXCERPT_CHARS]
+    redacted = re.sub(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+", r"\1=[REDACTED]", redacted)
+    redacted = re.sub(
+        r"-----BEGIN [A-Z ]+PRIVATE KEY-----.*?-----END [A-Z ]+PRIVATE KEY-----",
+        "[REDACTED_PRIVATE_KEY]",
+        redacted,
+        flags=re.DOTALL,
+    )
+    return redacted

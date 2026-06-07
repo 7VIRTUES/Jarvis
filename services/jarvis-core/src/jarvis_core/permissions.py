@@ -37,7 +37,16 @@ BLOCKED_COMMAND_PATTERNS = [
 
 PAYMENT_OR_PUBLIC_ACTIONS = {"send_email", "public_post", "payment_action"}
 SECRET_OR_BROWSER_ACTIONS = {"read_secret", "password_manager_access", "browser_session_access"}
-ALLOWED_ACTION_TYPES = {"command", "inspect_project", "write_report"}
+ALLOWED_ACTION_TYPES = {
+    "command",
+    "inspect_project",
+    "write_report",
+    "codex.plan_execution",
+    "codex.prepare_prompt",
+    "codex.preview_command",
+    "codex.execute_approved_plan",
+}
+BLOCKED_CODEX_ACTIONS = {"codex.execute", "codex.exec", "codex.run", "run_codex_exec_workspace_write"}
 
 
 @dataclass(frozen=True)
@@ -76,6 +85,8 @@ def check_action(action_type: str, target: str | None = None) -> PolicyCheckResu
         return PolicyCheckResult(False, "blocked", f"{action_type} is blocked in v0.1A")
     if action_type in {"codex_execute", "browser_automation", "connector_execute"}:
         return PolicyCheckResult(False, "blocked", f"{action_type} is outside v0.1A scope")
+    if action_type in BLOCKED_CODEX_ACTIONS:
+        return PolicyCheckResult(False, "blocked", f"{action_type} is not implemented in current v0.1 scope")
     if action_type in {"sensitive_write", "external_connector"}:
         return PolicyCheckResult(False, "approval_required", f"{action_type} requires approval before future implementation")
     if action_type not in ALLOWED_ACTION_TYPES:
