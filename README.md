@@ -68,6 +68,10 @@ python -m uvicorn --app-dir services/jarvis-core/src jarvis_core.app:app --reloa
 
 The service is local-only by design. The `/health` endpoint returns the app name, version, status, and local mode.
 
+## ChatGPT and Codex Workflow
+
+Jarvis uses ChatGPT Project for planning, architecture, safety review, prompt writing, review triage, and next-step decisions. Codex is used for local implementation only: code/docs edits, tests, local commands, and approved local commits. See [docs/chatgpt-codex-workflow.md](docs/chatgpt-codex-workflow.md).
+
 Key workflow endpoints:
 
 - `POST /tasks`
