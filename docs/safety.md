@@ -10,6 +10,8 @@ The first v0.1C dashboard slices are read-only. They expose local status, settin
 
 Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, stop-task controls, desktop shell behavior, first-run wizard behavior, or installer packaging.
 
+LAN setup guidance is loopback-only. Non-loopback requests to setup status and setup HTML are denied even with a valid dashboard token until a real pairing UX exists. The setup surface does not expose token values, token prefixes, token suffixes, token hashes, environment dumps, input fields, persistence, or token creation controls.
+
 ## LAN Dashboard Threat Model
 
 Threats for the LAN protection slice:

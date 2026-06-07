@@ -16,7 +16,7 @@ from .dashboard import DashboardService, dashboard_html
 from .diagnostics import DiagnosticExporter
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
-from .lan_security import require_dashboard_lan_access
+from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .project_registry import ProjectRegistry
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
@@ -107,9 +107,19 @@ def local_dashboard(_: None = Depends(require_dashboard_lan_access)) -> HTMLResp
     return HTMLResponse(dashboard_html())
 
 
+@app.get("/setup/lan", response_class=HTMLResponse)
+def lan_setup_page(_: None = Depends(require_loopback_request)) -> HTMLResponse:
+    return HTMLResponse(lan_setup_html())
+
+
 @app.get("/api/dashboard/summary")
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
+
+
+@app.get("/api/setup/lan/status")
+def lan_setup_status_endpoint(_: None = Depends(require_loopback_request)) -> dict[str, object]:
+    return lan_setup_status()
 
 
 @app.get("/api/safety/summary")

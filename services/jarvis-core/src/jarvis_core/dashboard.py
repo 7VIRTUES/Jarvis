@@ -7,7 +7,7 @@ from urllib.parse import unquote
 
 from . import APP_NAME, VERSION
 from .config import load_json_config
-from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status
+from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 
@@ -26,7 +26,7 @@ class DashboardService:
         settings = self.settings_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 3", "status": "LAN dashboard/API token protection foundation"},
+            "phase": {"current": "v0.1C Slice 4", "status": "loopback-only LAN setup guidance foundation"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
@@ -50,6 +50,7 @@ class DashboardService:
             "safety": self.safety_summary(),
             "settings": settings,
             "lanProtection": lan_protection_status(),
+            "lanSetup": lan_setup_status(),
             "connectors": connectors,
             "unsupportedActions": unsupported_actions(),
         }
@@ -60,7 +61,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "LAN dashboard/API token protection foundation",
+            "currentSlice": "loopback-only LAN setup guidance foundation",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -76,6 +77,7 @@ class DashboardService:
             "lanPairingStatus": "not_implemented_yet",
             "tokenProtectionStatus": "implemented_for_dashboard_api",
             "lanProtection": lan_protection_status(),
+            "lanSetup": lan_setup_status(),
             "lanTokenEnvVar": LAN_TOKEN_ENV_VAR,
             "stopTaskStatus": "not_implemented_yet",
             "tauriShellStatus": "not_implemented_yet",
@@ -84,6 +86,7 @@ class DashboardService:
             "privateAlphaPackagingStatus": "not_implemented_yet",
             "notes": [
                 "Settings are visible as read-only status only.",
+                "LAN setup guidance is available from loopback only.",
                 "Loopback dashboard access is allowed without a token.",
                 "LAN dashboard access requires a configured header or bearer token.",
                 "Stop-task, desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
@@ -232,6 +235,7 @@ def dashboard_html() -> str:
     <section id="lan-protection">
       <h2>LAN Protection</h2>
       <pre id="lan">Loading LAN protection status...</pre>
+      <p><a href="/setup/lan">Open loopback LAN setup guidance</a></p>
     </section>
     <section>
       <h2>Reports</h2>
