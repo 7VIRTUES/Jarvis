@@ -225,6 +225,59 @@ def test_project_lock_acquired_and_released_on_success(tmp_path):
     assert conn.execute("select count(*) from project_locks").fetchone()[0] == 0
 
 
+def test_acquire_lock_allows_same_task_reentry(tmp_path):
+    conn, _, _, _, _, _, execution, _ = stack(tmp_path)
+    conn.execute(
+        "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
+        ("sample", "task-1", "write", "now"),
+    )
+    conn.commit()
+
+    assert execution._acquire_lock("sample", "task-1") is True
+    assert conn.execute("select count(*) from project_locks where project_name = ?", ("sample",)).fetchone()[0] == 1
+
+
+def test_acquire_lock_blocks_different_task(tmp_path):
+    conn, _, _, _, _, _, execution, _ = stack(tmp_path)
+    conn.execute(
+        "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
+        ("sample", "task-1", "write", "now"),
+    )
+    conn.commit()
+
+    assert execution._acquire_lock("sample", "task-2") is False
+    assert conn.execute("select task_id from project_locks where project_name = ?", ("sample",)).fetchone()[0] == "task-1"
+
+
+def test_release_lock_does_not_remove_different_task_lock(tmp_path):
+    conn, _, _, _, _, _, execution, _ = stack(tmp_path)
+    conn.execute(
+        "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
+        ("sample", "task-2", "write", "now"),
+    )
+    conn.commit()
+
+    execution._release_lock("sample", "task-1")
+
+    assert conn.execute("select task_id from project_locks where project_name = ?", ("sample",)).fetchone()[0] == "task-2"
+
+
+def test_execution_reenters_same_task_lock_without_releasing_it(tmp_path):
+    conn, _, _, _, _, plans, execution, _ = stack(tmp_path)
+    plan = approved_plan(plans)
+    conn.execute(
+        "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
+        ("sample", plan["task_id"], "write", "now"),
+    )
+    conn.commit()
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "succeeded"
+    row = conn.execute("select task_id, lock_type from project_locks where project_name = ?", ("sample",)).fetchone()
+    assert row == (plan["task_id"], "write")
+
+
 def test_receipt_and_events_created_for_successful_mocked_execution(tmp_path):
     _, events, runtime, _, _, plans, execution, project = stack(tmp_path)
     plan = approved_plan(plans)

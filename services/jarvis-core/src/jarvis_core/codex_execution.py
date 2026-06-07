@@ -73,7 +73,8 @@ class CodexExecutionService:
             receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", reason, str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
             return self._record_execution(execution_id, plan_id, str(plan["task_id"]), str(plan["project_name"]), "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, reason, None)
 
-        if not self._acquire_lock(str(plan["project_name"]), str(plan["task_id"])):
+        lock_allowed, lock_inserted = self._acquire_execution_lock(str(plan["project_name"]), str(plan["task_id"]))
+        if not lock_allowed:
             receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", "project is locked", str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
             return self._record_execution(execution_id, plan_id, str(plan["task_id"]), str(plan["project_name"]), "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, "project is locked", None)
 
@@ -133,7 +134,8 @@ class CodexExecutionService:
             self.events.emit("codex.execution_failed", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "error": type(exc).__name__})
             return self.get_execution(execution_id)  # type: ignore[return-value]
         finally:
-            self._release_lock(str(plan["project_name"]), str(plan["task_id"]))
+            if lock_inserted:
+                self._release_lock(str(plan["project_name"]), str(plan["task_id"]))
 
     def get_execution(self, execution_id: str) -> dict[str, Any] | None:
         row = self.conn.execute(self._select_sql() + " where execution_id = ?", (execution_id,)).fetchone()
@@ -267,15 +269,19 @@ class CodexExecutionService:
         )
 
     def _acquire_lock(self, project_name: str, task_id: str) -> bool:
+        return self._acquire_execution_lock(project_name, task_id)[0]
+
+    def _acquire_execution_lock(self, project_name: str, task_id: str) -> tuple[bool, bool]:
         try:
             self.conn.execute(
                 "insert into project_locks (project_name, task_id, lock_type, locked_at) values (?, ?, ?, ?)",
                 (project_name, task_id, "codex-execution", utc_now()),
             )
             self.conn.commit()
-            return True
+            return True, True
         except sqlite3.IntegrityError:
-            return False
+            row = self.conn.execute("select task_id from project_locks where project_name = ?", (project_name,)).fetchone()
+            return bool(row and row[0] == task_id), False
 
     def _release_lock(self, project_name: str, task_id: str) -> None:
         self.conn.execute("delete from project_locks where project_name = ? and task_id = ?", (project_name, task_id))
