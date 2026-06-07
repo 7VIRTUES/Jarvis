@@ -28,6 +28,8 @@ Codex should work from a clear task or prompt. Codex must not make broad plannin
 
 ## Handoff Pattern
 
+During pre-MVP development, Jarvis may use direct local work on `main` instead of feature branches. Codex may edit files, run local commands/tests, and create a local commit on `main` only when allowed by the prompt and checks pass. Codex must not push, merge, reset hard, delete files, or modify remote state. The user manually pushes after reviewing the result.
+
 1. ChatGPT plans or reviews the work and writes a bounded implementation prompt.
 2. The user gives that prompt to Codex.
 3. Codex implements locally, verifies, and reports exact changes and command results.

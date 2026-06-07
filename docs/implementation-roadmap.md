@@ -12,11 +12,13 @@ Future versions may add controlled execution, UI surfaces, and external connecto
 
 ## v0.1B Workflow Foundation
 
+Status: complete after v0.1B closeout validation. v0.1C is next, but it must be planned and approved through ChatGPT Project and the user before implementation begins.
+
 The first v0.1B slice adds task orchestration, event history, approval records, project locks, dry-run planning, action receipts, risk budget checks, diagnostics export, and report validation. It does not execute Codex or shell commands.
 
-## Future v0.1B Slices
+## Completed v0.1B Slices
 
-Future reviewed slices can add controlled execution only after the approval and receipt model is proven. Codex execution remains a non-goal for this foundation slice.
+The reviewed v0.1B slices added controlled execution only after the approval and receipt model was proven. Generic shell execution remains out of scope.
 
 ## v0.1B Codex Execution Planning
 

@@ -18,6 +18,8 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
+Closeout status: v0.1B is complete after local validation. v0.1C is the next phase and must be planned before implementation begins.
+
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
 - task queue APIs
