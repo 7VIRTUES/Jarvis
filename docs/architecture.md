@@ -8,7 +8,7 @@ The Codex planning slice adds future execution plans, command previews, and appr
 
 The controlled execution slice can run only an approved Codex plan through the official local Codex CLI using fixed argv, `shell=False`, a registered project path, and the `workspace-write` sandbox.
 
-The first v0.1C slices add read-only local dashboard, report, settings/status visibility APIs, LAN token protection, and loopback-only LAN setup guidance. They do not add write controls, editable settings, full pairing UX, remote internet access, desktop shell packaging, or connector execution.
+The first v0.1C slices add read-only local dashboard, report, settings/status visibility APIs, LAN token protection, loopback-only LAN setup guidance, and a stop-task boundary for Jarvis-owned task records. They do not add editable settings, full pairing UX, remote internet access, desktop shell packaging, arbitrary process control, or connector execution.
 
 ## Modules
 
@@ -26,6 +26,7 @@ The first v0.1C slices add read-only local dashboard, report, settings/status vi
 - `diagnostics.py` exports local diagnostic summaries without secret values.
 - `dashboard.py` builds read-only dashboard summaries, settings/status summaries, connector placeholder summaries, and path-safe Markdown report listing/detail responses.
 - `lan_security.py` protects dashboard-related routes by allowing loopback requests and requiring a configured header or bearer token for non-loopback requests. It also exposes loopback-only LAN setup status and HTML guidance without token values.
+- `task_control.py` exposes active Jarvis task status and a narrow stop operation for known active task IDs. It does not accept PID, process-name, shell-command, or OS service identifiers.
 - `reports.py` validates required implementation report sections.
 - `codex_plans.py` creates validated Codex future-run plans, prompt previews, command previews, approval records, and plan status transitions.
 - `codex_execution.py` validates approved plans, prepares bounded prompt files, runs the official Codex CLI only, stores execution summaries, and emits receipts/events.
@@ -37,6 +38,8 @@ Runtime state is stored under `data/jarvis/`, which is gitignored. No secrets ar
 Dashboard report detail reads only Markdown files directly under `data/jarvis/reports` after validating the requested report id is a contained file name.
 
 LAN protection reads only `JARVIS_LAN_DASHBOARD_TOKEN` from the process environment. Missing or too-short tokens deny non-loopback dashboard/API access. Setup endpoints are loopback-only and token values, fragments, hashes, and environment dumps are not returned in dashboard HTML or JSON responses.
+
+Stop-task status is derived from the local task table. Active task controls apply only to task statuses `queued`, `running`, and `waiting_for_approval`. Stopping a task marks that Jarvis task record as `canceled`, emits the existing `task.canceled` event, and releases the Jarvis project lock. It does not kill OS processes or accept PID, process-name, command, or Windows service inputs.
 
 ## Project Locks
 

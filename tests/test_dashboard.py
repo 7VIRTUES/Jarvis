@@ -21,13 +21,16 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1C Slice 4"
+    assert summary["phase"]["current"] == "v0.1C Slice 5"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
+    assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
     assert summary["safety"]["paidApis"] is False
     assert summary["safety"]["connectorExecution"] is False
+    assert summary["safety"]["arbitraryProcessKill"] is False
     assert summary["settings"]["settingsEditable"] is False
     assert summary["lanProtection"]["lanProtectionImplemented"] is True
+    assert summary["stopTask"]["pidAccepted"] is False
 
 
 def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, monkeypatch):
@@ -37,7 +40,7 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
 
     assert settings["appName"] == "Jarvis PC Local"
     assert settings["phase"] == "v0.1C"
-    assert settings["currentSlice"] == "loopback-only LAN setup guidance foundation"
+    assert settings["currentSlice"] == "stop-task status/control boundary"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
@@ -63,7 +66,7 @@ def test_settings_summary_confirms_external_connectors_disabled(tmp_path, monkey
     assert settings["nonCodingConnectorsImplemented"] is False
 
 
-def test_settings_summary_marks_lan_pairing_and_stop_task_future(tmp_path, monkeypatch):
+def test_settings_summary_marks_lan_pairing_future_and_stop_task_boundary(tmp_path, monkeypatch):
     dashboard_service(tmp_path, monkeypatch)
 
     settings = app_module.settings_summary()
@@ -72,7 +75,9 @@ def test_settings_summary_marks_lan_pairing_and_stop_task_future(tmp_path, monke
     assert settings["tokenProtectionStatus"] == "implemented_for_dashboard_api"
     assert settings["lanProtection"]["nonLoopbackRequiresToken"] is True
     assert settings["lanSetup"]["setupPageLoopbackOnly"] is True
-    assert settings["stopTaskStatus"] == "not_implemented_yet"
+    assert settings["stopTaskStatus"] == "implemented_for_jarvis_task_queue_state_only"
+    assert settings["stopTask"]["osProcessControl"] is False
+    assert settings["stopTask"]["pidAccepted"] is False
     assert settings["tauriShellStatus"] == "not_implemented_yet"
     assert settings["firstRunWizardStatus"] == "not_implemented_yet"
     assert settings["installerStatus"] == "not_implemented_yet"
@@ -179,10 +184,12 @@ def test_unsupported_controls_are_not_exposed_as_working_automation(tmp_path, mo
     page_text = page.body.decode("utf-8").lower()
 
     assert all(action["available"] is False for action in summary["unsupportedActions"])
-    assert "<button" not in page_text
+    assert 'id="stop-task-button" type="button" disabled' in page_text
     assert "git push" not in page_text
     assert "save" not in page_text
     assert "edit" not in page_text
+    assert "taskkill" not in page_text
+    assert "process name" not in page_text
 
 
 def test_dashboard_html_includes_settings_status_section(tmp_path, monkeypatch):
@@ -194,6 +201,9 @@ def test_dashboard_html_includes_settings_status_section(tmp_path, monkeypatch):
     assert "settings / status" in page_text
     assert 'id="lan-protection"' in page_text
     assert "lan protection" in page_text
+    assert 'id="stop-task-control"' in page_text
+    assert "active task / stop task" in page_text
+    assert "/api/tasks/" in page_text
     assert "/setup/lan" in page_text
     assert "/api/dashboard/summary" in page_text
 

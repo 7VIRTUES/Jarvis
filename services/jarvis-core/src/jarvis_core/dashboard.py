@@ -10,6 +10,8 @@ from .config import load_json_config
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
+from .task_control import ACTIVE_TASK_STATUSES
+from .tasks import TERMINAL_STATUSES
 
 
 class DashboardService:
@@ -24,14 +26,16 @@ class DashboardService:
         reports = self.list_reports()
         connectors = self.connector_summary()
         settings = self.settings_summary()
+        stop_task = self.stop_task_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 4", "status": "loopback-only LAN setup guidance foundation"},
+            "phase": {"current": "v0.1C Slice 5", "status": "stop-task status/control boundary"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
                 "settings": "read_only_status",
                 "projects": "read_only_summary",
+                "stopTask": "jarvis_task_queue_state_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -49,6 +53,8 @@ class DashboardService:
             "reports": reports,
             "safety": self.safety_summary(),
             "settings": settings,
+            "stopTask": stop_task,
+            "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
             "connectors": connectors,
@@ -61,7 +67,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "loopback-only LAN setup guidance foundation",
+            "currentSlice": "stop-task status/control boundary",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -79,7 +85,8 @@ class DashboardService:
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
             "lanTokenEnvVar": LAN_TOKEN_ENV_VAR,
-            "stopTaskStatus": "not_implemented_yet",
+            "stopTaskStatus": "implemented_for_jarvis_task_queue_state_only",
+            "stopTask": self.stop_task_summary(),
             "tauriShellStatus": "not_implemented_yet",
             "firstRunWizardStatus": "not_implemented_yet",
             "installerStatus": "not_implemented_yet",
@@ -89,7 +96,8 @@ class DashboardService:
                 "LAN setup guidance is available from loopback only.",
                 "Loopback dashboard access is allowed without a token.",
                 "LAN dashboard access requires a configured header or bearer token.",
-                "Stop-task, desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
+                "Stop-task controls apply only to Jarvis-owned task records and do not kill OS processes.",
+                "Desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
             ],
         }
 
@@ -101,16 +109,70 @@ class DashboardService:
             "browserAutomation": False,
             "connectorExecution": False,
             "destructiveGitAutomation": False,
+            "arbitraryProcessKill": False,
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
+            "stopTask": self.stop_task_summary(),
             "notes": [
                 "Dashboard endpoints are read-only.",
                 "Non-loopback dashboard requests require a configured token.",
                 "Report detail reads only approved Markdown reports under data/jarvis/reports.",
-                "Future v0.1C controls remain absent or unavailable in this slice.",
+                "Stop-task controls accept only Jarvis task IDs and do not accept PID, process-name, command, or OS service identifiers.",
+                "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
+
+    def stop_task_summary(self) -> dict[str, Any]:
+        active = self.active_tasks()
+        return {
+            "requirement": "v0.1C stop-task control boundary",
+            "safeBackendCancellationAvailable": True,
+            "stopControlsEnabled": bool(active),
+            "enabledWhen": "known Jarvis-owned task status is queued, running, or waiting_for_approval",
+            "backendType": "jarvis_task_queue_state_only",
+            "activeTaskCount": len(active),
+            "activeStatuses": sorted(ACTIVE_TASK_STATUSES),
+            "terminalStatuses": sorted(TERMINAL_STATUSES),
+            "scope": "Jarvis-owned task records tracked in the local Jarvis task table",
+            "osProcessControl": False,
+            "arbitraryProcessKill": False,
+            "pidAccepted": False,
+            "processNameAccepted": False,
+            "shellCommandAccepted": False,
+            "windowsServiceControl": False,
+            "auditEvent": "task.canceled",
+        }
+
+    def active_tasks(self) -> list[dict[str, Any]]:
+        rows = self._rows(
+            """
+            select task_id, project_name, agent_id, task_type, status, autonomy_level,
+                   dry_run, write_capable, created_at, started_at, finished_at, summary, error
+            from tasks
+            where status in ('queued', 'running', 'waiting_for_approval')
+            order by created_at desc
+            """,
+            [
+                "taskId",
+                "projectName",
+                "agentId",
+                "taskType",
+                "status",
+                "autonomyLevel",
+                "dryRun",
+                "writeCapable",
+                "createdAt",
+                "startedAt",
+                "finishedAt",
+                "summary",
+                "error",
+            ],
+        )
+        for row in rows:
+            row["dryRun"] = bool(row["dryRun"])
+            row["writeCapable"] = bool(row["writeCapable"])
+        return rows
 
     def connector_summary(self) -> list[dict[str, Any]]:
         connectors: list[dict[str, Any]] = []
@@ -237,6 +299,12 @@ def dashboard_html() -> str:
       <pre id="lan">Loading LAN protection status...</pre>
       <p><a href="/setup/lan">Open loopback LAN setup guidance</a></p>
     </section>
+    <section id="stop-task-control">
+      <h2>Active Task / Stop Task</h2>
+      <div id="active-tasks" class="muted">Loading active task status...</div>
+      <button id="stop-task-button" type="button" disabled>Stop Task</button>
+      <pre id="stop-task-status">Loading stop-task status...</pre>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -261,6 +329,24 @@ def dashboard_html() -> str:
         ? summary.reports.map((report) => `<div><a href="/api/reports/${encodeURIComponent(report.id)}">${report.title}</a> <span class="muted">${report.sizeBytes} bytes</span></div>`).join('')
         : 'No reports found.';
       document.getElementById('settings').textContent = JSON.stringify(summary.settings, null, 2);
+      document.getElementById('stop-task-status').textContent = JSON.stringify(summary.stopTask, null, 2);
+      const activeTasks = summary.activeTasks || [];
+      const stopButton = document.getElementById('stop-task-button');
+      if (activeTasks.length) {
+        const task = activeTasks[0];
+        document.getElementById('active-tasks').innerHTML = `<div>${task.taskId} <span class="muted">${task.status}</span></div>`;
+        stopButton.disabled = false;
+        stopButton.onclick = async () => {
+          stopButton.disabled = true;
+          const result = await fetch(`/api/tasks/${encodeURIComponent(task.taskId)}/stop`, { method: 'POST' }).then((response) => response.json());
+          document.getElementById('stop-task-status').textContent = JSON.stringify(result, null, 2);
+          await loadDashboard();
+        };
+      } else {
+        document.getElementById('active-tasks').textContent = 'No active Jarvis-owned task is available to stop.';
+        stopButton.disabled = true;
+        stopButton.onclick = null;
+      }
       document.getElementById('lan').textContent = JSON.stringify(summary.lanProtection, null, 2);
       document.getElementById('safety').textContent = JSON.stringify(summary.safety, null, 2);
       document.getElementById('connectors').innerHTML = summary.connectors.length

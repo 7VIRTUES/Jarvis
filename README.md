@@ -18,7 +18,7 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
-Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, and loopback-only setup guidance foundations. Later v0.1C slices must be planned before implementation begins.
+Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, and stop-task control boundary foundations. Later v0.1C slices must be planned before implementation begins.
 
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
@@ -72,7 +72,9 @@ Slice 3 adds LAN dashboard/API token protection. Loopback access remains availab
 
 Slice 4 adds loopback-only LAN setup guidance and status. The setup page explains the environment variable source, accepted headers, and unsupported token channels without exposing token values, token fragments, hashes, or editable controls.
 
-Future v0.1C slices still need planning before implementation: full pairing wizard, QR/mobile pairing, stop-task controls, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging.
+Slice 5 adds an Active Task / Stop Task boundary for Jarvis-owned task records. The dashboard and API can list active Jarvis tasks and stop only known task IDs already tracked in the local Jarvis task table. It records the existing `task.canceled` event and releases Jarvis project locks. It is not arbitrary process control and does not accept PID, process name, shell command, or Windows service identifiers.
+
+Future v0.1C slices still need planning before implementation: full pairing wizard, QR/mobile pairing, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging.
 
 ## Run Jarvis Core
 
@@ -111,12 +113,15 @@ Key workflow endpoints:
 - `GET /api/dashboard/summary`
 - `GET /api/safety/summary`
 - `GET /api/settings/summary`
+- `GET /api/tasks/active`
+- `GET /api/tasks/stop/status`
+- `POST /api/tasks/{task_id}/stop`
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
 - `GET /setup/lan`
 - `GET /api/setup/lan/status`
 
-Dashboard and dashboard-related API endpoints are guarded for LAN access. Loopback requests can read them without a token; non-loopback requests require a valid configured token.
+Dashboard and dashboard-related API endpoints, including task status and stop-task routes, are guarded for LAN access. Loopback requests can read or use them without a token; non-loopback requests require a valid configured token.
 
 LAN setup endpoints are loopback-only. Non-loopback requests are denied even with a token until a real pairing UX is planned and implemented.
 
@@ -132,4 +137,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1C Slice 4 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, expose write-capable dashboard controls, run autonomous background repair, run unrestricted repair loops, implement token generation, implement a full pairing wizard, or implement external account connectors. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.
+Jarvis v0.1C Slice 5 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, run arbitrary process killing, run autonomous background repair, run unrestricted repair loops, implement token generation, implement a full pairing wizard, or implement external account connectors. Stop-task controls apply only to Jarvis-owned task records. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.

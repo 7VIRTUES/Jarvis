@@ -20,6 +20,7 @@ from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_la
 from .project_registry import ProjectRegistry
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
+from .task_control import TaskControlService
 from .tasks import TaskQueue
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
@@ -31,6 +32,7 @@ projects = ProjectRegistry(conn, WORKSPACE_ROOT)
 runtime = SafeActionRuntime(logger, conn, events)
 approvals = ApprovalQueue(conn, events)
 tasks = TaskQueue(conn, events, runtime, approvals)
+task_control = TaskControlService(tasks)
 codex_plans = CodexPlanService(conn, events, runtime, approvals, projects)
 codex_execution = CodexExecutionService(conn, events, runtime, approvals, projects, codex_plans)
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
@@ -132,6 +134,26 @@ def settings_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[st
     return dashboard.settings_summary()
 
 
+@app.get("/api/tasks/active")
+def active_dashboard_tasks(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
+    return task_control.active_tasks()
+
+
+@app.get("/api/tasks/stop/status")
+def task_stop_status(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return task_control.stop_status()
+
+
+@app.post("/api/tasks/{task_id}/stop")
+def stop_dashboard_task(task_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return task_control.stop_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.get("/api/reports")
 def list_dashboard_reports(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
     return dashboard.list_reports()
@@ -223,7 +245,7 @@ def get_task(task_id: str) -> dict[str, object]:
 
 
 @app.post("/tasks/{task_id}/cancel")
-def cancel_task(task_id: str) -> dict[str, object]:
+def cancel_task(task_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     try:
         return tasks.cancel_task(task_id)
     except KeyError as exc:

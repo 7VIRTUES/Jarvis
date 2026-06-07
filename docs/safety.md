@@ -6,9 +6,9 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
-The first v0.1C dashboard slices are read-only. They expose local status, settings/status placeholders, safety, connector placeholder, and report visibility only. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, and purchases must remain absent or unavailable.
+The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, and a narrow stop-task boundary. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, and OS service control must remain absent or unavailable.
 
-Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, stop-task controls, desktop shell behavior, first-run wizard behavior, or installer packaging.
+Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, desktop shell behavior, first-run wizard behavior, or installer packaging.
 
 LAN setup guidance is loopback-only. Non-loopback requests to setup status and setup HTML are denied even with a valid dashboard token until a real pairing UX exists. The setup surface does not expose token values, token prefixes, token suffixes, token hashes, environment dumps, input fields, persistence, or token creation controls.
 
@@ -32,6 +32,14 @@ Mitigations in this slice:
 - Token values are not returned in dashboard HTML or JSON responses.
 
 Non-goals for this slice: full pairing UX, user accounts, remote internet access, HTTPS/TLS termination, production-grade public-network authentication, and mobile app pairing.
+
+## Stop-Task Boundary
+
+Stop-task controls apply only to Jarvis-owned task records in the local task table. The API accepts a Jarvis `task_id` path parameter for active task statuses only: `queued`, `running`, and `waiting_for_approval`.
+
+Stopping a Jarvis task marks that task record as `canceled`, emits the existing `task.canceled` event, and releases its Jarvis project lock. It is not a process manager. It must not accept PID, process name, shell command, executable path, or Windows service identifiers, and it must not kill unrelated user applications.
+
+Dashboard, task-status, and stop-task endpoints remain LAN-protected: loopback is allowed without a token, while non-loopback access requires the configured dashboard token.
 
 ## Hard Blocks
 

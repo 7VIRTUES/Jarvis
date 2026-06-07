@@ -12,7 +12,7 @@ Future versions may add controlled execution, UI surfaces, and external connecto
 
 ## v0.1B Workflow Foundation
 
-Status: complete after v0.1B closeout validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, and loopback-only setup guidance foundations. Later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
+Status: complete after v0.1B closeout validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, and stop-task control boundary foundations. Later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
 
 The first v0.1B slice adds task orchestration, event history, approval records, project locks, dry-run planning, action receipts, risk budget checks, diagnostics export, and report validation. It does not execute Codex or shell commands.
 
@@ -60,4 +60,6 @@ v0.1C Slice 3 adds LAN dashboard/API token protection foundation. Loopback dashb
 
 v0.1C Slice 4 adds loopback-only LAN setup guidance and status. It explains manual environment variable setup and accepted headers without exposing token values, token fragments, token hashes, token input fields, token persistence, or token generation.
 
-Later v0.1C slices remain future work and must be planned before implementation: full pairing wizard, QR/mobile pairing, stop-task control, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging. Unsupported dashboard controls must remain disabled or absent.
+v0.1C Slice 5 adds a stop-task status/control boundary. It exposes active Jarvis task records and a stop endpoint for known active task IDs only. The stop operation is state-only inside Jarvis: it marks the task canceled, emits `task.canceled`, and releases the Jarvis project lock. It does not stop arbitrary OS processes and does not accept PID, process-name, shell-command, or Windows service identifiers. Dashboard/task endpoints remain LAN-protected.
+
+Later v0.1C slices remain future work and must be planned before implementation: full pairing wizard, QR/mobile pairing, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging. Unsupported dashboard controls must remain disabled or absent.

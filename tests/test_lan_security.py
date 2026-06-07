@@ -132,6 +132,9 @@ def test_dashboard_related_routes_have_lan_guard_dependency():
         "/api/dashboard/summary",
         "/api/safety/summary",
         "/api/settings/summary",
+        "/api/tasks/active",
+        "/api/tasks/stop/status",
+        "/api/tasks/{task_id}/stop",
         "/api/reports",
         "/api/reports/{report_id:path}",
     }
