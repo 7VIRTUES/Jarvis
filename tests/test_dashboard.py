@@ -21,10 +21,58 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1C Slice 1"
+    assert summary["phase"]["current"] == "v0.1C Slice 2"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
+    assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["safety"]["paidApis"] is False
     assert summary["safety"]["connectorExecution"] is False
+    assert summary["settings"]["settingsEditable"] is False
+
+
+def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+
+    assert settings["appName"] == "Jarvis PC Local"
+    assert settings["phase"] == "v0.1C"
+    assert settings["currentSlice"] == "settings/status placeholder"
+    assert settings["localFirst"] is True
+    assert settings["settingsEditable"] is False
+    assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
+    assert settings["autonomyMode"] == "supervised_local_only"
+    assert settings["safetyMode"] == "strict_local_read_only_dashboard"
+
+
+def test_settings_summary_confirms_paid_ai_and_browser_automation_disabled(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+
+    assert settings["paidAiApisEnabled"] is False
+    assert settings["browserAutomationEnabled"] is False
+
+
+def test_settings_summary_confirms_external_connectors_disabled(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+
+    assert settings["externalConnectorsEnabled"] is False
+    assert settings["nonCodingConnectorsImplemented"] is False
+
+
+def test_settings_summary_marks_lan_pairing_and_stop_task_future(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+
+    assert settings["lanPairingStatus"] == "not_implemented_yet"
+    assert settings["tokenProtectionStatus"] == "not_implemented_yet"
+    assert settings["stopTaskStatus"] == "not_implemented_yet"
+    assert settings["tauriShellStatus"] == "not_implemented_yet"
+    assert settings["firstRunWizardStatus"] == "not_implemented_yet"
+    assert settings["installerStatus"] == "not_implemented_yet"
 
 
 def test_reports_list_endpoint_works_when_reports_exist(tmp_path, monkeypatch):
@@ -109,10 +157,23 @@ def test_unsupported_controls_are_not_exposed_as_working_automation(tmp_path, mo
 
     summary = app_module.dashboard_summary()
     page = app_module.local_dashboard()
+    page_text = page.body.decode("utf-8").lower()
 
     assert all(action["available"] is False for action in summary["unsupportedActions"])
-    assert "<button" not in page.body.decode("utf-8").lower()
-    assert "git push" not in page.body.decode("utf-8").lower()
+    assert "<button" not in page_text
+    assert "git push" not in page_text
+    assert "save" not in page_text
+    assert "edit" not in page_text
+
+
+def test_dashboard_html_includes_settings_status_section(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    page_text = app_module.local_dashboard().body.decode("utf-8").lower()
+
+    assert 'id="settings-status"' in page_text
+    assert "settings / status" in page_text
+    assert "/api/dashboard/summary" in page_text
 
 
 def _connector(connector_id: str, provider: str) -> dict[str, object]:

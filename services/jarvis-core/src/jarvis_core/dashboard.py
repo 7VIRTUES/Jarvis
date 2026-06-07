@@ -22,12 +22,14 @@ class DashboardService:
     def summary(self) -> dict[str, Any]:
         reports = self.list_reports()
         connectors = self.connector_summary()
+        settings = self.settings_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 1", "status": "dashboard/report visibility foundation"},
+            "phase": {"current": "v0.1C Slice 2", "status": "read-only settings/status visibility"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
+                "settings": "read_only_status",
                 "projects": "read_only_summary",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
@@ -45,8 +47,42 @@ class DashboardService:
             "recentTasks": self._rows("select task_id, project_name, task_type, status, created_at from tasks order by created_at desc limit 10", ["taskId", "projectName", "taskType", "status", "createdAt"]),
             "reports": reports,
             "safety": self.safety_summary(),
+            "settings": settings,
             "connectors": connectors,
             "unsupportedActions": unsupported_actions(),
+        }
+
+    def settings_summary(self) -> dict[str, Any]:
+        return {
+            "appName": APP_NAME,
+            "productName": "Jarvis PC Local",
+            "version": VERSION,
+            "phase": "v0.1C",
+            "currentSlice": "settings/status placeholder",
+            "localFirst": True,
+            "settingsEditable": False,
+            "settingsPersistence": "not_implemented_in_this_slice",
+            "autonomyMode": "supervised_local_only",
+            "safetyMode": "strict_local_read_only_dashboard",
+            "paidAiApisEnabled": False,
+            "browserAutomationEnabled": False,
+            "externalConnectorsEnabled": False,
+            "nonCodingConnectorsImplemented": False,
+            "mainOnlyPreMvpWorkflow": True,
+            "remoteWriteAutomationAllowed": False,
+            "destructiveAutomationAllowed": False,
+            "lanPairingStatus": "not_implemented_yet",
+            "tokenProtectionStatus": "not_implemented_yet",
+            "stopTaskStatus": "not_implemented_yet",
+            "tauriShellStatus": "not_implemented_yet",
+            "firstRunWizardStatus": "not_implemented_yet",
+            "installerStatus": "not_implemented_yet",
+            "privateAlphaPackagingStatus": "not_implemented_yet",
+            "notes": [
+                "Settings are visible as read-only status only.",
+                "LAN pairing/token protection remains a future security slice.",
+                "Stop-task, desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
+            ],
         }
 
     def safety_summary(self) -> dict[str, Any]:
@@ -143,7 +179,7 @@ def unsupported_actions() -> list[dict[str, Any]]:
         {"id": "git_push", "label": "Push", "available": False, "reason": "manual user action only"},
         {"id": "git_merge", "label": "Merge", "available": False, "reason": "not exposed in dashboard"},
         {"id": "delete_files", "label": "Delete files", "available": False, "reason": "destructive automation is blocked"},
-        {"id": "install_dependencies", "label": "Install dependencies", "available": False, "reason": "not part of v0.1C Slice 1"},
+        {"id": "install_dependencies", "label": "Install dependencies", "available": False, "reason": "not part of v0.1C Slice 2"},
         {"id": "enable_connectors", "label": "Enable connectors", "available": False, "reason": "future connectors remain placeholders"},
         {"id": "send_email", "label": "Send email", "available": False, "reason": "external account actions are excluded"},
         {"id": "public_posting", "label": "Public posting", "available": False, "reason": "external posting is excluded"},
@@ -175,12 +211,16 @@ def dashboard_html() -> str:
 <body>
   <header>
     <h1>Jarvis PC Local</h1>
-    <div class="muted">Read-only dashboard and report visibility foundation</div>
+    <div class="muted">Read-only dashboard, report, and settings/status visibility</div>
   </header>
   <main>
     <section>
       <h2>Status</h2>
       <div id="metrics" class="grid"></div>
+    </section>
+    <section id="settings-status">
+      <h2>Settings / Status</h2>
+      <pre id="settings">Loading settings/status summary...</pre>
     </section>
     <section>
       <h2>Reports</h2>
@@ -205,6 +245,7 @@ def dashboard_html() -> str:
       document.getElementById('reports').innerHTML = summary.reports.length
         ? summary.reports.map((report) => `<div><a href="/api/reports/${encodeURIComponent(report.id)}">${report.title}</a> <span class="muted">${report.sizeBytes} bytes</span></div>`).join('')
         : 'No reports found.';
+      document.getElementById('settings').textContent = JSON.stringify(summary.settings, null, 2);
       document.getElementById('safety').textContent = JSON.stringify(summary.safety, null, 2);
       document.getElementById('connectors').innerHTML = summary.connectors.length
         ? summary.connectors.map((connector) => `<div>${connector.provider}: ${connector.status}</div>`).join('')

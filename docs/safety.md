@@ -6,7 +6,9 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
-The first v0.1C dashboard slice is read-only. It exposes local status, safety, connector placeholder, and report visibility only. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, and purchases must remain absent or unavailable.
+The first v0.1C dashboard slices are read-only. They expose local status, settings/status placeholders, safety, connector placeholder, and report visibility only. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, and purchases must remain absent or unavailable.
+
+Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, stop-task controls, desktop shell behavior, first-run wizard behavior, or installer packaging.
 
 ## Hard Blocks
 

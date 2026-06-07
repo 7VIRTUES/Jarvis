@@ -116,6 +116,11 @@ def safety_summary() -> dict[str, object]:
     return dashboard.safety_summary()
 
 
+@app.get("/api/settings/summary")
+def settings_summary() -> dict[str, object]:
+    return dashboard.settings_summary()
+
+
 @app.get("/api/reports")
 def list_dashboard_reports() -> list[dict[str, object]]:
     return dashboard.list_reports()

@@ -39,3 +39,4 @@ Tests cover:
 - Safe check execution receipts, stored results, ordered execution, skipped no-script plans, blocked unsafe plans, output redaction, and stop-on-failure behavior.
 - Controlled repair loop attempts, max-attempt and max-Codex-run limits, repeated failure stops, post-repair review stops, repair prompt context, and stored repair results.
 - Dashboard summary status, safety summary, connector placeholder visibility, report listing, report detail, report missing responses, report traversal rejection, absolute path rejection, and absence of working unsupported dashboard controls.
+- Settings/status summary read-only fields, disabled paid AI/browser automation flags, disabled external connector flags, future LAN pairing/stop-task/Tauri/wizard/installer status, settings/status dashboard markup, and absence of save/edit controls.
