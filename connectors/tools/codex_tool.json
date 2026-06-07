@@ -1,9 +1,14 @@
 {
   "id": "codex_tool",
   "name": "Codex Tool",
-  "implemented": false,
+  "implemented": true,
   "approvalRequired": true,
-  "capabilities": ["detect_cli_only"],
-  "notes": "v0.1A may detect Codex CLI availability but must not execute Codex."
+  "capabilities": [
+    "detect_codex",
+    "plan_codex_execution",
+    "preview_codex_command",
+    "future_not_enabled_run_codex_exec_workspace_write",
+    "future_not_enabled_stop_codex_process"
+  ],
+  "notes": "Planning and command preview are implemented. Actual Codex execution and process control are not enabled in current v0.1 scope."
 }
-

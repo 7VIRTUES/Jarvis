@@ -1,3 +1,2 @@
 APP_NAME = "Jarvis PC Local"
-VERSION = "0.1A"
-
+VERSION = "0.1B"

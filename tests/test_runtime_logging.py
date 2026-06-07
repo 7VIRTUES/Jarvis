@@ -10,10 +10,11 @@ def test_blocked_command_creates_security_event(tmp_path):
 
     receipt = runtime.validate(ActionRequest("coding_agent", "command", "git push"))
 
-    assert receipt.status == "blocked"
+    assert receipt.blocked is True
+    assert receipt.result == "blocked"
     security_log = tmp_path / "security.jsonl"
     assert security_log.exists()
     events = [json.loads(line) for line in security_log.read_text(encoding="utf-8").splitlines()]
     assert events[0]["eventType"] == "action_blocked"
     assert events[0]["action_type"] == "command"
-
+    assert events[0]["blocked"] is True

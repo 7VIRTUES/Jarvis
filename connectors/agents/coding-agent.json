@@ -10,6 +10,5 @@
     "detect_codex_cli",
     "write_markdown_report"
   ],
-  "notes": "Only inspection, check planning, and report generation are implemented in v0.1A. Codex execution is not implemented."
+  "notes": "Only inspection, check planning, dry-run workflow records, and report generation are implemented in current v0.1 scope. Codex execution is not implemented."
 }
-
