@@ -7,6 +7,7 @@ from urllib.parse import unquote
 
 from . import APP_NAME, VERSION
 from .config import load_json_config
+from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 
@@ -25,7 +26,7 @@ class DashboardService:
         settings = self.settings_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 2", "status": "read-only settings/status visibility"},
+            "phase": {"current": "v0.1C Slice 3", "status": "LAN dashboard/API token protection foundation"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
@@ -48,6 +49,7 @@ class DashboardService:
             "reports": reports,
             "safety": self.safety_summary(),
             "settings": settings,
+            "lanProtection": lan_protection_status(),
             "connectors": connectors,
             "unsupportedActions": unsupported_actions(),
         }
@@ -58,7 +60,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "settings/status placeholder",
+            "currentSlice": "LAN dashboard/API token protection foundation",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -72,7 +74,9 @@ class DashboardService:
             "remoteWriteAutomationAllowed": False,
             "destructiveAutomationAllowed": False,
             "lanPairingStatus": "not_implemented_yet",
-            "tokenProtectionStatus": "not_implemented_yet",
+            "tokenProtectionStatus": "implemented_for_dashboard_api",
+            "lanProtection": lan_protection_status(),
+            "lanTokenEnvVar": LAN_TOKEN_ENV_VAR,
             "stopTaskStatus": "not_implemented_yet",
             "tauriShellStatus": "not_implemented_yet",
             "firstRunWizardStatus": "not_implemented_yet",
@@ -80,7 +84,8 @@ class DashboardService:
             "privateAlphaPackagingStatus": "not_implemented_yet",
             "notes": [
                 "Settings are visible as read-only status only.",
-                "LAN pairing/token protection remains a future security slice.",
+                "Loopback dashboard access is allowed without a token.",
+                "LAN dashboard access requires a configured header or bearer token.",
                 "Stop-task, desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
             ],
         }
@@ -94,9 +99,11 @@ class DashboardService:
             "connectorExecution": False,
             "destructiveGitAutomation": False,
             "unsupportedControlsExposed": False,
+            "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
             "notes": [
                 "Dashboard endpoints are read-only.",
+                "Non-loopback dashboard requests require a configured token.",
                 "Report detail reads only approved Markdown reports under data/jarvis/reports.",
                 "Future v0.1C controls remain absent or unavailable in this slice.",
             ],
@@ -222,6 +229,10 @@ def dashboard_html() -> str:
       <h2>Settings / Status</h2>
       <pre id="settings">Loading settings/status summary...</pre>
     </section>
+    <section id="lan-protection">
+      <h2>LAN Protection</h2>
+      <pre id="lan">Loading LAN protection status...</pre>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -246,6 +257,7 @@ def dashboard_html() -> str:
         ? summary.reports.map((report) => `<div><a href="/api/reports/${encodeURIComponent(report.id)}">${report.title}</a> <span class="muted">${report.sizeBytes} bytes</span></div>`).join('')
         : 'No reports found.';
       document.getElementById('settings').textContent = JSON.stringify(summary.settings, null, 2);
+      document.getElementById('lan').textContent = JSON.stringify(summary.lanProtection, null, 2);
       document.getElementById('safety').textContent = JSON.stringify(summary.safety, null, 2);
       document.getElementById('connectors').innerHTML = summary.connectors.length
         ? summary.connectors.map((connector) => `<div>${connector.provider}: ${connector.status}</div>`).join('')

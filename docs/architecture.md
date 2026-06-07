@@ -8,7 +8,7 @@ The Codex planning slice adds future execution plans, command previews, and appr
 
 The controlled execution slice can run only an approved Codex plan through the official local Codex CLI using fixed argv, `shell=False`, a registered project path, and the `workspace-write` sandbox.
 
-The first v0.1C slices add read-only local dashboard, report, and settings/status visibility APIs. They do not add write controls, editable settings, remote access, LAN pairing, token protection, desktop shell packaging, or connector execution.
+The first v0.1C slices add read-only local dashboard, report, settings/status visibility APIs, and a LAN token protection foundation. They do not add write controls, editable settings, full pairing UX, remote internet access, desktop shell packaging, or connector execution.
 
 ## Modules
 
@@ -25,6 +25,7 @@ The first v0.1C slices add read-only local dashboard, report, and settings/statu
 - `risk.py` validates task plans against default risk budgets.
 - `diagnostics.py` exports local diagnostic summaries without secret values.
 - `dashboard.py` builds read-only dashboard summaries, settings/status summaries, connector placeholder summaries, and path-safe Markdown report listing/detail responses.
+- `lan_security.py` protects dashboard-related routes by allowing loopback requests and requiring a configured header or bearer token for non-loopback requests.
 - `reports.py` validates required implementation report sections.
 - `codex_plans.py` creates validated Codex future-run plans, prompt previews, command previews, approval records, and plan status transitions.
 - `codex_execution.py` validates approved plans, prepares bounded prompt files, runs the official Codex CLI only, stores execution summaries, and emits receipts/events.
@@ -34,6 +35,8 @@ The first v0.1C slices add read-only local dashboard, report, and settings/statu
 Runtime state is stored under `data/jarvis/`, which is gitignored. No secrets are stored. SQLite now includes task, event, approval, action receipt, project lock, Codex plan, and Codex execution tables.
 
 Dashboard report detail reads only Markdown files directly under `data/jarvis/reports` after validating the requested report id is a contained file name.
+
+LAN protection reads only `JARVIS_LAN_DASHBOARD_TOKEN` from the process environment. Missing or too-short tokens deny non-loopback dashboard/API access. Token values are not returned in dashboard HTML or JSON responses.
 
 ## Project Locks
 

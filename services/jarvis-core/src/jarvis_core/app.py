@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,7 @@ from .dashboard import DashboardService, dashboard_html
 from .diagnostics import DiagnosticExporter
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
+from .lan_security import require_dashboard_lan_access
 from .project_registry import ProjectRegistry
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
@@ -102,32 +103,32 @@ def health() -> dict[str, str]:
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def local_dashboard() -> HTMLResponse:
+def local_dashboard(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
     return HTMLResponse(dashboard_html())
 
 
 @app.get("/api/dashboard/summary")
-def dashboard_summary() -> dict[str, object]:
+def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
 
 
 @app.get("/api/safety/summary")
-def safety_summary() -> dict[str, object]:
+def safety_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.safety_summary()
 
 
 @app.get("/api/settings/summary")
-def settings_summary() -> dict[str, object]:
+def settings_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.settings_summary()
 
 
 @app.get("/api/reports")
-def list_dashboard_reports() -> list[dict[str, object]]:
+def list_dashboard_reports(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
     return dashboard.list_reports()
 
 
 @app.get("/api/reports/{report_id:path}")
-def get_dashboard_report(report_id: str) -> dict[str, object]:
+def get_dashboard_report(report_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     try:
         return dashboard.read_report(report_id)
     except PermissionError as exc:

@@ -10,6 +10,27 @@ The first v0.1C dashboard slices are read-only. They expose local status, settin
 
 Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, stop-task controls, desktop shell behavior, first-run wizard behavior, or installer packaging.
 
+## LAN Dashboard Threat Model
+
+Threats for the LAN protection slice:
+
+- A user starts Jarvis bound to `0.0.0.0` or another LAN-reachable host.
+- Another device on the LAN tries to read dashboard/API state.
+- Report contents are accessed remotely without permission.
+- Token leakage through URLs if query-string tokens are accepted.
+
+Mitigations in this slice:
+
+- Loopback dashboard/API requests are allowed without a token.
+- Non-loopback dashboard/API requests require `JARVIS_LAN_DASHBOARD_TOKEN`.
+- Missing or too-short tokens deny non-loopback access.
+- Tokens are accepted only through `X-Jarvis-LAN-Token` or `Authorization: Bearer` headers.
+- Query-string tokens and cookie tokens are not accepted.
+- Token comparisons use constant-time comparison.
+- Token values are not returned in dashboard HTML or JSON responses.
+
+Non-goals for this slice: full pairing UX, user accounts, remote internet access, HTTPS/TLS termination, production-grade public-network authentication, and mobile app pairing.
+
 ## Hard Blocks
 
 Jarvis blocks dangerous commands such as `git push`, `git merge`, `git reset --hard`, `rm -rf`, `del /s`, `format`, `diskpart`, `reg delete`, `Disable-WindowsDefender`, unrestricted execution policy changes, downloaded script execution, file deletion automation, secret reads, browser session access, email sending, public posting, and payments.

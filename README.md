@@ -18,7 +18,7 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
-Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, and settings/status visibility foundations, and later v0.1C slices must be planned before implementation begins.
+Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, and LAN token protection foundations, and later v0.1C slices must be planned before implementation begins.
 
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
@@ -68,7 +68,9 @@ v0.1C has started with a read-only dashboard and report visibility foundation. T
 
 Slice 2 adds read-only settings/status visibility. Settings are status placeholders only; there are no editable controls, no settings persistence, and no save actions.
 
-Future v0.1C slices still need planning before implementation: LAN pairing/token protection, stop-task controls, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging.
+Slice 3 adds LAN dashboard/API token protection. Loopback access remains available without a token. Non-loopback dashboard/API access requires a configured `JARVIS_LAN_DASHBOARD_TOKEN`; if the token is missing or too short, LAN access is denied. Tokens are accepted only through `X-Jarvis-LAN-Token` or `Authorization: Bearer` headers, never query strings.
+
+Future v0.1C slices still need planning before implementation: full pairing wizard, stop-task controls, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging.
 
 ## Run Jarvis Core
 
@@ -110,6 +112,8 @@ Key workflow endpoints:
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
 
+Dashboard and dashboard-related API endpoints are guarded for LAN access. Loopback requests can read them without a token; non-loopback requests require a valid configured token.
+
 ## Run Tests
 
 ```powershell
@@ -122,4 +126,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1C Slice 2 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, expose write-capable dashboard controls, run autonomous background repair, run unrestricted repair loops, or implement external account connectors. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.
+Jarvis v0.1C Slice 3 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, expose write-capable dashboard controls, run autonomous background repair, run unrestricted repair loops, implement a full pairing wizard, or implement external account connectors. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.

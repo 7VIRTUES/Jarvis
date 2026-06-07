@@ -12,7 +12,7 @@ Future versions may add controlled execution, UI surfaces, and external connecto
 
 ## v0.1B Workflow Foundation
 
-Status: complete after v0.1B closeout validation. v0.1C has started with dashboard, report, and settings/status visibility foundations, and later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
+Status: complete after v0.1B closeout validation. v0.1C has started with dashboard, report, settings/status, and LAN token protection foundations, and later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
 
 The first v0.1B slice adds task orchestration, event history, approval records, project locks, dry-run planning, action receipts, risk budget checks, diagnostics export, and report validation. It does not execute Codex or shell commands.
 
@@ -56,4 +56,6 @@ v0.1C Slice 1 added read-only dashboard and report visibility. It added local st
 
 v0.1C Slice 2 adds read-only settings/status visibility. Settings are placeholders in this slice: visible as status fields only, not editable controls, and not persisted as user changes.
 
-Later v0.1C slices remain future work and must be planned before implementation: LAN pairing/token protection, stop-task control, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging. Unsupported dashboard controls must remain disabled or absent.
+v0.1C Slice 3 adds LAN dashboard/API token protection foundation. Loopback dashboard/API access remains allowed without a token, while non-loopback access requires a valid `JARVIS_LAN_DASHBOARD_TOKEN` supplied through an accepted header. Missing or too-short tokens deny non-loopback access. Query-string tokens are not accepted and token values are not exposed.
+
+Later v0.1C slices remain future work and must be planned before implementation: full pairing wizard, stop-task control, Tauri shell placeholder, first-run setup wizard placeholder, and installer/private-alpha packaging. Unsupported dashboard controls must remain disabled or absent.
