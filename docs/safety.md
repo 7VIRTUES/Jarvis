@@ -2,7 +2,7 @@
 
 Jarvis v0.1A is read-only-first and local-first. Agents request actions, the runtime validates them, and blocked decisions are logged to `security.jsonl`.
 
-The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run plans may be validated. Controlled Codex execution exists only for approved plans through the official local CLI; generic shell execution, repair loops, and future connectors remain disabled.
+The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run plans may be validated. Controlled Codex execution exists only for approved plans through the official local CLI; generic shell execution, unrestricted repair loops, and future connectors remain disabled.
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
@@ -30,10 +30,12 @@ Execution uses fixed subprocess argv with `shell=False`; no arbitrary shell comm
 
 After Codex returns, Jarvis reviews the git diff before checks are allowed. The review counts changed files and diff lines, detects protected file paths without reading contents, and flags dependency/package files such as `package.json`, lockfiles, `pyproject.toml`, and requirements files. If the review exceeds budget or needs user review, the workflow stops before checks or repair.
 
-If the review passes, Jarvis may execute only the generated safe check plan. Check execution uses fixed argv entries from detected `package.json` scripts, validates each command through the Safe Action Runtime, records receipts, stores redacted command results, and stops on the first failed or blocked check. It does not start repair.
+If the review passes, Jarvis may execute only the generated safe check plan. Check execution uses fixed argv entries from detected `package.json` scripts, validates each command through the Safe Action Runtime, records receipts, stores redacted command results, and stops on the first failed or blocked check.
+
+If an executed safe check fails, Jarvis may run at most two controlled Codex repair attempts while staying within `maxCodexRunsPerTask`. Each repair uses a validated prompt under `.jarvis/prompts`, fixed Codex argv with `shell=False`, redacted failed-check context, post-repair policy review, and then safe checks again. Repair stops on repeated failures, protected/dependency changes, risk-budget issues, Codex repair failure, or user-review requirements.
 
 ## Risk Budgets
 
 Default limits are `maxChangedFiles=10`, `maxDiffLines=700`, `maxRepairAttempts=2`, `maxCodexRunsPerTask=3`, and `maxNewDependenciesWithoutApproval=0`. Plans that exceed these limits require approval before any future execution slice can proceed.
 
-The post-Codex review reuses these limits. Dependency/package file changes require user review in this slice because the allowed number of new dependency changes without approval is zero.
+The post-Codex review and repair loop reuse these limits. Dependency/package file changes require user review in this slice because the allowed number of new dependency changes without approval is zero.

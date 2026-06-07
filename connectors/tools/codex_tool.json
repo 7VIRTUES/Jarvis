@@ -10,5 +10,5 @@
     "execute_approved_codex_plan_workspace_write",
     "future_not_enabled_stop_codex_process"
   ],
-  "notes": "Planning, command preview, and approved-plan workspace-write Codex CLI execution are implemented. Generic Codex execution, repair loops, and process control are not enabled in current v0.1 scope."
+  "notes": "Planning, command preview, approved-plan workspace-write Codex CLI execution, safe check execution, and bounded post-check repair are implemented. Generic Codex execution, autonomous background repair, unrestricted repair loops, browser automation, and process control are not enabled in current v0.1B scope."
 }

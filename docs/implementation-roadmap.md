@@ -22,7 +22,7 @@ This slice adds Codex plan records, safe command previews, prompt planning, risk
 
 ## v0.1B Controlled Codex Execution
 
-This slice adds one approved-plan execution path through the official local Codex CLI. It validates approval, command preview, project paths, prompt/output boundaries, run limits, and project locks before execution. Repair loops and generic shell execution remain future work.
+This slice adds one approved-plan execution path through the official local Codex CLI. It validates approval, command preview, project paths, prompt/output boundaries, run limits, and project locks before execution. Generic shell execution remains out of scope.
 
 ## v0.1B Post-Codex Review and Check Planning
 
@@ -34,4 +34,10 @@ If the review passes, Jarvis generates a planned-check list from detected packag
 
 This slice executes only the generated safe check plan after Codex succeeds and post-Codex review passes. Each check is validated through the Safe Action Runtime, run with fixed argv and `shell=False`, recorded with a receipt, and stored on the Codex execution record with redacted output excerpts.
 
-Failed or blocked checks stop the remaining planned checks. Repair loops remain future work.
+Failed or blocked checks stop the remaining planned checks. Failed executed checks can enter the controlled repair loop.
+
+## v0.1B Controlled Repair Loop
+
+This slice runs at most two Codex repair attempts after failed safe checks. Each attempt uses the official local Codex CLI with fixed argv and `shell=False`, writes the repair prompt under `.jarvis/prompts`, includes redacted failed-check context, reruns post-Codex review, and reruns safe checks only if review passes.
+
+Repair stops on passing checks, repeated failures, max attempts, max Codex runs per task, Codex repair failure, protected/dependency-file changes, or changed-file/diff-line budget issues.

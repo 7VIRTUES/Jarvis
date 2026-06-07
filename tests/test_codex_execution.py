@@ -46,6 +46,12 @@ def success_runner(argv, **kwargs):
     return subprocess.CompletedProcess(argv, 0, stdout="completed", stderr="")
 
 
+def repair_success_runner(argv, **kwargs):
+    assert kwargs["shell"] is False
+    assert argv[0:2] == ["codex", "exec"]
+    return subprocess.CompletedProcess(argv, 0, stdout="repair completed" if "repair-attempt" in argv[-1] else "completed", stderr="")
+
+
 def success_check_runner(argv, **kwargs):
     assert kwargs["shell"] is False
     assert argv[0].startswith("npm")
@@ -334,6 +340,7 @@ def test_successful_check_plan_executes_all_checks_in_order_and_stores_results(t
     assert stored["check_results"] == result["check_results"]
     assert len(command_receipts) == 4
     assert conn.execute("select check_results from codex_executions where execution_id = ?", (result["execution_id"],)).fetchone()[0] != "{}"
+    assert result["repair_results"]["status"] == "skipped"
 
 
 def test_failed_first_check_stops_later_checks(tmp_path):
@@ -350,10 +357,210 @@ def test_failed_first_check_stops_later_checks(tmp_path):
     result = execution.execute_plan(plan["plan_id"])
 
     assert result["status"] == "failed"
-    assert [call[-1] for call in calls] == ["typecheck"]
+    assert [call[-1] for call in calls] == ["typecheck", "typecheck"]
     assert result["check_results"]["status"] == "failed"
     assert result["check_results"]["checks"][0]["status"] == "failed"
-    assert len([receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]) == 1
+    assert result["repair_results"]["reason"] == "same check failure repeated"
+    assert len([receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]) == 2
+
+
+def test_failed_check_triggers_repair_and_passing_repair_stops_loop(tmp_path):
+    check_calls = []
+
+    def check_runner(argv, **kwargs):
+        check_calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 1 if len(check_calls) == 1 else 0, stdout=f"check call {len(check_calls)}", stderr="")
+
+    conn, _, _, _, _, plans, execution, project = stack(tmp_path, runner=repair_success_runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+    stored = execution.get_execution(result["execution_id"])
+
+    assert result["status"] == "succeeded"
+    assert len(check_calls) == 2
+    assert result["repair_results"]["status"] == "succeeded"
+    assert len(result["repair_results"]["attempts"]) == 1
+    assert result["repair_results"]["attempts"][0]["check_results"]["status"] == "succeeded"
+    assert stored["repair_results"] == result["repair_results"]
+    assert conn.execute("select repair_results from codex_executions where execution_id = ?", (result["execution_id"],)).fetchone()[0] != "{}"
+
+
+def test_repair_loop_enforces_max_two_attempts(tmp_path):
+    check_calls = []
+
+    def check_runner(argv, **kwargs):
+        check_calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 1, stdout=f"failure {len(check_calls)}", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=repair_success_runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "stopped"
+    assert result["repair_results"]["reason"] == "max repair attempts reached"
+    assert len(result["repair_results"]["attempts"]) == 2
+    assert len(check_calls) == 3
+
+
+def test_repair_loop_respects_max_codex_runs_per_task(tmp_path):
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="check failed", stderr="")
+
+    conn, _, _, _, _, plans, execution, project = stack(tmp_path, runner=repair_success_runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+    for index in range(2):
+        conn.execute(
+            "insert into codex_executions (execution_id, plan_id, task_id, project_name, status, started_at, codex_command_preview) values (?, ?, ?, ?, ?, ?, ?)",
+            (f"prior-exec-{index}", plan["plan_id"], plan["task_id"], plan["project_name"], "succeeded", "now", "codex exec"),
+        )
+    conn.commit()
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "stopped"
+    assert result["repair_results"]["reason"] == "maxCodexRunsPerTask reached before repair"
+    assert result["repair_results"]["attempts"] == []
+
+
+def test_same_failure_repeated_stops_repair_loop(tmp_path):
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="same failure", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=repair_success_runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "stopped"
+    assert result["repair_results"]["reason"] == "same check failure repeated"
+    assert len(result["repair_results"]["attempts"]) == 1
+
+
+def test_repair_codex_failure_stops_loop(tmp_path):
+    def runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1 if "repair-attempt" in argv[-1] else 0, stdout="repair failed", stderr="")
+
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="check failed", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "failed"
+    assert result["repair_results"]["reason"] == "Codex repair run failed"
+    assert result["repair_results"]["attempts"][0]["codex_return_code"] == 1
+
+
+def test_post_repair_protected_file_review_stops_loop(tmp_path):
+    def runner(argv, **kwargs):
+        if "repair-attempt" in argv[-1]:
+            project = __import__("pathlib").Path(kwargs["cwd"])
+            (project / ".env").write_text("SECRET_VALUE_SHOULD_NOT_READ=1\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="check failed", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+    attempt = result["repair_results"]["attempts"][0]
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "review_required"
+    assert "protected file" in result["repair_results"]["reason"]
+    assert attempt["post_review"]["protectedFilesChanged"] == [".env"]
+    assert "SECRET_VALUE_SHOULD_NOT_READ" not in json.dumps(result["repair_results"])
+
+
+def test_post_repair_dependency_file_review_stops_loop(tmp_path):
+    def runner(argv, **kwargs):
+        if "repair-attempt" in argv[-1]:
+            project = __import__("pathlib").Path(kwargs["cwd"])
+            (project / "package.json").write_text('{"scripts":{"test":"node test.js"},"dependencies":{"x":"1.0.0"}}\n', encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="check failed", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "review_required"
+    assert "dependency/package" in result["repair_results"]["reason"]
+    assert result["repair_results"]["attempts"][0]["post_review"]["dependencyFilesChanged"] == ["package.json"]
+
+
+def test_post_repair_risk_budget_failure_stops_loop(tmp_path):
+    def runner(argv, **kwargs):
+        if "repair-attempt" in argv[-1]:
+            project = __import__("pathlib").Path(kwargs["cwd"])
+            for index in range(12):
+                (project / f"repair-{index}.txt").write_text("changed\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="check failed", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert result["repair_results"]["status"] == "review_required"
+    assert "changedFiles=" in result["repair_results"]["reason"]
+
+
+def test_repair_prompt_includes_failed_check_context_with_redacted_output(tmp_path):
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="api_key=SECRET_VALUE", stderr="password=HIDDEN")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, runner=repair_success_runner, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = plans.create_plan(
+        CodexPlanInput(
+            task_id="task-1",
+            project_name="sample",
+            task_goal="Approved repair prompt goal",
+            exact_scope="Only repair the failing test.",
+            non_goals="No unrelated work.",
+            risk_plan={"changedFiles": 1},
+        )
+    )
+    approved = plans.approve_for_future_execution(plan["plan_id"], "local_user", "approved")
+
+    execution.execute_plan(approved["plan_id"])
+    prompt_text = (project / ".jarvis" / "prompts" / "repair-attempt-1.md").read_text(encoding="utf-8")
+
+    assert "Approved repair prompt goal" in prompt_text
+    assert "Name: test" in prompt_text
+    assert "Command: npm run test" in prompt_text
+    assert "api_key=[REDACTED]" in prompt_text
+    assert "password=[REDACTED]" in prompt_text
+    assert "SECRET_VALUE" not in prompt_text
+    assert "HIDDEN" not in prompt_text
+    assert "Fix only the failed check above" in prompt_text
 
 
 def test_failed_middle_check_stops_later_checks(tmp_path):
@@ -370,8 +577,9 @@ def test_failed_middle_check_stops_later_checks(tmp_path):
     result = execution.execute_plan(plan["plan_id"])
 
     assert result["status"] == "failed"
-    assert [call[-1] for call in calls] == ["typecheck", "lint"]
+    assert [call[-1] for call in calls] == ["typecheck", "lint", "typecheck", "lint"]
     assert [check["status"] for check in result["check_results"]["checks"]] == ["succeeded", "failed"]
+    assert result["repair_results"]["reason"] == "same check failure repeated"
 
 
 def test_no_scripts_creates_skipped_check_result(tmp_path):
@@ -399,6 +607,7 @@ def test_controlled_codex_flow_stops_before_checks_when_post_review_fails(tmp_pa
     assert result["post_review"]["checksMayProceed"] is False
     assert result["check_plan"]["checks"] == [{"name": "test", "command": "npm run test", "argv": safe_check_argv("test"), "source": "package.json scripts"}]
     assert result["check_results"]["status"] == "skipped"
+    assert result["repair_results"]["status"] == "skipped"
     assert "codex.post_review_blocked" in event_types
     assert "codex.check_plan_generated" not in event_types
     assert calls == []

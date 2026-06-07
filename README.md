@@ -58,7 +58,7 @@ The check execution receipts slice executes only the generated safe check plan a
 - redacted stdout/stderr excerpts stored on the execution record
 - stop-on-first-failed-or-blocked-check behavior
 
-Repair loops are not implemented in this slice.
+The controlled repair loop slice may run at most two Codex repair attempts after failed safe checks. Each repair uses fixed Codex argv, redacted failed-check context, post-repair policy review, and safe checks again. It stops on repeated failures, max-run limits, review-required changes, protected/dependency-file changes, or risk-budget issues.
 
 ## Run Jarvis Core
 
@@ -102,4 +102,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1B does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, run a dashboard, repair code automatically, or implement external account connectors. Controlled Codex execution is limited to approved plans through the official local CLI.
+Jarvis v0.1B does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, run a dashboard, run autonomous background repair, run unrestricted repair loops, or implement external account connectors. Controlled Codex execution and bounded post-check repair are limited to approved plans through the official local CLI.

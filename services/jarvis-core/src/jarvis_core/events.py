@@ -42,6 +42,8 @@ EVENT_TYPES = {
     "codex.post_review_blocked",
     "codex.check_plan_generated",
     "codex.checks_completed",
+    "codex.repair_started",
+    "codex.repair_completed",
 }
 
 

@@ -108,17 +108,22 @@ class CodexExecutionService:
             blocked_reason = None
             status = "succeeded" if completed.returncode == 0 else "failed"
             check_results = {"status": "skipped", "reason": "Codex execution failed before checks", "checks": []}
+            repair_results = {"status": "skipped", "reason": "repair not needed", "attempts": []}
             if completed.returncode == 0 and review["requiresUserReview"]:
                 status = "blocked"
                 blocked_reason = "; ".join(review["reasons"])
                 check_results = {"status": "skipped", "reason": "post-Codex review requires user review", "checks": []}
+                repair_results = {"status": "skipped", "reason": "post-Codex review requires user review", "attempts": []}
             elif completed.returncode == 0:
                 check_results = self._run_check_plan(project_path, plan, review["checkPlan"], package_scripts)
                 if check_results["status"] == "failed":
-                    status = "failed"
+                    repair_results = self._run_repair_loop(project_path, prompt_path, output_path, plan, check_results)
+                    check_results = repair_results.get("final_check_results", check_results)
+                    status = "succeeded" if repair_results["status"] == "succeeded" else "failed"
                 elif check_results["status"] == "blocked":
                     status = "blocked"
                     blocked_reason = str(check_results["reason"])
+                    repair_results = {"status": "skipped", "reason": "blocked check was not repairable", "attempts": []}
             self._finish_execution(
                 execution_id,
                 status,
@@ -131,6 +136,7 @@ class CodexExecutionService:
                 review,
                 review["checkPlan"],
                 check_results,
+                repair_results,
             )
             if status == "blocked":
                 if review["requiresUserReview"]:
@@ -138,7 +144,7 @@ class CodexExecutionService:
                 self.events.emit("codex.execution_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
             else:
                 event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
-                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review, "checkResults": check_results})
+                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review, "checkResults": check_results, "repairResults": repair_results})
                 if status == "succeeded":
                     self.events.emit("codex.check_plan_generated", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkPlan": review["checkPlan"]})
             if completed.returncode == 0 and not review["requiresUserReview"]:
@@ -254,12 +260,13 @@ class CodexExecutionService:
         post_review: dict[str, Any] | None = None,
         check_plan: dict[str, Any] | None = None,
         check_results: dict[str, Any] | None = None,
+        repair_results: dict[str, Any] | None = None,
     ) -> None:
         self.conn.execute(
             """
             update codex_executions
             set status = ?, finished_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?,
-                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?, check_results = ?
+                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?, check_results = ?, repair_results = ?
             where execution_id = ?
             """,
             (
@@ -273,10 +280,119 @@ class CodexExecutionService:
                 json.dumps(post_review or {}),
                 json.dumps(check_plan or {}),
                 json.dumps(check_results or {}),
+                json.dumps(repair_results or {}),
                 execution_id,
             ),
         )
         self.conn.commit()
+
+    def _run_repair_loop(self, project_path: Path, prompt_path: Path, output_path: Path, plan: dict[str, Any], initial_check_results: dict[str, Any]) -> dict[str, Any]:
+        attempts: list[dict[str, Any]] = []
+        previous_failure = self._failure_signature(initial_check_results)
+        current_failure = self._failed_check(initial_check_results)
+        if not current_failure:
+            return {"status": "skipped", "reason": "no failed check to repair", "attempts": [], "final_check_results": initial_check_results}
+
+        max_attempts = int(DEFAULT_RISK_BUDGET["maxRepairAttempts"])
+        max_codex_runs = int(DEFAULT_RISK_BUDGET["maxCodexRunsPerTask"])
+        for attempt_number in range(1, max_attempts + 1):
+            if self._codex_runs_for_task(str(plan["task_id"])) + len(attempts) >= max_codex_runs:
+                return {"status": "stopped", "reason": "maxCodexRunsPerTask reached before repair", "attempts": attempts, "final_check_results": initial_check_results}
+
+            started_at = utc_now()
+            repair_prompt_path = prompt_path.with_name(f"repair-attempt-{attempt_number}.md")
+            repair_output_path = output_path.with_name(f"repair-attempt-{attempt_number}.md")
+            validation = validate_codex_project_paths(
+                project_path,
+                str(repair_prompt_path.relative_to(project_path)),
+                str(repair_output_path.relative_to(project_path)),
+                str(plan["sandbox_mode"]),
+            )[0]
+            attempt: dict[str, Any] = {
+                "attempt_number": attempt_number,
+                "started_at": started_at,
+                "finished_at": "",
+                "status": "failed",
+                "codex_return_code": None,
+                "output_path": str(repair_output_path),
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+                "failed_check": current_failure,
+                "post_review": {},
+                "check_results": {},
+                "reason": "",
+            }
+            if validation:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "stopped"
+                attempt["reason"] = validation
+                attempts.append(attempt)
+                return {"status": "stopped", "reason": validation, "attempts": attempts, "final_check_results": initial_check_results}
+
+            repair_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+            repair_output_path.parent.mkdir(parents=True, exist_ok=True)
+            repair_prompt_path.write_text(self._repair_prompt(plan, current_failure), encoding="utf-8")
+            self.events.emit("codex.repair_started", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number})
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute_approved_plan", str(plan["plan_id"]), str(plan["task_id"]), str(plan["tool_id"]), str(plan["risk_level"])))
+            if receipt.blocked or receipt.approval_required:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "stopped"
+                attempt["reason"] = receipt.reason
+                attempts.append(attempt)
+                return {"status": "stopped", "reason": receipt.reason, "attempts": attempts, "final_check_results": initial_check_results}
+
+            completed = self.runner(
+                self._repair_argv(project_path, repair_prompt_path, repair_output_path, str(plan["sandbox_mode"])),
+                cwd=str(project_path),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+            attempt["codex_return_code"] = completed.returncode
+            attempt["stdout_excerpt"] = redact_output(completed.stdout)
+            attempt["stderr_excerpt"] = redact_output(completed.stderr)
+            if completed.returncode != 0:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "failed"
+                attempt["reason"] = "Codex repair run failed"
+                attempts.append(attempt)
+                return {"status": "failed", "reason": "Codex repair run failed", "attempts": attempts, "final_check_results": initial_check_results}
+
+            inspection = inspect_project(project_path)
+            package_scripts = inspection.get("packageScripts", {})
+            review = review_post_codex_diff(project_path, package_scripts)
+            attempt["post_review"] = review
+            if review["requiresUserReview"]:
+                attempt["finished_at"] = utc_now()
+                attempt["status"] = "review_required"
+                attempt["reason"] = "; ".join(review["reasons"])
+                attempts.append(attempt)
+                return {"status": "review_required", "reason": attempt["reason"], "attempts": attempts, "final_check_results": initial_check_results}
+
+            check_results = self._run_check_plan(project_path, plan, review["checkPlan"], package_scripts)
+            attempt["check_results"] = check_results
+            attempt["finished_at"] = utc_now()
+            if check_results["status"] == "succeeded":
+                attempt["status"] = "succeeded"
+                attempt["reason"] = "checks passed after repair"
+                attempts.append(attempt)
+                self.events.emit("codex.repair_completed", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number, "status": "succeeded"})
+                return {"status": "succeeded", "reason": "checks passed after repair", "attempts": attempts, "final_check_results": check_results}
+
+            next_failure = self._failure_signature(check_results)
+            attempt["status"] = "failed" if check_results["status"] == "failed" else "stopped"
+            attempt["reason"] = str(check_results.get("reason") or "checks failed after repair")
+            attempts.append(attempt)
+            self.events.emit("codex.repair_completed", str(plan["task_id"]), {"plan_id": plan["plan_id"], "attempt": attempt_number, "status": attempt["status"]})
+            if next_failure == previous_failure:
+                return {"status": "stopped", "reason": "same check failure repeated", "attempts": attempts, "final_check_results": check_results}
+            previous_failure = next_failure
+            current_failure = self._failed_check(check_results)
+            if not current_failure:
+                return {"status": "stopped", "reason": "repair checks did not produce a repairable failure", "attempts": attempts, "final_check_results": check_results}
+
+        return {"status": "stopped", "reason": "max repair attempts reached", "attempts": attempts, "final_check_results": attempts[-1].get("check_results", initial_check_results) if attempts else initial_check_results}
 
     def _run_check_plan(self, project_path: Path, plan: dict[str, Any], check_plan: dict[str, Any], package_scripts: dict[str, str]) -> dict[str, Any]:
         checks = check_plan.get("checks", [])
@@ -351,6 +467,72 @@ class CodexExecutionService:
 
         return {"status": "succeeded", "reason": "all planned checks succeeded", "checks": results}
 
+    def _failed_check(self, check_results: dict[str, Any]) -> dict[str, Any] | None:
+        for check in check_results.get("checks", []):
+            if isinstance(check, dict) and check.get("status") in {"failed", "blocked"} and check.get("command"):
+                return check
+        return None
+
+    def _failure_signature(self, check_results: dict[str, Any]) -> dict[str, Any] | None:
+        failed = self._failed_check(check_results)
+        if not failed:
+            return None
+        return {
+            "name": failed.get("name"),
+            "command": failed.get("command"),
+            "argv": failed.get("argv"),
+            "stdout_excerpt": failed.get("stdout_excerpt"),
+            "stderr_excerpt": failed.get("stderr_excerpt"),
+            "reason": failed.get("reason"),
+        }
+
+    def _repair_argv(self, project_path: Path, repair_prompt_path: Path, repair_output_path: Path, sandbox_mode: str) -> list[str]:
+        return [
+            "codex",
+            "exec",
+            "--cd",
+            str(project_path),
+            "--sandbox",
+            sandbox_mode,
+            "--ask-for-approval",
+            "never",
+            "--output-last-message",
+            str(repair_output_path),
+            f"Read {repair_prompt_path} and complete the repair task exactly.",
+        ]
+
+    def _repair_prompt(self, plan: dict[str, Any], failed_check: dict[str, Any]) -> str:
+        approved_prompt = str(plan.get("prompt_content") or "").strip()
+        return "\n".join(
+            [
+                "# Jarvis Controlled Codex Repair",
+                "",
+                f"Plan ID: {plan['plan_id']}",
+                f"Task ID: {plan['task_id']}",
+                "",
+                "## Original Approved Plan",
+                approved_prompt or "No persisted approved prompt content was available.",
+                "",
+                "## Failed Check",
+                f"Name: {failed_check.get('name')}",
+                f"Command: {failed_check.get('command')}",
+                f"Argv: {json.dumps(failed_check.get('argv', []))}",
+                f"Exit code: {failed_check.get('exit_code')}",
+                "",
+                "## Redacted Output",
+                "Stdout excerpt:",
+                str(failed_check.get("stdout_excerpt") or ""),
+                "",
+                "Stderr excerpt:",
+                str(failed_check.get("stderr_excerpt") or ""),
+                "",
+                "## Repair Boundary",
+                "Fix only the failed check above. Do not broaden scope, refactor unrelated code, read secrets, push, merge, reset hard, delete files destructively, send email, post publicly, make purchases, automate browsers, use paid APIs, or access future connectors.",
+                "Do not modify protected files or dependency/package files unless the original approved plan already allowed that exact change.",
+                "After the repair, stop and report what changed.",
+            ]
+        ) + "\n"
+
     def _codex_runs_for_task(self, task_id: str) -> int:
         return int(
             self.conn.execute(
@@ -418,7 +600,7 @@ class CodexExecutionService:
                 "git push; git merge; git reset --hard; rm -rf; del /s; format; diskpart; reg delete; secret reads; browser sessions; email; public posting; payments; connector execution.",
                 "",
                 "## Tests",
-                "Plan checks only unless explicitly available through a later Jarvis check-runner slice.",
+                "Jarvis may run detected safe checks and bounded repairs only through the controlled local workflow.",
                 "",
                 "## Final Report Requirements",
                 "Summarize changed files, commands run by Codex, tests attempted, blocked actions, risks, and recommended next task.",
@@ -429,7 +611,7 @@ class CodexExecutionService:
         return (
             "select execution_id, plan_id, task_id, project_name, status, started_at, finished_at, "
             "codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error, "
-            "post_review, check_plan, check_results from codex_executions"
+            "post_review, check_plan, check_results, repair_results from codex_executions"
         )
 
     def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
@@ -452,6 +634,7 @@ class CodexExecutionService:
             "post_review": json.loads(row[15] or "{}"),
             "check_plan": json.loads(row[16] or "{}"),
             "check_results": json.loads(row[17] or "{}"),
+            "repair_results": json.loads(row[18] or "{}"),
         }
 
 
