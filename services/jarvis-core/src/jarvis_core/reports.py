@@ -14,11 +14,17 @@ REQUIRED_IMPLEMENTATION_REPORT_SECTIONS = [
     "Command results",
     "Tests added/changed",
     "Test results",
+    "Post-Codex review findings",
+    "Safe check results",
+    "Repair attempts/results",
     "Blocked actions/safety decisions",
     "Known risks",
     "Whether safe to build on",
     "Recommended next task",
 ]
+
+
+REQUIRED_IMPLEMENTATION_REPORT_FORMAT = "; ".join(REQUIRED_IMPLEMENTATION_REPORT_SECTIONS) + "."
 
 
 def missing_implementation_report_sections(text: str) -> list[str]:

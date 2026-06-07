@@ -19,6 +19,7 @@ The Coding Agent is the only implemented agent manifest in v0.1A.
 - Generate a safe planned-check list from detected package scripts only.
 - Execute the generated safe check plan with action receipts and stored results.
 - Run a bounded repair loop after failed checks, then repeat post-Codex review and safe checks.
+- Produce final reports that include post-Codex review findings, safe check results, repair attempts/results, blocked actions, known risks, build-safety status, and the recommended next task.
 
 ## Limits
 

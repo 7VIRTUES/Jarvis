@@ -708,6 +708,9 @@ def test_execution_prompt_includes_approved_plan_fields(tmp_path):
     assert "Approved non goals" in prompt_text
     assert "src/allowed.py" in prompt_text
     assert "python -m pytest tests/test_codex_execution.py" in prompt_text
+    assert "Post-Codex review findings" in prompt_text
+    assert "Safe check results" in prompt_text
+    assert "Repair attempts/results" in prompt_text
 
 
 def test_diagnostics_include_execution_summary_but_not_secret_output(tmp_path):

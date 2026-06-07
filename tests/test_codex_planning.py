@@ -13,7 +13,7 @@ from jarvis_core.events import EventBus
 from jarvis_core.permissions import check_action
 from jarvis_core.project_registry import ProjectRegistry
 from jarvis_core.registries import load_manifest
-from jarvis_core.reports import REQUIRED_IMPLEMENTATION_REPORT_SECTIONS, missing_implementation_report_sections
+from jarvis_core.reports import REQUIRED_IMPLEMENTATION_REPORT_FORMAT, REQUIRED_IMPLEMENTATION_REPORT_SECTIONS, missing_implementation_report_sections
 from jarvis_core.runtime import SafeActionRuntime
 
 
@@ -286,3 +286,14 @@ def test_codex_tool_manifest_and_future_connectors_validate():
 def test_report_validation_still_passes():
     report = "\n".join(f"## {section}" for section in REQUIRED_IMPLEMENTATION_REPORT_SECTIONS)
     assert missing_implementation_report_sections(report) == []
+
+
+def test_codex_plan_prompt_uses_shared_final_report_format(tmp_path):
+    _, _, _, _, _, _, service, _ = stack(tmp_path)
+
+    prompt = service.build_prompt(plan_payload(), tmp_path)
+
+    assert REQUIRED_IMPLEMENTATION_REPORT_FORMAT in prompt
+    assert "Post-Codex review findings" in prompt
+    assert "Safe check results" in prompt
+    assert "Repair attempts/results" in prompt
