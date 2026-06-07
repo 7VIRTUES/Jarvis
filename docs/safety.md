@@ -6,9 +6,9 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
-The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, and a narrow stop-task boundary. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, and OS service control must remain absent or unavailable.
+The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, a narrow stop-task boundary, and desktop-shell placeholder status. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, desktop launch/install/update automation, telemetry, and OS service control must remain absent or unavailable.
 
-Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, desktop shell behavior, first-run wizard behavior, or installer packaging.
+Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, production desktop shell behavior, first-run wizard behavior, or installer packaging.
 
 LAN setup guidance is loopback-only. Non-loopback requests to setup status and setup HTML are denied even with a valid dashboard token until a real pairing UX exists. The setup surface does not expose token values, token prefixes, token suffixes, token hashes, environment dumps, input fields, persistence, or token creation controls.
 
@@ -40,6 +40,14 @@ Stop-task controls apply only to Jarvis-owned task records in the local task tab
 Stopping a Jarvis task marks that task record as `canceled`, emits the existing `task.canceled` event, and releases its Jarvis project lock. It is not a process manager. It must not accept PID, process name, shell command, executable path, or Windows service identifiers, and it must not kill unrelated user applications.
 
 Dashboard, task-status, and stop-task endpoints remain LAN-protected: loopback is allowed without a token, while non-loopback access requires the configured dashboard token.
+
+## Desktop Shell Placeholder
+
+The v0.1C desktop shell slice is placeholder/readiness only. `apps/desktop` contains documentation, not a working Tauri application.
+
+No Tauri dependencies, package manager dependencies, Rust toolchain setup, launch controls, install controls, auto-updater, telemetry, production packaging, Windows service behavior, OS-level permissions, or host-PC control are added in this slice.
+
+A future desktop shell must wrap the local dashboard without bypassing LAN/token protection, the Safe Action Runtime, approvals, or audit logging.
 
 ## Hard Blocks
 

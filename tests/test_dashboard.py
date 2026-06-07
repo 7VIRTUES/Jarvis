@@ -21,16 +21,19 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1C Slice 5"
+    assert summary["phase"]["current"] == "v0.1C Slice 6"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
+    assert summary["capabilities"]["desktopShell"] == "placeholder_only"
     assert summary["safety"]["paidApis"] is False
     assert summary["safety"]["connectorExecution"] is False
     assert summary["safety"]["arbitraryProcessKill"] is False
+    assert summary["safety"]["desktopShell"]["autoUpdaterEnabled"] is False
     assert summary["settings"]["settingsEditable"] is False
     assert summary["lanProtection"]["lanProtectionImplemented"] is True
     assert summary["stopTask"]["pidAccepted"] is False
+    assert summary["desktopShell"]["tauriShellImplemented"] is False
 
 
 def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, monkeypatch):
@@ -40,7 +43,7 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
 
     assert settings["appName"] == "Jarvis PC Local"
     assert settings["phase"] == "v0.1C"
-    assert settings["currentSlice"] == "stop-task status/control boundary"
+    assert settings["currentSlice"] == "Tauri desktop shell placeholder/readiness foundation"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
@@ -78,9 +81,30 @@ def test_settings_summary_marks_lan_pairing_future_and_stop_task_boundary(tmp_pa
     assert settings["stopTaskStatus"] == "implemented_for_jarvis_task_queue_state_only"
     assert settings["stopTask"]["osProcessControl"] is False
     assert settings["stopTask"]["pidAccepted"] is False
-    assert settings["tauriShellStatus"] == "not_implemented_yet"
+    assert settings["tauriShellStatus"] == "placeholder_only"
     assert settings["firstRunWizardStatus"] == "not_implemented_yet"
     assert settings["installerStatus"] == "not_implemented_yet"
+
+
+def test_settings_summary_reports_desktop_shell_placeholder_status(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+    desktop = settings["desktopShell"]
+
+    assert settings["desktopShellStatus"] == "placeholder_only"
+    assert settings["tauriShellStatus"] == "placeholder_only"
+    assert settings["tauriShellImplemented"] is False
+    assert settings["tauriDependenciesInstalled"] is False
+    assert settings["installerPackagingStatus"] == "not_implemented_yet"
+    assert settings["autoUpdaterEnabled"] is False
+    assert settings["telemetryEnabled"] is False
+    assert desktop["desktopShellStatus"] == "placeholder_only"
+    assert desktop["productionDesktopAppImplemented"] is False
+    assert desktop["desktopLaunchControlAvailable"] is False
+    assert desktop["desktopInstallControlAvailable"] is False
+    assert desktop["lanTokenProtectionMustBeRespected"] is True
+    assert desktop["safeActionRuntimeMustBeRespected"] is True
 
 
 def test_settings_summary_shows_lan_protection_without_token_value(tmp_path, monkeypatch):
@@ -188,6 +212,10 @@ def test_unsupported_controls_are_not_exposed_as_working_automation(tmp_path, mo
     assert "git push" not in page_text
     assert "save" not in page_text
     assert "edit" not in page_text
+    assert "launch desktop" not in page_text
+    assert "install tauri" not in page_text
+    assert "update app" not in page_text
+    assert "auto-updater enabled" not in page_text
     assert "taskkill" not in page_text
     assert "process name" not in page_text
 
@@ -203,6 +231,8 @@ def test_dashboard_html_includes_settings_status_section(tmp_path, monkeypatch):
     assert "lan protection" in page_text
     assert 'id="stop-task-control"' in page_text
     assert "active task / stop task" in page_text
+    assert 'id="desktop-shell-status"' in page_text
+    assert "desktop shell / tauri" in page_text
     assert "/api/tasks/" in page_text
     assert "/setup/lan" in page_text
     assert "/api/dashboard/summary" in page_text

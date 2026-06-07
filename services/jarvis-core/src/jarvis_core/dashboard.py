@@ -27,15 +27,17 @@ class DashboardService:
         connectors = self.connector_summary()
         settings = self.settings_summary()
         stop_task = self.stop_task_summary()
+        desktop_shell = self.desktop_shell_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 5", "status": "stop-task status/control boundary"},
+            "phase": {"current": "v0.1C Slice 6", "status": "Tauri desktop shell placeholder/readiness foundation"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
                 "settings": "read_only_status",
                 "projects": "read_only_summary",
                 "stopTask": "jarvis_task_queue_state_only",
+                "desktopShell": "placeholder_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -54,6 +56,7 @@ class DashboardService:
             "safety": self.safety_summary(),
             "settings": settings,
             "stopTask": stop_task,
+            "desktopShell": desktop_shell,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -67,7 +70,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "stop-task status/control boundary",
+            "currentSlice": "Tauri desktop shell placeholder/readiness foundation",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -87,17 +90,25 @@ class DashboardService:
             "lanTokenEnvVar": LAN_TOKEN_ENV_VAR,
             "stopTaskStatus": "implemented_for_jarvis_task_queue_state_only",
             "stopTask": self.stop_task_summary(),
-            "tauriShellStatus": "not_implemented_yet",
+            "desktopShellStatus": "placeholder_only",
+            "desktopShell": self.desktop_shell_summary(),
+            "tauriShellStatus": "placeholder_only",
+            "tauriShellImplemented": False,
+            "tauriDependenciesInstalled": False,
             "firstRunWizardStatus": "not_implemented_yet",
             "installerStatus": "not_implemented_yet",
             "privateAlphaPackagingStatus": "not_implemented_yet",
+            "installerPackagingStatus": "not_implemented_yet",
+            "autoUpdaterEnabled": False,
+            "telemetryEnabled": False,
             "notes": [
                 "Settings are visible as read-only status only.",
                 "LAN setup guidance is available from loopback only.",
                 "Loopback dashboard access is allowed without a token.",
                 "LAN dashboard access requires a configured header or bearer token.",
                 "Stop-task controls apply only to Jarvis-owned task records and do not kill OS processes.",
-                "Desktop shell, first-run wizard, and installer packaging remain future v0.1C slices.",
+                "Desktop shell is placeholder/readiness only and does not install or launch Tauri.",
+                "First-run wizard and installer packaging remain future v0.1C slices.",
             ],
         }
 
@@ -110,6 +121,7 @@ class DashboardService:
             "connectorExecution": False,
             "destructiveGitAutomation": False,
             "arbitraryProcessKill": False,
+            "desktopShell": self.desktop_shell_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
@@ -119,7 +131,37 @@ class DashboardService:
                 "Non-loopback dashboard requests require a configured token.",
                 "Report detail reads only approved Markdown reports under data/jarvis/reports.",
                 "Stop-task controls accept only Jarvis task IDs and do not accept PID, process-name, command, or OS service identifiers.",
+                "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
+            ],
+        }
+
+    def desktop_shell_summary(self) -> dict[str, Any]:
+        desktop_root = self.workspace_root / "apps" / "desktop"
+        return {
+            "requirement": "v0.1C Tauri desktop shell placeholder/readiness foundation",
+            "desktopShellStatus": "placeholder_only",
+            "placeholderDirectory": "apps/desktop",
+            "placeholderDirectoryExists": desktop_root.exists(),
+            "tauriShellImplemented": False,
+            "productionDesktopAppImplemented": False,
+            "tauriDependenciesInstalled": False,
+            "packageManagerDependenciesAdded": False,
+            "desktopLaunchControlAvailable": False,
+            "desktopInstallControlAvailable": False,
+            "autoUpdaterEnabled": False,
+            "telemetryEnabled": False,
+            "installerPackagingStatus": "not_implemented_yet",
+            "privateAlphaPackagingStatus": "not_implemented_yet",
+            "firstRunWizardStatus": "not_implemented_yet",
+            "lanTokenProtectionMustBeRespected": True,
+            "safeActionRuntimeMustBeRespected": True,
+            "osLevelPermissionsAdded": False,
+            "hostPcControlAdded": False,
+            "notes": [
+                "apps/desktop contains documentation-only readiness notes.",
+                "A future shell may wrap the local dashboard but must not bypass LAN/token protection.",
+                "No auto-updater, telemetry, installer packaging, or Tauri dependency installation is included in this slice.",
             ],
         }
 
@@ -305,6 +347,10 @@ def dashboard_html() -> str:
       <button id="stop-task-button" type="button" disabled>Stop Task</button>
       <pre id="stop-task-status">Loading stop-task status...</pre>
     </section>
+    <section id="desktop-shell-status">
+      <h2>Desktop Shell / Tauri</h2>
+      <pre id="desktop-shell">Loading desktop shell placeholder status...</pre>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -330,6 +376,7 @@ def dashboard_html() -> str:
         : 'No reports found.';
       document.getElementById('settings').textContent = JSON.stringify(summary.settings, null, 2);
       document.getElementById('stop-task-status').textContent = JSON.stringify(summary.stopTask, null, 2);
+      document.getElementById('desktop-shell').textContent = JSON.stringify(summary.desktopShell, null, 2);
       const activeTasks = summary.activeTasks || [];
       const stopButton = document.getElementById('stop-task-button');
       if (activeTasks.length) {
