@@ -6,6 +6,8 @@ The first v0.1B slice adds workflow orchestration foundations while keeping exec
 
 The Codex planning slice adds future execution plans, command previews, and approval contracts. It does not spawn Codex or run shell commands.
 
+The controlled execution slice can run only an approved Codex plan through the official local Codex CLI using fixed argv, `shell=False`, a registered project path, and the `workspace-write` sandbox.
+
 ## Modules
 
 - `app.py` exposes local service endpoints.
@@ -22,10 +24,11 @@ The Codex planning slice adds future execution plans, command previews, and appr
 - `diagnostics.py` exports local diagnostic summaries without secret values.
 - `reports.py` validates required implementation report sections.
 - `codex_plans.py` creates validated Codex future-run plans, prompt previews, command previews, approval records, and plan status transitions.
+- `codex_execution.py` validates approved plans, prepares bounded prompt files, runs the official Codex CLI only, stores execution summaries, and emits receipts/events.
 
 ## Data
 
-Runtime state is stored under `data/jarvis/`, which is gitignored. No secrets are stored. SQLite now includes task, event, approval, action receipt, project lock, and Codex plan tables.
+Runtime state is stored under `data/jarvis/`, which is gitignored. No secrets are stored. SQLite now includes task, event, approval, action receipt, project lock, Codex plan, and Codex execution tables.
 
 ## Project Locks
 

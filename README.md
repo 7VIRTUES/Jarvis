@@ -39,6 +39,8 @@ The Codex execution planning slice adds safe future-run planning without enablin
 - plan receipts and events
 - diagnostics plan summaries without prompt content
 
+The controlled Codex execution slice adds one approved-plan execution endpoint. It uses the official local Codex CLI only, with a fixed argv template, `workspace-write`, `shell=False`, registered project boundaries, and action receipts.
+
 ## Run Jarvis Core
 
 ```powershell
@@ -67,6 +69,7 @@ Key workflow endpoints:
 - `POST /codex/plans/{plan_id}/cancel`
 - `POST /codex/plans/{plan_id}/approve-for-future-execution`
 - `POST /codex/plans/{plan_id}/reject`
+- `POST /codex/plans/{plan_id}/execute`
 
 ## Run Tests
 
@@ -80,4 +83,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1B still does not execute Codex, call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, run a dashboard, repair code automatically, or implement external account connectors. Codex approval marks a plan as approved for future execution only.
+Jarvis v0.1B does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, run a dashboard, repair code automatically, or implement external account connectors. Controlled Codex execution is limited to approved plans through the official local CLI.

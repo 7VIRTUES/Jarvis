@@ -33,6 +33,12 @@ EVENT_TYPES = {
     "codex.approved_for_future_execution",
     "codex.rejected",
     "codex.canceled",
+    "codex.execution_requested",
+    "codex.execution_blocked",
+    "codex.execution_started",
+    "codex.execution_succeeded",
+    "codex.execution_failed",
+    "codex.execution_receipt_created",
 }
 
 

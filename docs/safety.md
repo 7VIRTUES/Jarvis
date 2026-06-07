@@ -4,7 +4,7 @@ Jarvis v0.1A is read-only-first and local-first. Agents request actions, the run
 
 The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run plans may be validated, but Codex, shell execution, repair loops, and future connectors remain disabled.
 
-Codex planning may create a command preview and approval request. Approval changes plan status only; it does not execute Codex.
+Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
 ## Hard Blocks
 
@@ -24,7 +24,9 @@ Approvals are auditable records. Approval can resolve approval-required actions,
 
 ## Codex Planning
 
-Codex command previews must use `workspace-write`, a registered project path, prompt paths under `.jarvis/prompts`, and output paths under `.jarvis/reports`. Execution action types such as `codex.execute`, `codex.exec`, `codex.run`, and `run_codex_exec_workspace_write` remain blocked.
+Codex command previews must use `workspace-write`, a registered project path, prompt paths under `.jarvis/prompts`, and output paths under `.jarvis/reports`. Generic execution action types such as `codex.execute`, `codex.exec`, `codex.run`, and `run_codex_exec_workspace_write` remain blocked. The only execution path is `codex.execute_approved_plan` through the official CLI after approval.
+
+Execution uses fixed subprocess argv with `shell=False`; no arbitrary shell command endpoint exists.
 
 ## Risk Budgets
 

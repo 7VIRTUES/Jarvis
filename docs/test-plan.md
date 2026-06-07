@@ -30,3 +30,6 @@ Tests cover:
 - Codex prompt/output path boundary validation.
 - Blocked Codex execution action validation.
 - Codex diagnostics summaries without prompt content or secrets.
+- Controlled Codex execution blocked states.
+- Mocked successful Codex execution with fixed argv and `shell=False`.
+- Execution receipts, events, run limits, lock release, and diagnostics summaries.

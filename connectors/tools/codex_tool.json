@@ -7,8 +7,8 @@
     "detect_codex",
     "plan_codex_execution",
     "preview_codex_command",
-    "future_not_enabled_run_codex_exec_workspace_write",
+    "execute_approved_codex_plan_workspace_write",
     "future_not_enabled_stop_codex_process"
   ],
-  "notes": "Planning and command preview are implemented. Actual Codex execution and process control are not enabled in current v0.1 scope."
+  "notes": "Planning, command preview, and approved-plan workspace-write Codex CLI execution are implemented. Generic Codex execution, repair loops, and process control are not enabled in current v0.1 scope."
 }

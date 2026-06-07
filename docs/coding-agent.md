@@ -14,7 +14,8 @@ The Coding Agent is the only implemented agent manifest in v0.1A.
 - Write a Markdown report.
 - Create dry-run task plans and action receipts through the workflow foundation.
 - Create Codex future-run plans, safe command previews, approval requests, and receipts without executing Codex.
+- Execute approved Codex plans through the controlled official-CLI path.
 
 ## Limits
 
-Codex CLI execution is explicitly not implemented. v0.1B adds task, approval, and Codex plan records, but repair loops, review loops, actual Codex execution, and dashboard workflows remain excluded.
+Generic Codex CLI execution is explicitly not implemented. v0.1B allows only approved-plan controlled execution; repair loops, review loops, and dashboard workflows remain excluded.

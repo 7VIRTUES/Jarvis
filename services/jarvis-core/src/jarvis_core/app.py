@@ -9,6 +9,7 @@ from . import APP_NAME, VERSION
 from .approvals import ApprovalQueue
 from .audit import JsonlLogger
 from .codex_plans import CodexPlanInput, CodexPlanService
+from .codex_execution import CodexExecutionService
 from .db import init_db
 from .diagnostics import DiagnosticExporter
 from .events import EventBus
@@ -28,6 +29,7 @@ runtime = SafeActionRuntime(logger, conn, events)
 approvals = ApprovalQueue(conn, events)
 tasks = TaskQueue(conn, events, runtime, approvals)
 codex_plans = CodexPlanService(conn, events, runtime, approvals, projects)
+codex_execution = CodexExecutionService(conn, events, runtime, approvals, projects, codex_plans)
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
@@ -286,3 +288,8 @@ def reject_codex_plan(plan_id: str, payload: ApprovalResolutionInput) -> dict[st
         return codex_plans.reject_plan(plan_id, payload.resolvedBy, payload.resolutionNote)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/codex/plans/{plan_id}/execute")
+def execute_codex_plan(plan_id: str) -> dict[str, object]:
+    return codex_execution.execute_plan(plan_id)

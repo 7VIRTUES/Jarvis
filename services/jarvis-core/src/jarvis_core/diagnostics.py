@@ -25,6 +25,7 @@ class DiagnosticExporter:
             "events": self._rows("select event_id, task_id, event_type, created_at from events order by created_at limit 100", ["event_id", "task_id", "event_type", "created_at"]),
             "actions": self._rows("select receipt_id, task_id, action_type, blocked, approval_required, risk_level from action_receipts order by started_at limit 100", ["receipt_id", "task_id", "action_type", "blocked", "approval_required", "risk_level"]),
             "codexPlans": self._codex_plan_summaries(),
+            "codexExecutions": self._codex_execution_summaries(),
             "connectors": self._connector_status(),
             "recentSecurityEvents": self._recent_security_events(),
             "reports": self._reports_index(),
@@ -55,6 +56,12 @@ class DiagnosticExporter:
         return self._rows(
             "select plan_id, task_id, project_name, status, risk_level, created_at, approval_required, approval_id from codex_plans order by created_at",
             ["plan_id", "task_id", "project_name", "status", "risk_level", "created_at", "approval_required", "approval_id"],
+        )
+
+    def _codex_execution_summaries(self) -> list[dict[str, Any]]:
+        return self._rows(
+            "select execution_id, plan_id, task_id, project_name, status, started_at, finished_at, exit_code, output_path, receipt_id, blocked_reason from codex_executions order by started_at",
+            ["execution_id", "plan_id", "task_id", "project_name", "status", "started_at", "finished_at", "exit_code", "output_path", "receipt_id", "blocked_reason"],
         )
 
     def _recent_security_events(self) -> list[dict[str, Any]]:

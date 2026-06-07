@@ -120,6 +120,24 @@ create table if not exists codex_plans (
   created_at text not null,
   updated_at text not null
 );
+
+create table if not exists codex_executions (
+  execution_id text primary key,
+  plan_id text not null,
+  task_id text not null,
+  project_name text not null,
+  status text not null,
+  started_at text not null,
+  finished_at text,
+  codex_command_preview text not null,
+  exit_code integer,
+  stdout_excerpt text,
+  stderr_excerpt text,
+  output_path text,
+  receipt_id text,
+  blocked_reason text,
+  error text
+);
 """
 
 

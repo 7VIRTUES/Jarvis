@@ -37,7 +37,15 @@ BLOCKED_COMMAND_PATTERNS = [
 
 PAYMENT_OR_PUBLIC_ACTIONS = {"send_email", "public_post", "payment_action"}
 SECRET_OR_BROWSER_ACTIONS = {"read_secret", "password_manager_access", "browser_session_access"}
-ALLOWED_ACTION_TYPES = {"command", "inspect_project", "write_report", "codex.plan_execution", "codex.prepare_prompt", "codex.preview_command"}
+ALLOWED_ACTION_TYPES = {
+    "command",
+    "inspect_project",
+    "write_report",
+    "codex.plan_execution",
+    "codex.prepare_prompt",
+    "codex.preview_command",
+    "codex.execute_approved_plan",
+}
 BLOCKED_CODEX_ACTIONS = {"codex.execute", "codex.exec", "codex.run", "run_codex_exec_workspace_write"}
 
 
