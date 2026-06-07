@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import sqlite3
@@ -13,7 +14,9 @@ from .codex_constants import ALLOWED_SANDBOX_MODE
 from .codex_paths import validate_codex_project_paths
 from .codex_plans import CodexPlanService
 from .events import EventBus
+from .inspector import inspect_project
 from .permissions import check_action, check_command
+from .post_execution_review import review_post_codex_diff
 from .project_registry import ProjectRegistry
 from .risk import DEFAULT_RISK_BUDGET
 from .runtime import ActionRequest, SafeActionRuntime
@@ -94,17 +97,39 @@ class CodexExecutionService:
                 timeout=3600,
             )
             finished_at = utc_now()
-            status = "succeeded" if completed.returncode == 0 else "failed"
             stdout_excerpt = redact_output(completed.stdout)
             stderr_excerpt = redact_output(completed.stderr)
-            self._finish_execution(execution_id, status, finished_at, completed.returncode, stdout_excerpt, stderr_excerpt, None)
-            diff_summary = self._inspect_git_diff(project_path)
-            event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
-            self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "diff": diff_summary})
+            inspection = inspect_project(project_path)
+            review = review_post_codex_diff(project_path, inspection.get("packageScripts", {}))
+            blocked_reason = None
+            status = "succeeded" if completed.returncode == 0 else "failed"
+            if completed.returncode == 0 and review["requiresUserReview"]:
+                status = "blocked"
+                blocked_reason = "; ".join(review["reasons"])
+            self._finish_execution(
+                execution_id,
+                status,
+                finished_at,
+                completed.returncode,
+                stdout_excerpt,
+                stderr_excerpt,
+                blocked_reason,
+                None,
+                review,
+                review["checkPlan"],
+            )
+            if status == "blocked":
+                self.events.emit("codex.post_review_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reasons": review["reasons"]})
+                self.events.emit("codex.execution_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
+            else:
+                event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
+                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review})
+                if status == "succeeded":
+                    self.events.emit("codex.check_plan_generated", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkPlan": review["checkPlan"]})
             return self.get_execution(execution_id)  # type: ignore[return-value]
         except Exception as exc:  # noqa: BLE001 - store safe error summary for local diagnostics.
             finished_at = utc_now()
-            self._finish_execution(execution_id, "failed", finished_at, None, "", "", redact_output(str(exc)))
+            self._finish_execution(execution_id, "failed", finished_at, None, "", "", None, redact_output(str(exc)))
             self.events.emit("codex.execution_failed", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "error": type(exc).__name__})
             return self.get_execution(execution_id)  # type: ignore[return-value]
         finally:
@@ -198,10 +223,38 @@ class CodexExecutionService:
         self.events.emit("codex.execution_blocked", task_id or None, {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason}) if status == "blocked" else None
         return self.get_execution(execution_id)  # type: ignore[return-value]
 
-    def _finish_execution(self, execution_id: str, status: str, finished_at: str, exit_code: int | None, stdout_excerpt: str, stderr_excerpt: str, error: str | None) -> None:
+    def _finish_execution(
+        self,
+        execution_id: str,
+        status: str,
+        finished_at: str,
+        exit_code: int | None,
+        stdout_excerpt: str,
+        stderr_excerpt: str,
+        blocked_reason: str | None,
+        error: str | None,
+        post_review: dict[str, Any] | None = None,
+        check_plan: dict[str, Any] | None = None,
+    ) -> None:
         self.conn.execute(
-            "update codex_executions set status = ?, finished_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?, error = ? where execution_id = ?",
-            (status, finished_at, exit_code, stdout_excerpt, stderr_excerpt, error, execution_id),
+            """
+            update codex_executions
+            set status = ?, finished_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?,
+                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?
+            where execution_id = ?
+            """,
+            (
+                status,
+                finished_at,
+                exit_code,
+                stdout_excerpt,
+                stderr_excerpt,
+                blocked_reason,
+                error,
+                json.dumps(post_review or {}),
+                json.dumps(check_plan or {}),
+                execution_id,
+            ),
         )
         self.conn.commit()
 
@@ -275,25 +328,11 @@ class CodexExecutionService:
             ]
         ) + "\n"
 
-    def _inspect_git_diff(self, project_path: Path) -> dict[str, str | None]:
-        return {
-            "status": self._git_read(project_path, ["status", "--short"]),
-            "diffStat": self._git_read(project_path, ["diff", "--stat"]),
-        }
-
-    def _git_read(self, project_path: Path, args: list[str]) -> str | None:
-        try:
-            result = subprocess.run(["git", *args], cwd=str(project_path), shell=False, capture_output=True, text=True, timeout=10)
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-        if result.returncode != 0:
-            return None
-        return redact_output(result.stdout)
-
     def _select_sql(self) -> str:
         return (
             "select execution_id, plan_id, task_id, project_name, status, started_at, finished_at, "
-            "codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error from codex_executions"
+            "codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error, "
+            "post_review, check_plan from codex_executions"
         )
 
     def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
@@ -313,6 +352,8 @@ class CodexExecutionService:
             "receipt_id": row[12],
             "blocked_reason": row[13],
             "error": row[14],
+            "post_review": json.loads(row[15] or "{}"),
+            "check_plan": json.loads(row[16] or "{}"),
         }
 
 

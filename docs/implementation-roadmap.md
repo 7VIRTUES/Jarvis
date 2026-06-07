@@ -23,3 +23,9 @@ This slice adds Codex plan records, safe command previews, prompt planning, risk
 ## v0.1B Controlled Codex Execution
 
 This slice adds one approved-plan execution path through the official local Codex CLI. It validates approval, command preview, project paths, prompt/output boundaries, run limits, and project locks before execution. Repair loops and generic shell execution remain future work.
+
+## v0.1B Post-Codex Review and Check Planning
+
+This slice adds a post-execution review gate. After an approved Codex run returns, Jarvis inspects git status and diff stats, enforces changed-file and diff-line budgets, detects protected-file and dependency/package-file path changes without reading protected contents, and stops for user review when policy requires it.
+
+If the review passes, Jarvis generates a planned-check list from detected package scripts only. It prefers typecheck, lint, test, then build, and it does not execute checks or attempt repair loops yet.

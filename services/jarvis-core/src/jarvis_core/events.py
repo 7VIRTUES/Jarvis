@@ -39,6 +39,8 @@ EVENT_TYPES = {
     "codex.execution_succeeded",
     "codex.execution_failed",
     "codex.execution_receipt_created",
+    "codex.post_review_blocked",
+    "codex.check_plan_generated",
 }
 
 

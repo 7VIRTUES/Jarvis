@@ -2,7 +2,7 @@
 
 Jarvis v0.1A is read-only-first and local-first. Agents request actions, the runtime validates them, and blocked decisions are logged to `security.jsonl`.
 
-The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run plans may be validated, but Codex, shell execution, repair loops, and future connectors remain disabled.
+The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run plans may be validated. Controlled Codex execution exists only for approved plans through the official local CLI; generic shell execution, repair loops, and future connectors remain disabled.
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
@@ -16,7 +16,7 @@ Protected paths such as `.env`, `.pem`, `.key`, SSH keys, service account files,
 
 ## Exclusions
 
-Current v0.1 scope does not execute Codex, automate browsers, use paid AI APIs, access external accounts, or silently escalate permissions.
+Current v0.1 scope does not allow generic Codex execution, automate browsers, use paid AI APIs, access external accounts, or silently escalate permissions.
 
 ## Approvals
 
@@ -28,6 +28,10 @@ Codex command previews must use `workspace-write`, a registered project path, pr
 
 Execution uses fixed subprocess argv with `shell=False`; no arbitrary shell command endpoint exists.
 
+After Codex returns, Jarvis reviews the git diff before checks are allowed. The review counts changed files and diff lines, detects protected file paths without reading contents, and flags dependency/package files such as `package.json`, lockfiles, `pyproject.toml`, and requirements files. If the review exceeds budget or needs user review, the workflow stops before checks or repair.
+
 ## Risk Budgets
 
 Default limits are `maxChangedFiles=10`, `maxDiffLines=700`, `maxRepairAttempts=2`, `maxCodexRunsPerTask=3`, and `maxNewDependenciesWithoutApproval=0`. Plans that exceed these limits require approval before any future execution slice can proceed.
+
+The post-Codex review reuses these limits. Dependency/package file changes require user review in this slice because the allowed number of new dependency changes without approval is zero.

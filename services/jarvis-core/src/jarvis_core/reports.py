@@ -5,16 +5,16 @@ REQUIRED_IMPLEMENTATION_REPORT_SECTIONS = [
     "Summary",
     "Files created",
     "Files changed",
-    "What each file did",
-    "Endpoints implemented or changed",
+    "What each file change did",
+    "Endpoints changed",
     "Database/schema changes",
     "Agents/tools/connectors changed",
     "Safety boundaries enforced",
     "Commands run",
     "Command results",
-    "Tests added or changed",
+    "Tests added/changed",
     "Test results",
-    "Blocked actions or safety decisions",
+    "Blocked actions/safety decisions",
     "Known risks",
     "Whether safe to build on",
     "Recommended next task",
@@ -28,4 +28,3 @@ def missing_implementation_report_sections(text: str) -> list[str]:
 
 def validate_implementation_report(text: str) -> bool:
     return not missing_implementation_report_sections(text)
-

@@ -33,3 +33,6 @@ Tests cover:
 - Controlled Codex execution blocked states.
 - Mocked successful Codex execution with fixed argv and `shell=False`.
 - Execution receipts, events, run limits, lock release, and diagnostics summaries.
+- Post-Codex diff review for changed-file budgets, diff-line budgets, protected-file path changes, and dependency/package-file changes.
+- Safe check planning from detected package scripts only, including preferred ordering and empty-plan reasons.
+- Controlled Codex flow stopping before checks when post-execution review requires user review.

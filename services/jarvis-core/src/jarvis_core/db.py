@@ -137,7 +137,9 @@ create table if not exists codex_executions (
   output_path text,
   receipt_id text,
   blocked_reason text,
-  error text
+  error text,
+  post_review text not null default '{}',
+  check_plan text not null default '{}'
 );
 """
 
@@ -147,6 +149,8 @@ def init_db(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.executescript(SCHEMA)
     _ensure_column(conn, "codex_plans", "prompt_content", "text not null default ''")
+    _ensure_column(conn, "codex_executions", "post_review", "text not null default '{}'")
+    _ensure_column(conn, "codex_executions", "check_plan", "text not null default '{}'")
     conn.commit()
     return conn
 

@@ -41,6 +41,16 @@ The Codex execution planning slice adds safe future-run planning without enablin
 
 The controlled Codex execution slice adds one approved-plan execution endpoint. It uses the official local Codex CLI only, with a fixed argv template, `workspace-write`, `shell=False`, registered project boundaries, and action receipts.
 
+The post-Codex review slice adds a policy gate after the Codex process returns:
+
+- git status and diff-stat review
+- changed-file and diff-line budget enforcement
+- protected-file path detection without reading protected contents
+- dependency/package-file change detection
+- safe planned-check generation from detected package scripts only
+
+If the post-review gate requires user review, Jarvis stops before checks. Check execution and repair loops are not implemented in this slice.
+
 ## Run Jarvis Core
 
 ```powershell

@@ -180,7 +180,7 @@ class CodexPlanService:
                 "\n".join(f"- {item}" for item in (payload.test_commands or ["python -m pytest"])),
                 "",
                 "## Required Final Report Format",
-                "Summary; Files created; Files changed; What each file did; Endpoints implemented or changed; Database/schema changes; Agents/tools/connectors changed; Safety boundaries enforced; Commands run; Command results; Tests added or changed; Test results; Blocked actions or safety decisions; Known risks; Whether safe to build on; Recommended next task.",
+                "Summary; Files created; Files changed; What each file change did; Endpoints changed; Database/schema changes; Agents/tools/connectors changed; Safety boundaries enforced; Commands run; Command results; Tests added/changed; Test results; Blocked actions/safety decisions; Known risks; Whether safe to build on; Recommended next task.",
             ]
         ) + "\n"
 

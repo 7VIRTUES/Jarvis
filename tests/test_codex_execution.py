@@ -32,6 +32,7 @@ def stack(tmp_path, runner=None, detector=None):
     execution = CodexExecutionService(conn, events, runtime, approvals, projects, plans, detector or (lambda: "codex"), runner or success_runner)
     project = tmp_path / "sample"
     project.mkdir()
+    subprocess.run(["git", "init"], cwd=project, shell=False, check=True, capture_output=True, text=True)
     projects.add_project("sample", project)
     return conn, events, runtime, approvals, projects, plans, execution, project
 
@@ -40,6 +41,12 @@ def success_runner(argv, **kwargs):
     assert kwargs["shell"] is False
     assert argv[0:2] == ["codex", "exec"]
     return subprocess.CompletedProcess(argv, 0, stdout="completed", stderr="")
+
+
+def dependency_change_runner(argv, **kwargs):
+    project = __import__("pathlib").Path(kwargs["cwd"])
+    (project / "package.json").write_text('{"scripts":{"test":"node test.js"},"dependencies":{"x":"1.0.0"}}\n', encoding="utf-8")
+    return subprocess.CompletedProcess(argv, 0, stdout="changed dependency file", stderr="")
 
 
 def approved_plan(plans):
@@ -231,7 +238,24 @@ def test_receipt_and_events_created_for_successful_mocked_execution(tmp_path):
     assert any(receipt["action_type"] == "codex.execute_approved_plan" for receipt in receipts)
     assert "codex.execution_started" in event_types
     assert "codex.execution_succeeded" in event_types
+    assert "codex.check_plan_generated" in event_types
     assert (project / ".jarvis" / "prompts" / "current-task.md").exists()
+
+
+def test_controlled_codex_flow_stops_before_checks_when_post_review_fails(tmp_path):
+    _, events, _, _, _, plans, execution, project = stack(tmp_path, runner=dependency_change_runner)
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+    event_types = [event["event_type"] for event in events.list_events(plan["task_id"])]
+
+    assert result["status"] == "blocked"
+    assert "dependency/package" in result["blocked_reason"]
+    assert result["post_review"]["checksMayProceed"] is False
+    assert result["check_plan"]["checks"] == [{"name": "test", "command": "npm run test", "source": "package.json scripts"}]
+    assert "codex.post_review_blocked" in event_types
+    assert "codex.check_plan_generated" not in event_types
+    assert (project / "package.json").exists()
 
 
 def test_execution_prompt_includes_approved_plan_fields(tmp_path):
