@@ -24,7 +24,7 @@ Tests cover:
 - Dry-run receipts without execution.
 - Risk budget validation.
 - Diagnostic export without secret values.
-- Implementation report section validation.
+- Implementation report section validation, including post-Codex review findings, safe check results, and repair attempts/results.
 - Codex plan creation, listing, reading, canceling, approving, and rejecting.
 - Codex command preview flag validation without execution.
 - Codex prompt/output path boundary validation.

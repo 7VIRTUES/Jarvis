@@ -14,6 +14,7 @@ from .codex_paths import validate_codex_project_paths
 from .events import EventBus
 from .permissions import check_action, check_command
 from .project_registry import ProjectRegistry
+from .reports import REQUIRED_IMPLEMENTATION_REPORT_FORMAT
 from .risk import validate_risk_budget
 from .runtime import ActionRequest, SafeActionRuntime
 from .time_utils import utc_now
@@ -180,7 +181,7 @@ class CodexPlanService:
                 "\n".join(f"- {item}" for item in (payload.test_commands or ["python -m pytest"])),
                 "",
                 "## Required Final Report Format",
-                "Summary; Files created; Files changed; What each file change did; Endpoints changed; Database/schema changes; Agents/tools/connectors changed; Safety boundaries enforced; Commands run; Command results; Tests added/changed; Test results; Blocked actions/safety decisions; Known risks; Whether safe to build on; Recommended next task.",
+                REQUIRED_IMPLEMENTATION_REPORT_FORMAT,
             ]
         ) + "\n"
 

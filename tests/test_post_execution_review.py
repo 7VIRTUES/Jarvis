@@ -122,3 +122,6 @@ def test_final_report_required_sections_are_enforced():
 
     assert missing_implementation_report_sections(report) == []
     assert "What each file change did" in missing_implementation_report_sections("## Summary")
+    assert "Post-Codex review findings" in missing_implementation_report_sections("## Summary")
+    assert "Safe check results" in missing_implementation_report_sections("## Summary")
+    assert "Repair attempts/results" in missing_implementation_report_sections("## Summary")

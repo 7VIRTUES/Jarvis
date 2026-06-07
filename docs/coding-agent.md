@@ -2,6 +2,8 @@
 
 The Coding Agent is the only implemented agent manifest in v0.1A.
 
+Repo workflow guidance lives in [chatgpt-codex-workflow.md](chatgpt-codex-workflow.md). In that workflow, ChatGPT Project handles planning and review, while Codex handles local implementation only.
+
 ## Capabilities
 
 - Inspect a registered project.
@@ -19,9 +21,12 @@ The Coding Agent is the only implemented agent manifest in v0.1A.
 - Generate a safe planned-check list from detected package scripts only.
 - Execute the generated safe check plan with action receipts and stored results.
 - Run a bounded repair loop after failed checks, then repeat post-Codex review and safe checks.
+- Produce final reports that include post-Codex review findings, safe check results, repair attempts/results, blocked actions, known risks, build-safety status, and the recommended next task.
 
 ## Limits
 
 Generic Codex CLI execution is explicitly not implemented. v0.1B allows only approved-plan controlled execution. After Codex returns, Jarvis inspects git status, diff stats, changed-file counts, protected-file paths, and dependency/package-file paths before any checks may proceed.
 
 Jarvis executes checks only from scripts that already exist in detected `package.json` scripts, ordered as typecheck, lint, test, then build. Each check runs through the safe action runtime with a fixed argv command and stored result. If checks fail, repair is limited to two Codex attempts, repeats post-Codex review after every repair, and stops on repeated failures or any review/risk issue.
+
+Codex is not the product planner for Jarvis. It should not make roadmap, architecture, or broad next-phase decisions; those stay with ChatGPT Project and the user.

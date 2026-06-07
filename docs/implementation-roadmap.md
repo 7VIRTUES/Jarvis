@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+Planning and roadmap decisions are owned by ChatGPT Project and the user. Codex implements bounded local tasks only; see [chatgpt-codex-workflow.md](chatgpt-codex-workflow.md).
+
 ## v0.1A
 
 Implement local service foundation, registries, safety policy, audit logs, project inspection, disabled connector placeholders, and tests.
@@ -41,3 +43,11 @@ Failed or blocked checks stop the remaining planned checks. Failed executed chec
 This slice runs at most two Codex repair attempts after failed safe checks. Each attempt uses the official local Codex CLI with fixed argv and `shell=False`, writes the repair prompt under `.jarvis/prompts`, includes redacted failed-check context, reruns post-Codex review, and reruns safe checks only if review passes.
 
 Repair stops on passing checks, repeated failures, max attempts, max Codex runs per task, Codex repair failure, protected/dependency-file changes, or changed-file/diff-line budget issues.
+
+## v0.1B Final Reporting Polish
+
+Final implementation reports must include the post-Codex review findings, safe check results, repair attempts/results, blocked actions or safety decisions, known risks, build-safety status, and recommended next task.
+
+## v0.1C Boundary
+
+Do not start v0.1C from Codex implementation work. v0.1C scope must be planned and approved through ChatGPT Project and the user before any implementation begins.

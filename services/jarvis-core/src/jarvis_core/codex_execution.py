@@ -18,6 +18,7 @@ from .inspector import CHECK_ORDER, inspect_project
 from .permissions import check_action, check_command
 from .post_execution_review import review_post_codex_diff, safe_check_argv, safe_check_command
 from .project_registry import ProjectRegistry
+from .reports import REQUIRED_IMPLEMENTATION_REPORT_FORMAT
 from .risk import DEFAULT_RISK_BUDGET
 from .runtime import ActionRequest, SafeActionRuntime
 from .time_utils import utc_now
@@ -575,6 +576,9 @@ class CodexExecutionService:
                     "",
                     "## Execution Boundary",
                     "Do not drift from the approved plan. Do not expand scope, read secrets, run destructive commands, push, merge, reset hard, send email, post publicly, make purchases, automate browsers, use paid APIs, or access future connectors.",
+                    "",
+                    "## Final Report Requirements",
+                    REQUIRED_IMPLEMENTATION_REPORT_FORMAT,
                 ]
             ) + "\n"
         return "\n".join(
@@ -603,7 +607,7 @@ class CodexExecutionService:
                 "Jarvis may run detected safe checks and bounded repairs only through the controlled local workflow.",
                 "",
                 "## Final Report Requirements",
-                "Summarize changed files, commands run by Codex, tests attempted, blocked actions, risks, and recommended next task.",
+                REQUIRED_IMPLEMENTATION_REPORT_FORMAT,
             ]
         ) + "\n"
 
