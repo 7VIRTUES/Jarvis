@@ -49,7 +49,16 @@ The post-Codex review slice adds a policy gate after the Codex process returns:
 - dependency/package-file change detection
 - safe planned-check generation from detected package scripts only
 
-If the post-review gate requires user review, Jarvis stops before checks. Check execution and repair loops are not implemented in this slice.
+If the post-review gate requires user review, Jarvis stops before checks.
+
+The check execution receipts slice executes only the generated safe check plan after review passes:
+
+- fixed argv commands for detected package scripts only
+- Safe Action Runtime receipts for each check
+- redacted stdout/stderr excerpts stored on the execution record
+- stop-on-first-failed-or-blocked-check behavior
+
+Repair loops are not implemented in this slice.
 
 ## Run Jarvis Core
 

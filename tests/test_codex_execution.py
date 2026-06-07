@@ -10,6 +10,7 @@ from jarvis_core.codex_plans import CodexPlanInput, CodexPlanService
 from jarvis_core.db import init_db
 from jarvis_core.diagnostics import DiagnosticExporter
 from jarvis_core.events import EventBus
+from jarvis_core.post_execution_review import safe_check_argv
 from jarvis_core.project_registry import ProjectRegistry
 from jarvis_core.runtime import SafeActionRuntime
 
@@ -21,7 +22,7 @@ def symlink_or_skip(link, target):
         pytest.skip(f"symlink creation unavailable in this environment: {exc}")
 
 
-def stack(tmp_path, runner=None, detector=None):
+def stack(tmp_path, runner=None, detector=None, check_runner=None):
     conn = init_db(tmp_path / "jarvis.sqlite")
     logger = JsonlLogger(tmp_path / "logs")
     events = EventBus(conn, logger)
@@ -29,10 +30,12 @@ def stack(tmp_path, runner=None, detector=None):
     approvals = ApprovalQueue(conn, events)
     projects = ProjectRegistry(conn, tmp_path)
     plans = CodexPlanService(conn, events, runtime, approvals, projects)
-    execution = CodexExecutionService(conn, events, runtime, approvals, projects, plans, detector or (lambda: "codex"), runner or success_runner)
+    execution = CodexExecutionService(conn, events, runtime, approvals, projects, plans, detector or (lambda: "codex"), runner or success_runner, check_runner or success_check_runner)
     project = tmp_path / "sample"
     project.mkdir()
     subprocess.run(["git", "init"], cwd=project, shell=False, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "jarvis@example.invalid"], cwd=project, shell=False, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Jarvis Tests"], cwd=project, shell=False, check=True, capture_output=True, text=True)
     projects.add_project("sample", project)
     return conn, events, runtime, approvals, projects, plans, execution, project
 
@@ -43,10 +46,23 @@ def success_runner(argv, **kwargs):
     return subprocess.CompletedProcess(argv, 0, stdout="completed", stderr="")
 
 
+def success_check_runner(argv, **kwargs):
+    assert kwargs["shell"] is False
+    assert argv[0].startswith("npm")
+    return subprocess.CompletedProcess(argv, 0, stdout=f"{argv[-1]} ok", stderr="")
+
+
 def dependency_change_runner(argv, **kwargs):
     project = __import__("pathlib").Path(kwargs["cwd"])
     (project / "package.json").write_text('{"scripts":{"test":"node test.js"},"dependencies":{"x":"1.0.0"}}\n', encoding="utf-8")
     return subprocess.CompletedProcess(argv, 0, stdout="changed dependency file", stderr="")
+
+
+def write_package_scripts(project, scripts):
+    script_json = ",".join(f'"{name}":"{command}"' for name, command in scripts.items())
+    (project / "package.json").write_text(f'{{"scripts":{{{script_json}}}}}\n', encoding="utf-8")
+    subprocess.run(["git", "add", "package.json"], cwd=project, shell=False, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "package scripts"], cwd=project, shell=False, check=True, capture_output=True, text=True)
 
 
 def approved_plan(plans):
@@ -292,11 +308,87 @@ def test_receipt_and_events_created_for_successful_mocked_execution(tmp_path):
     assert "codex.execution_started" in event_types
     assert "codex.execution_succeeded" in event_types
     assert "codex.check_plan_generated" in event_types
+    assert result["check_results"]["status"] == "skipped"
     assert (project / ".jarvis" / "prompts" / "current-task.md").exists()
 
 
+def test_successful_check_plan_executes_all_checks_in_order_and_stores_results(tmp_path):
+    calls = []
+
+    def check_runner(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, stdout=f"{argv[-1]} completed", stderr="")
+
+    conn, _, runtime, _, _, plans, execution, project = stack(tmp_path, check_runner=check_runner)
+    write_package_scripts(project, {"build": "vite build", "lint": "eslint .", "test": "node test.js", "typecheck": "tsc --noEmit"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+    stored = execution.get_execution(result["execution_id"])
+    command_receipts = [receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]
+
+    assert result["status"] == "succeeded"
+    assert [call[-1] for call in calls] == ["typecheck", "lint", "test", "build"]
+    assert result["check_results"]["status"] == "succeeded"
+    assert [check["name"] for check in result["check_results"]["checks"]] == ["typecheck", "lint", "test", "build"]
+    assert stored["check_results"] == result["check_results"]
+    assert len(command_receipts) == 4
+    assert conn.execute("select check_results from codex_executions where execution_id = ?", (result["execution_id"],)).fetchone()[0] != "{}"
+
+
+def test_failed_first_check_stops_later_checks(tmp_path):
+    calls = []
+
+    def check_runner(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 1, stdout="typecheck failed", stderr="")
+
+    _, _, runtime, _, _, plans, execution, project = stack(tmp_path, check_runner=check_runner)
+    write_package_scripts(project, {"typecheck": "tsc --noEmit", "lint": "eslint .", "test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert [call[-1] for call in calls] == ["typecheck"]
+    assert result["check_results"]["status"] == "failed"
+    assert result["check_results"]["checks"][0]["status"] == "failed"
+    assert len([receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]) == 1
+
+
+def test_failed_middle_check_stops_later_checks(tmp_path):
+    calls = []
+
+    def check_runner(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 1 if argv[-1] == "lint" else 0, stdout=f"{argv[-1]} result", stderr="")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, check_runner=check_runner)
+    write_package_scripts(project, {"typecheck": "tsc --noEmit", "lint": "eslint .", "test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "failed"
+    assert [call[-1] for call in calls] == ["typecheck", "lint"]
+    assert [check["status"] for check in result["check_results"]["checks"]] == ["succeeded", "failed"]
+
+
+def test_no_scripts_creates_skipped_check_result(tmp_path):
+    calls = []
+    _, _, _, _, _, plans, execution, _ = stack(tmp_path, check_runner=lambda argv, **kwargs: calls.append(list(argv)))
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "succeeded"
+    assert result["check_results"] == {"status": "skipped", "reason": "no detected package scripts for safe checks", "checks": []}
+    assert calls == []
+
+
 def test_controlled_codex_flow_stops_before_checks_when_post_review_fails(tmp_path):
-    _, events, _, _, _, plans, execution, project = stack(tmp_path, runner=dependency_change_runner)
+    calls = []
+    _, events, _, _, _, plans, execution, project = stack(tmp_path, runner=dependency_change_runner, check_runner=lambda argv, **kwargs: calls.append(list(argv)))
     plan = approved_plan(plans)
 
     result = execution.execute_plan(plan["plan_id"])
@@ -305,10 +397,80 @@ def test_controlled_codex_flow_stops_before_checks_when_post_review_fails(tmp_pa
     assert result["status"] == "blocked"
     assert "dependency/package" in result["blocked_reason"]
     assert result["post_review"]["checksMayProceed"] is False
-    assert result["check_plan"]["checks"] == [{"name": "test", "command": "npm run test", "source": "package.json scripts"}]
+    assert result["check_plan"]["checks"] == [{"name": "test", "command": "npm run test", "argv": safe_check_argv("test"), "source": "package.json scripts"}]
+    assert result["check_results"]["status"] == "skipped"
     assert "codex.post_review_blocked" in event_types
     assert "codex.check_plan_generated" not in event_types
+    assert calls == []
     assert (project / "package.json").exists()
+
+
+def test_unsafe_check_plan_entry_is_blocked_and_not_executed(tmp_path, monkeypatch):
+    calls = []
+    _, _, runtime, _, _, plans, execution, project = stack(tmp_path, check_runner=lambda argv, **kwargs: calls.append(list(argv)))
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    monkeypatch.setattr(
+        "jarvis_core.codex_execution.review_post_codex_diff",
+        lambda project_path, package_scripts: {
+            "requiresUserReview": False,
+            "checksMayProceed": True,
+            "reasons": ["post-Codex diff is within policy"],
+            "checkPlan": {"checks": [{"name": "test", "command": "git push", "argv": ["git", "push"], "source": "package.json scripts"}], "reason": "planned detected package scripts only"},
+        },
+    )
+
+    result = execution.execute_plan(plan["plan_id"])
+    command_receipts = [receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]
+
+    assert result["status"] == "blocked"
+    assert result["check_results"]["status"] == "blocked"
+    assert "blocked command pattern" in result["check_results"]["reason"]
+    assert calls == []
+    assert command_receipts[-1]["blocked"] is True
+
+
+def test_non_detected_check_script_is_blocked_and_not_executed(tmp_path, monkeypatch):
+    calls = []
+    _, _, runtime, _, _, plans, execution, project = stack(tmp_path, check_runner=lambda argv, **kwargs: calls.append(list(argv)))
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    monkeypatch.setattr(
+        "jarvis_core.codex_execution.review_post_codex_diff",
+        lambda project_path, package_scripts: {
+            "requiresUserReview": False,
+            "checksMayProceed": True,
+            "reasons": ["post-Codex diff is within policy"],
+            "checkPlan": {"checks": [{"name": "start", "command": "npm run start", "argv": safe_check_argv("start"), "source": "package.json scripts"}], "reason": "planned detected package scripts only"},
+        },
+    )
+
+    result = execution.execute_plan(plan["plan_id"])
+    command_receipts = [receipt for receipt in runtime.list_receipts(plan["task_id"]) if receipt["action_type"] == "command"]
+
+    assert result["status"] == "blocked"
+    assert result["check_results"]["reason"] == "check plan entry does not match a detected safe script"
+    assert calls == []
+    assert command_receipts[-1]["approved"] is True
+
+
+def test_check_output_is_redacted_and_truncated(tmp_path):
+    def check_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout=f"api_key=SECRET_VALUE {'x' * 2500}", stderr="password=HIDDEN")
+
+    _, _, _, _, _, plans, execution, project = stack(tmp_path, check_runner=check_runner)
+    write_package_scripts(project, {"test": "node test.js"})
+    plan = approved_plan(plans)
+
+    result = execution.execute_plan(plan["plan_id"])
+    check = result["check_results"]["checks"][0]
+
+    assert result["status"] == "succeeded"
+    assert "SECRET_VALUE" not in check["stdout_excerpt"]
+    assert "HIDDEN" not in check["stderr_excerpt"]
+    assert len(check["stdout_excerpt"]) <= 2100
 
 
 def test_execution_prompt_includes_approved_plan_fields(tmp_path):

@@ -14,9 +14,9 @@ from .codex_constants import ALLOWED_SANDBOX_MODE
 from .codex_paths import validate_codex_project_paths
 from .codex_plans import CodexPlanService
 from .events import EventBus
-from .inspector import inspect_project
+from .inspector import CHECK_ORDER, inspect_project
 from .permissions import check_action, check_command
-from .post_execution_review import review_post_codex_diff
+from .post_execution_review import review_post_codex_diff, safe_check_argv, safe_check_command
 from .project_registry import ProjectRegistry
 from .risk import DEFAULT_RISK_BUDGET
 from .runtime import ActionRequest, SafeActionRuntime
@@ -38,6 +38,7 @@ class CodexExecutionService:
         plans: CodexPlanService,
         codex_detector: Callable[[], str | None] | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+        check_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     ):
         self.conn = conn
         self.events = events
@@ -47,6 +48,7 @@ class CodexExecutionService:
         self.plans = plans
         self.codex_detector = codex_detector or (lambda: shutil.which("codex"))
         self.runner = runner or subprocess.run
+        self.check_runner = check_runner or subprocess.run
 
     def execute_plan(self, plan_id: str) -> dict[str, Any]:
         execution_id = str(uuid4())
@@ -101,12 +103,22 @@ class CodexExecutionService:
             stdout_excerpt = redact_output(completed.stdout)
             stderr_excerpt = redact_output(completed.stderr)
             inspection = inspect_project(project_path)
-            review = review_post_codex_diff(project_path, inspection.get("packageScripts", {}))
+            package_scripts = inspection.get("packageScripts", {})
+            review = review_post_codex_diff(project_path, package_scripts)
             blocked_reason = None
             status = "succeeded" if completed.returncode == 0 else "failed"
+            check_results = {"status": "skipped", "reason": "Codex execution failed before checks", "checks": []}
             if completed.returncode == 0 and review["requiresUserReview"]:
                 status = "blocked"
                 blocked_reason = "; ".join(review["reasons"])
+                check_results = {"status": "skipped", "reason": "post-Codex review requires user review", "checks": []}
+            elif completed.returncode == 0:
+                check_results = self._run_check_plan(project_path, plan, review["checkPlan"], package_scripts)
+                if check_results["status"] == "failed":
+                    status = "failed"
+                elif check_results["status"] == "blocked":
+                    status = "blocked"
+                    blocked_reason = str(check_results["reason"])
             self._finish_execution(
                 execution_id,
                 status,
@@ -118,15 +130,19 @@ class CodexExecutionService:
                 None,
                 review,
                 review["checkPlan"],
+                check_results,
             )
             if status == "blocked":
-                self.events.emit("codex.post_review_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reasons": review["reasons"]})
+                if review["requiresUserReview"]:
+                    self.events.emit("codex.post_review_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reasons": review["reasons"]})
                 self.events.emit("codex.execution_blocked", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
             else:
                 event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
-                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review})
+                self.events.emit(event_type, str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "exit_code": completed.returncode, "postReview": review, "checkResults": check_results})
                 if status == "succeeded":
                     self.events.emit("codex.check_plan_generated", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkPlan": review["checkPlan"]})
+            if completed.returncode == 0 and not review["requiresUserReview"]:
+                self.events.emit("codex.checks_completed", str(plan["task_id"]), {"plan_id": plan_id, "execution_id": execution_id, "checkResults": check_results})
             return self.get_execution(execution_id)  # type: ignore[return-value]
         except Exception as exc:  # noqa: BLE001 - store safe error summary for local diagnostics.
             finished_at = utc_now()
@@ -237,12 +253,13 @@ class CodexExecutionService:
         error: str | None,
         post_review: dict[str, Any] | None = None,
         check_plan: dict[str, Any] | None = None,
+        check_results: dict[str, Any] | None = None,
     ) -> None:
         self.conn.execute(
             """
             update codex_executions
             set status = ?, finished_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?,
-                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?
+                blocked_reason = ?, error = ?, post_review = ?, check_plan = ?, check_results = ?
             where execution_id = ?
             """,
             (
@@ -255,10 +272,84 @@ class CodexExecutionService:
                 error,
                 json.dumps(post_review or {}),
                 json.dumps(check_plan or {}),
+                json.dumps(check_results or {}),
                 execution_id,
             ),
         )
         self.conn.commit()
+
+    def _run_check_plan(self, project_path: Path, plan: dict[str, Any], check_plan: dict[str, Any], package_scripts: dict[str, str]) -> dict[str, Any]:
+        checks = check_plan.get("checks", [])
+        if not isinstance(checks, list) or not checks:
+            return {"status": "skipped", "reason": str(check_plan.get("reason") or "no checks planned"), "checks": []}
+
+        results: list[dict[str, Any]] = []
+        for check in checks:
+            started_at = utc_now()
+            name = str(check.get("name", ""))
+            command = str(check.get("command", ""))
+            argv = list(check.get("argv", [])) if isinstance(check.get("argv"), list) else []
+            result: dict[str, Any] = {
+                "name": name,
+                "command": command,
+                "argv": argv,
+                "started_at": started_at,
+                "finished_at": "",
+                "exit_code": None,
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+                "status": "blocked",
+                "receipt_id": None,
+                "reason": "",
+            }
+            receipt = self.runtime.validate(
+                ActionRequest(
+                    str(plan["agent_id"]),
+                    "command",
+                    command,
+                    str(plan["task_id"]),
+                    "check_runner",
+                    str(plan["risk_level"]),
+                )
+            )
+            result["receipt_id"] = receipt.receipt_id
+            if receipt.blocked or receipt.approval_required:
+                result["finished_at"] = utc_now()
+                result["reason"] = receipt.reason
+                results.append(result)
+                return {"status": "blocked", "reason": receipt.reason, "checks": results}
+
+            expected_command = safe_check_command(name)
+            expected_argv = safe_check_argv(name)
+            if name not in CHECK_ORDER or name not in package_scripts or command != expected_command or argv != expected_argv:
+                result["finished_at"] = utc_now()
+                result["reason"] = "check plan entry does not match a detected safe script"
+                results.append(result)
+                return {"status": "blocked", "reason": result["reason"], "checks": results}
+
+            try:
+                completed = self.check_runner(
+                    argv,
+                    cwd=str(project_path),
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+                result["exit_code"] = completed.returncode
+                result["stdout_excerpt"] = redact_output(completed.stdout)
+                result["stderr_excerpt"] = redact_output(completed.stderr)
+                result["status"] = "succeeded" if completed.returncode == 0 else "failed"
+                result["reason"] = "check succeeded" if completed.returncode == 0 else "check failed"
+            except Exception as exc:  # noqa: BLE001 - keep execution result safe and local.
+                result["status"] = "failed"
+                result["reason"] = redact_output(str(exc))
+            result["finished_at"] = utc_now()
+            results.append(result)
+            if result["status"] != "succeeded":
+                return {"status": "failed", "reason": str(result["reason"]), "checks": results}
+
+        return {"status": "succeeded", "reason": "all planned checks succeeded", "checks": results}
 
     def _codex_runs_for_task(self, task_id: str) -> int:
         return int(
@@ -338,7 +429,7 @@ class CodexExecutionService:
         return (
             "select execution_id, plan_id, task_id, project_name, status, started_at, finished_at, "
             "codex_command_preview, exit_code, stdout_excerpt, stderr_excerpt, output_path, receipt_id, blocked_reason, error, "
-            "post_review, check_plan from codex_executions"
+            "post_review, check_plan, check_results from codex_executions"
         )
 
     def _row(self, row: tuple[Any, ...]) -> dict[str, Any]:
@@ -360,6 +451,7 @@ class CodexExecutionService:
             "error": row[14],
             "post_review": json.loads(row[15] or "{}"),
             "check_plan": json.loads(row[16] or "{}"),
+            "check_results": json.loads(row[17] or "{}"),
         }
 
 

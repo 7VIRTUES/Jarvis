@@ -28,4 +28,10 @@ This slice adds one approved-plan execution path through the official local Code
 
 This slice adds a post-execution review gate. After an approved Codex run returns, Jarvis inspects git status and diff stats, enforces changed-file and diff-line budgets, detects protected-file and dependency/package-file path changes without reading protected contents, and stops for user review when policy requires it.
 
-If the review passes, Jarvis generates a planned-check list from detected package scripts only. It prefers typecheck, lint, test, then build, and it does not execute checks or attempt repair loops yet.
+If the review passes, Jarvis generates a planned-check list from detected package scripts only. It prefers typecheck, lint, test, then build. Execution of that planned-check list is handled by the later check execution receipts slice.
+
+## v0.1B Check Execution Receipts
+
+This slice executes only the generated safe check plan after Codex succeeds and post-Codex review passes. Each check is validated through the Safe Action Runtime, run with fixed argv and `shell=False`, recorded with a receipt, and stored on the Codex execution record with redacted output excerpts.
+
+Failed or blocked checks stop the remaining planned checks. Repair loops remain future work.

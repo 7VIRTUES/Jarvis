@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -109,7 +110,8 @@ def build_safe_check_plan(package_scripts: dict[str, str]) -> dict[str, Any]:
     checks = [
         {
             "name": name,
-            "command": f"npm run {name}",
+            "command": safe_check_command(name),
+            "argv": safe_check_argv(name),
             "source": "package.json scripts",
         }
         for name in CHECK_ORDER
@@ -119,6 +121,14 @@ def build_safe_check_plan(package_scripts: dict[str, str]) -> dict[str, Any]:
         "checks": checks,
         "reason": "planned detected package scripts only" if checks else "no detected package scripts for safe checks",
     }
+
+
+def safe_check_command(name: str) -> str:
+    return f"npm run {name}"
+
+
+def safe_check_argv(name: str) -> list[str]:
+    return ["npm.cmd" if os.name == "nt" else "npm", "run", name]
 
 
 def is_dependency_file(path: str) -> bool:

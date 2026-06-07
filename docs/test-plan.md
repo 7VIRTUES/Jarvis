@@ -36,3 +36,4 @@ Tests cover:
 - Post-Codex diff review for changed-file budgets, diff-line budgets, protected-file path changes, and dependency/package-file changes.
 - Safe check planning from detected package scripts only, including preferred ordering and empty-plan reasons.
 - Controlled Codex flow stopping before checks when post-execution review requires user review.
+- Safe check execution receipts, stored results, ordered execution, skipped no-script plans, blocked unsafe plans, output redaction, and stop-on-failure behavior.
