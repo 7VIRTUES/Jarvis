@@ -1,0 +1,16 @@
+{
+  "id": "health",
+  "provider": "Health",
+  "implemented": false,
+  "defaultEnabled": false,
+  "readinessLevel": "placeholder_only",
+  "costMode": "disabled",
+  "authType": "not_implemented",
+  "privacyClass": "sensitive_personal",
+  "dataAccess": "none_in_v0.1A",
+  "approvalRequired": true,
+  "tokenStorage": "not_implemented",
+  "dataRetention": "none",
+  "notes": "Placeholder only. Health data access is excluded from v0.1A."
+}
+

@@ -1,0 +1,9 @@
+{
+  "id": "codex_tool",
+  "name": "Codex Tool",
+  "implemented": false,
+  "approvalRequired": true,
+  "capabilities": ["detect_cli_only"],
+  "notes": "v0.1A may detect Codex CLI availability but must not execute Codex."
+}
+

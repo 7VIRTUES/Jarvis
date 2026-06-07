@@ -1,0 +1,9 @@
+{
+  "id": "shell_tool",
+  "name": "Shell Tool",
+  "implemented": false,
+  "approvalRequired": true,
+  "capabilities": ["validated_command_plan"],
+  "notes": "Execution is not generally implemented; commands must pass the permission engine."
+}
+

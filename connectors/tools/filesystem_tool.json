@@ -1,0 +1,9 @@
+{
+  "id": "filesystem_tool",
+  "name": "Filesystem Tool",
+  "implemented": false,
+  "approvalRequired": true,
+  "capabilities": ["safe_project_inspection"],
+  "notes": "Protected files may be detected by name but not read."
+}
+

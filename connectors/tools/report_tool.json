@@ -1,0 +1,9 @@
+{
+  "id": "report_tool",
+  "name": "Report Tool",
+  "implemented": false,
+  "approvalRequired": false,
+  "capabilities": ["write_markdown_report"],
+  "notes": "Report generation writes local Markdown reports only."
+}
+

@@ -1,0 +1,16 @@
+{
+  "id": "gmail",
+  "provider": "Gmail",
+  "implemented": false,
+  "defaultEnabled": false,
+  "readinessLevel": "placeholder_only",
+  "costMode": "official_free_quota",
+  "authType": "oauth_future",
+  "privacyClass": "external_account",
+  "dataAccess": "none_in_v0.1A",
+  "approvalRequired": true,
+  "tokenStorage": "not_implemented",
+  "dataRetention": "none",
+  "notes": "Placeholder only. Email sending and mailbox access are excluded from v0.1A."
+}
+

@@ -1,0 +1,9 @@
+{
+  "id": "git_tool",
+  "name": "Git Tool",
+  "implemented": false,
+  "approvalRequired": true,
+  "capabilities": ["status", "current_branch"],
+  "notes": "Read-only git inspection only in v0.1A."
+}
+

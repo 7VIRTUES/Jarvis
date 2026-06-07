@@ -1,0 +1,15 @@
+{
+  "id": "coding_agent",
+  "name": "Coding Agent",
+  "implemented": true,
+  "capabilities": [
+    "inspect_registered_project",
+    "detect_git_status",
+    "detect_package_scripts",
+    "detect_protected_file_presence",
+    "detect_codex_cli",
+    "write_markdown_report"
+  ],
+  "notes": "Only inspection, check planning, and report generation are implemented in v0.1A. Codex execution is not implemented."
+}
+
