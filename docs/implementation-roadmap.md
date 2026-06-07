@@ -12,7 +12,7 @@ Future versions may add controlled execution, UI surfaces, and external connecto
 
 ## v0.1B Workflow Foundation
 
-Status: complete after v0.1B closeout validation. v0.1C is next, but it must be planned and approved through ChatGPT Project and the user before implementation begins.
+Status: complete after v0.1B closeout validation. v0.1C has started with the dashboard/report visibility foundation, and later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
 
 The first v0.1B slice adds task orchestration, event history, approval records, project locks, dry-run planning, action receipts, risk budget checks, diagnostics export, and report validation. It does not execute Codex or shell commands.
 
@@ -52,4 +52,6 @@ Final implementation reports must include the post-Codex review findings, safe c
 
 ## v0.1C Boundary
 
-Do not start v0.1C from Codex implementation work. v0.1C scope must be planned and approved through ChatGPT Project and the user before any implementation begins.
+v0.1C has started with Slice 1: read-only dashboard and report visibility foundation. This slice adds local status, safety summary, connector placeholder summary, report listing, report detail, and path-safe report reads only.
+
+Later v0.1C slices remain future work and must be planned before implementation: LAN pairing/token protection, stop-task control, Tauri shell placeholder, first-run setup wizard placeholder, settings view, and installer/private-alpha packaging. Unsupported dashboard controls must remain disabled or absent.

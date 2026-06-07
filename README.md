@@ -18,7 +18,7 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
-Closeout status: v0.1B is complete after local validation. v0.1C is the next phase and must be planned before implementation begins.
+Closeout status: v0.1B is complete after local validation. v0.1C has started with the dashboard/report visibility foundation, and later v0.1C slices must be planned before implementation begins.
 
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
@@ -62,6 +62,12 @@ The check execution receipts slice executes only the generated safe check plan a
 
 The controlled repair loop slice may run at most two Codex repair attempts after failed safe checks. Each repair uses fixed Codex argv, redacted failed-check context, post-repair policy review, and safe checks again. It stops on repeated failures, max-run limits, review-required changes, protected/dependency-file changes, or risk-budget issues.
 
+## v0.1C Dashboard Foundation
+
+v0.1C has started with a read-only dashboard and report visibility foundation. This slice adds local status, safety, connector-placeholder, report-list, and report-detail views without adding write controls or future automation.
+
+Future v0.1C slices still need planning before implementation: LAN pairing/token protection, stop-task controls, Tauri shell placeholder, first-run setup wizard placeholder, settings view, and installer/private-alpha packaging.
+
 ## Run Jarvis Core
 
 ```powershell
@@ -95,6 +101,11 @@ Key workflow endpoints:
 - `POST /codex/plans/{plan_id}/approve-for-future-execution`
 - `POST /codex/plans/{plan_id}/reject`
 - `POST /codex/plans/{plan_id}/execute`
+- `GET /dashboard`
+- `GET /api/dashboard/summary`
+- `GET /api/safety/summary`
+- `GET /api/reports`
+- `GET /api/reports/{report_id}`
 
 ## Run Tests
 
@@ -108,4 +119,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1B does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, run a dashboard, run autonomous background repair, run unrestricted repair loops, or implement external account connectors. Controlled Codex execution and bounded post-check repair are limited to approved plans through the official local CLI.
+Jarvis v0.1C Slice 1 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose write-capable dashboard controls, run autonomous background repair, run unrestricted repair loops, or implement external account connectors. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.

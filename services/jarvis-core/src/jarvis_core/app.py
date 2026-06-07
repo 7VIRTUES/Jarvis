@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from . import APP_NAME, VERSION
@@ -11,6 +12,7 @@ from .audit import JsonlLogger
 from .codex_plans import CodexPlanInput, CodexPlanService
 from .codex_execution import CodexExecutionService
 from .db import init_db
+from .dashboard import DashboardService, dashboard_html
 from .diagnostics import DiagnosticExporter
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
@@ -31,6 +33,7 @@ tasks = TaskQueue(conn, events, runtime, approvals)
 codex_plans = CodexPlanService(conn, events, runtime, approvals, projects)
 codex_execution = CodexExecutionService(conn, events, runtime, approvals, projects, codex_plans)
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
+dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "connectors")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -96,6 +99,36 @@ class CodexPlanRequest(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def local_dashboard() -> HTMLResponse:
+    return HTMLResponse(dashboard_html())
+
+
+@app.get("/api/dashboard/summary")
+def dashboard_summary() -> dict[str, object]:
+    return dashboard.summary()
+
+
+@app.get("/api/safety/summary")
+def safety_summary() -> dict[str, object]:
+    return dashboard.safety_summary()
+
+
+@app.get("/api/reports")
+def list_dashboard_reports() -> list[dict[str, object]]:
+    return dashboard.list_reports()
+
+
+@app.get("/api/reports/{report_id:path}")
+def get_dashboard_report(report_id: str) -> dict[str, object]:
+    try:
+        return dashboard.read_report(report_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/projects")

@@ -6,6 +6,8 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
+The first v0.1C dashboard slice is read-only. It exposes local status, safety, connector placeholder, and report visibility only. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, and purchases must remain absent or unavailable.
+
 ## Hard Blocks
 
 Jarvis blocks dangerous commands such as `git push`, `git merge`, `git reset --hard`, `rm -rf`, `del /s`, `format`, `diskpart`, `reg delete`, `Disable-WindowsDefender`, unrestricted execution policy changes, downloaded script execution, file deletion automation, secret reads, browser session access, email sending, public posting, and payments.
@@ -39,3 +41,7 @@ If an executed safe check fails, Jarvis may run at most two controlled Codex rep
 Default limits are `maxChangedFiles=10`, `maxDiffLines=700`, `maxRepairAttempts=2`, `maxCodexRunsPerTask=3`, and `maxNewDependenciesWithoutApproval=0`. Plans that exceed these limits require approval before any future execution slice can proceed.
 
 The post-Codex review and repair loop reuse these limits. Dependency/package file changes require user review in this slice because the allowed number of new dependency changes without approval is zero.
+
+## Dashboard Report Safety
+
+Report listing and detail are limited to Markdown files directly under `data/jarvis/reports`. Report detail rejects traversal, absolute paths, nested paths, unexpected extensions, and protected paths before reading content.

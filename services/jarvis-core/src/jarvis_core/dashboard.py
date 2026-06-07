@@ -1,0 +1,216 @@
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
+
+from . import APP_NAME, VERSION
+from .config import load_json_config
+from .permissions import is_protected_path
+from .registries import validate_connector_manifest
+
+
+class DashboardService:
+    def __init__(self, conn: sqlite3.Connection, workspace_root: Path, data_root: Path, connector_root: Path):
+        self.conn = conn
+        self.workspace_root = workspace_root
+        self.data_root = data_root
+        self.connector_root = connector_root
+        self.reports_root = data_root / "reports"
+
+    def summary(self) -> dict[str, Any]:
+        reports = self.list_reports()
+        connectors = self.connector_summary()
+        return {
+            "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
+            "phase": {"current": "v0.1C Slice 1", "status": "dashboard/report visibility foundation"},
+            "capabilities": {
+                "dashboard": "read_only",
+                "reports": "read_only",
+                "projects": "read_only_summary",
+                "connectors": "placeholder_summary_only",
+                "unsupportedControlsExposed": False,
+            },
+            "counts": {
+                "projects": self._count("projects"),
+                "tasks": self._count("tasks"),
+                "approvals": self._count("approvals"),
+                "codexPlans": self._count("codex_plans"),
+                "codexExecutions": self._count("codex_executions"),
+                "reports": len(reports),
+                "connectors": len(connectors),
+            },
+            "projects": self._rows("select name, path, created_at from projects order by name", ["name", "path", "created_at"]),
+            "recentTasks": self._rows("select task_id, project_name, task_type, status, created_at from tasks order by created_at desc limit 10", ["taskId", "projectName", "taskType", "status", "createdAt"]),
+            "reports": reports,
+            "safety": self.safety_summary(),
+            "connectors": connectors,
+            "unsupportedActions": unsupported_actions(),
+        }
+
+    def safety_summary(self) -> dict[str, Any]:
+        return {
+            "mode": "local_read_only_dashboard",
+            "genericShellExecution": False,
+            "paidApis": False,
+            "browserAutomation": False,
+            "connectorExecution": False,
+            "destructiveGitAutomation": False,
+            "unsupportedControlsExposed": False,
+            "reportPathValidation": "contained_md_files_only",
+            "notes": [
+                "Dashboard endpoints are read-only.",
+                "Report detail reads only approved Markdown reports under data/jarvis/reports.",
+                "Future v0.1C controls remain absent or unavailable in this slice.",
+            ],
+        }
+
+    def connector_summary(self) -> list[dict[str, Any]]:
+        connectors: list[dict[str, Any]] = []
+        for path in sorted((self.connector_root / "placeholders").glob("*.json")):
+            if is_protected_path(path):
+                continue
+            data = load_json_config(path)
+            validate_connector_manifest(data)
+            connectors.append(
+                {
+                    "id": data.get("id"),
+                    "provider": data.get("provider"),
+                    "implemented": False,
+                    "defaultEnabled": False,
+                    "readinessLevel": data.get("readinessLevel"),
+                    "availableInDashboard": False,
+                    "status": "placeholder_only",
+                }
+            )
+        return connectors
+
+    def list_reports(self) -> list[dict[str, Any]]:
+        if not self.reports_root.exists():
+            return []
+        root = self.reports_root.resolve()
+        reports: list[dict[str, Any]] = []
+        for path in sorted(root.glob("*.md")):
+            if not path.is_file() or is_protected_path(path):
+                continue
+            resolved = path.resolve()
+            if not resolved.is_relative_to(root):
+                continue
+            stat = resolved.stat()
+            reports.append({"id": resolved.name, "title": resolved.stem, "sizeBytes": stat.st_size})
+        return reports
+
+    def read_report(self, report_id: str) -> dict[str, Any]:
+        path = self._validated_report_path(report_id)
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError("report not found")
+        return {
+            "id": path.name,
+            "title": path.stem,
+            "contentType": "text/markdown",
+            "content": path.read_text(encoding="utf-8"),
+        }
+
+    def _validated_report_path(self, report_id: str) -> Path:
+        decoded = unquote(report_id).strip()
+        candidate_id = decoded.replace("\\", "/")
+        relative = Path(candidate_id)
+        if (
+            not decoded
+            or decoded != report_id
+            or relative.is_absolute()
+            or len(relative.parts) != 1
+            or ".." in relative.parts
+            or relative.suffix.lower() != ".md"
+        ):
+            raise PermissionError("report id must be a single Markdown file name")
+        root = self.reports_root.resolve()
+        candidate = (root / relative.name).resolve()
+        if not candidate.is_relative_to(root) or is_protected_path(candidate):
+            raise PermissionError("report path is outside the approved reports directory")
+        return candidate
+
+    def _count(self, table: str) -> int:
+        return int(self.conn.execute(f"select count(*) from {table}").fetchone()[0])
+
+    def _rows(self, query: str, names: list[str]) -> list[dict[str, Any]]:
+        return [dict(zip(names, row)) for row in self.conn.execute(query).fetchall()]
+
+
+def unsupported_actions() -> list[dict[str, Any]]:
+    return [
+        {"id": "git_push", "label": "Push", "available": False, "reason": "manual user action only"},
+        {"id": "git_merge", "label": "Merge", "available": False, "reason": "not exposed in dashboard"},
+        {"id": "delete_files", "label": "Delete files", "available": False, "reason": "destructive automation is blocked"},
+        {"id": "install_dependencies", "label": "Install dependencies", "available": False, "reason": "not part of v0.1C Slice 1"},
+        {"id": "enable_connectors", "label": "Enable connectors", "available": False, "reason": "future connectors remain placeholders"},
+        {"id": "send_email", "label": "Send email", "available": False, "reason": "external account actions are excluded"},
+        {"id": "public_posting", "label": "Public posting", "available": False, "reason": "external posting is excluded"},
+        {"id": "purchases", "label": "Purchases", "available": False, "reason": "payment actions are excluded"},
+    ]
+
+
+def dashboard_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis Dashboard</title>
+  <style>
+    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f7f9; color: #1d2733; }
+    header { background: #ffffff; border-bottom: 1px solid #d8dde5; padding: 18px 28px; }
+    main { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
+    section { background: #ffffff; border: 1px solid #d8dde5; border-radius: 8px; padding: 18px; }
+    h1, h2 { margin: 0 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .metric { border: 1px solid #e2e6ed; border-radius: 6px; padding: 12px; }
+    .metric strong { display: block; font-size: 24px; }
+    code, pre { background: #eef1f5; border-radius: 4px; padding: 2px 4px; }
+    a { color: #0b5cad; }
+    .muted { color: #5e6b7a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Jarvis PC Local</h1>
+    <div class="muted">Read-only dashboard and report visibility foundation</div>
+  </header>
+  <main>
+    <section>
+      <h2>Status</h2>
+      <div id="metrics" class="grid"></div>
+    </section>
+    <section>
+      <h2>Reports</h2>
+      <div id="reports" class="muted">Loading reports...</div>
+    </section>
+    <section>
+      <h2>Safety</h2>
+      <pre id="safety">Loading safety summary...</pre>
+    </section>
+    <section>
+      <h2>Connectors</h2>
+      <div id="connectors" class="muted">Loading connector placeholders...</div>
+    </section>
+  </main>
+  <script>
+    async function loadDashboard() {
+      const summary = await fetch('/api/dashboard/summary').then((response) => response.json());
+      const counts = summary.counts;
+      document.getElementById('metrics').innerHTML = Object.entries(counts)
+        .map(([key, value]) => `<div class="metric"><span>${key}</span><strong>${value}</strong></div>`)
+        .join('');
+      document.getElementById('reports').innerHTML = summary.reports.length
+        ? summary.reports.map((report) => `<div><a href="/api/reports/${encodeURIComponent(report.id)}">${report.title}</a> <span class="muted">${report.sizeBytes} bytes</span></div>`).join('')
+        : 'No reports found.';
+      document.getElementById('safety').textContent = JSON.stringify(summary.safety, null, 2);
+      document.getElementById('connectors').innerHTML = summary.connectors.length
+        ? summary.connectors.map((connector) => `<div>${connector.provider}: ${connector.status}</div>`).join('')
+        : 'No connector placeholders found.';
+    }
+    loadDashboard();
+  </script>
+</body>
+</html>"""
