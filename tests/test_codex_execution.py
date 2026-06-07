@@ -1,6 +1,8 @@
 import json
 import subprocess
 
+import pytest
+
 from jarvis_core.approvals import ApprovalQueue
 from jarvis_core.audit import JsonlLogger
 from jarvis_core.codex_execution import CodexExecutionService
@@ -10,6 +12,13 @@ from jarvis_core.diagnostics import DiagnosticExporter
 from jarvis_core.events import EventBus
 from jarvis_core.project_registry import ProjectRegistry
 from jarvis_core.runtime import SafeActionRuntime
+
+
+def symlink_or_skip(link, target):
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable in this environment: {exc}")
 
 
 def stack(tmp_path, runner=None, detector=None):
@@ -40,6 +49,8 @@ def approved_plan(plans):
             project_name="sample",
             task_goal="Safe execution test.",
             exact_scope="Only a mocked execution.",
+            non_goals="Do not broaden scope.",
+            test_commands=["python -m pytest tests/test_codex_execution.py"],
             risk_plan={"changedFiles": 1},
         )
     )
@@ -112,6 +123,34 @@ def test_execution_blocked_for_output_path_outside_reports(tmp_path):
 
     assert result["status"] == "blocked"
     assert ".jarvis/reports" in result["blocked_reason"]
+
+
+def test_execution_blocks_symlinked_prompt_root(tmp_path):
+    conn, _, _, _, _, plans, execution, project = stack(tmp_path)
+    plan = approved_plan(plans)
+    outside = tmp_path / "outside-prompts"
+    outside.mkdir()
+    (project / ".jarvis").mkdir(exist_ok=True)
+    symlink_or_skip(project / ".jarvis" / "prompts", outside)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "blocked"
+    assert "prompts" in result["blocked_reason"]
+
+
+def test_execution_blocks_symlinked_report_root(tmp_path):
+    conn, _, _, _, _, plans, execution, project = stack(tmp_path)
+    plan = approved_plan(plans)
+    outside = tmp_path / "outside-reports"
+    outside.mkdir()
+    (project / ".jarvis").mkdir(exist_ok=True)
+    symlink_or_skip(project / ".jarvis" / "reports", outside)
+
+    result = execution.execute_plan(plan["plan_id"])
+
+    assert result["status"] == "blocked"
+    assert "reports" in result["blocked_reason"]
 
 
 def test_execution_blocked_for_non_workspace_sandbox(tmp_path):
@@ -195,6 +234,34 @@ def test_receipt_and_events_created_for_successful_mocked_execution(tmp_path):
     assert (project / ".jarvis" / "prompts" / "current-task.md").exists()
 
 
+def test_execution_prompt_includes_approved_plan_fields(tmp_path):
+    _, _, _, _, _, plans, execution, project = stack(tmp_path)
+    plan = plans.create_plan(
+        CodexPlanInput(
+            task_id="task-1",
+            project_name="sample",
+            task_goal="Approved goal from review",
+            exact_scope="Approved exact scope",
+            non_goals="Approved non goals",
+            allowed_files=["src/allowed.py"],
+            test_commands=["python -m pytest tests/test_codex_execution.py"],
+            risk_plan={"changedFiles": 1},
+        )
+    )
+    approved = plans.approve_for_future_execution(plan["plan_id"], "local_user", "approved")
+
+    result = execution.execute_plan(approved["plan_id"])
+    prompt_text = (project / ".jarvis" / "prompts" / "current-task.md").read_text(encoding="utf-8")
+
+    assert result["status"] == "succeeded"
+    assert "Execute only the approved plan represented by this prompt and command preview." in prompt_text
+    assert "Approved goal from review" in prompt_text
+    assert "Approved exact scope" in prompt_text
+    assert "Approved non goals" in prompt_text
+    assert "src/allowed.py" in prompt_text
+    assert "python -m pytest tests/test_codex_execution.py" in prompt_text
+
+
 def test_diagnostics_include_execution_summary_but_not_secret_output(tmp_path):
     def secret_runner(argv, **kwargs):
         return subprocess.CompletedProcess(argv, 0, stdout="api_key=SECRET_VALUE", stderr="password=HIDDEN")
@@ -211,6 +278,31 @@ def test_diagnostics_include_execution_summary_but_not_secret_output(tmp_path):
     assert exported["codexExecutions"][0]["execution_id"] == result["execution_id"]
     assert "SECRET_VALUE" not in text
     assert "HIDDEN" not in text
+
+
+def test_diagnostics_redacts_raw_security_event_fields(tmp_path):
+    conn, _, runtime, _, _, _, execution, _ = stack(tmp_path)
+    connector_root = tmp_path / "connectors"
+    (connector_root / "placeholders").mkdir(parents=True)
+    runtime.validate(
+        __import__("jarvis_core.runtime", fromlist=["ActionRequest"]).ActionRequest(
+            "coding_agent",
+            "codex.execute",
+            "https://example.test/path?token=SECRET_TOKEN C:/Users/russe/private/.env",
+            "task-1",
+            "codex_tool",
+            "high",
+        )
+    )
+
+    exported = DiagnosticExporter(conn, tmp_path, tmp_path / "logs", connector_root).export()
+    text = json.dumps(exported)
+
+    assert exported["configSummary"]["secretValuesExported"] is False
+    assert "SECRET_TOKEN" not in text
+    assert "example.test/path" not in text
+    assert "private/.env" not in text
+    assert "target" not in exported["recentSecurityEvents"][0]
 
 
 def test_no_generic_codex_or_shell_endpoints_exist():

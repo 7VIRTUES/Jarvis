@@ -9,8 +9,10 @@ from typing import Any
 from uuid import uuid4
 
 from .approvals import ApprovalQueue
+from .codex_constants import ALLOWED_SANDBOX_MODE, COMMAND_TEMPLATE, OUTPUT_RELATIVE, PROMPT_RELATIVE
+from .codex_paths import validate_codex_project_paths
 from .events import EventBus
-from .permissions import check_action, check_command, is_protected_path
+from .permissions import check_action, check_command
 from .project_registry import ProjectRegistry
 from .risk import validate_risk_budget
 from .runtime import ActionRequest, SafeActionRuntime
@@ -19,22 +21,6 @@ from .time_utils import utc_now
 
 PLAN_MODES = {"plan_only", "approval_required"}
 PLAN_STATUSES = {"planned", "waiting_for_approval", "approved_for_future_execution", "rejected", "blocked", "canceled"}
-ALLOWED_SANDBOX_MODE = "workspace-write"
-PROMPT_RELATIVE = Path(".jarvis") / "prompts" / "current-task.md"
-OUTPUT_RELATIVE = Path(".jarvis") / "reports" / "latest-codex-output.md"
-COMMAND_TEMPLATE = [
-    "codex",
-    "exec",
-    "--cd",
-    "{PROJECT_PATH}",
-    "--sandbox",
-    "workspace-write",
-    "--ask-for-approval",
-    "never",
-    "--output-last-message",
-    "{OUTPUT_PATH}",
-    "Read {PROMPT_PATH} and complete the task exactly.",
-]
 
 
 @dataclass(frozen=True)
@@ -77,17 +63,17 @@ class CodexPlanService:
         if not project:
             return self._blocked_plan(plan_id, payload, "", "", "", "registered project is required", now)
 
-        project_path = Path(str(project["path"])).resolve()
-        validation = self._validate_plan_paths(project_path, payload.prompt_path, payload.output_path, payload.sandbox_mode)
+        validation, project_path, prompt_path, output_path = validate_codex_project_paths(Path(str(project["path"])), payload.prompt_path, payload.output_path, payload.sandbox_mode)
         risk = validate_risk_budget(payload.risk_plan)
         policy = check_action(payload.action_type)
         hard_block = self._hard_block_reason(payload)
         if validation or hard_block or policy.status == "blocked":
             reason = validation or hard_block or policy.reason
-            return self._blocked_plan(plan_id, payload, str(project_path), payload.prompt_path, payload.output_path, reason, now)
+            return self._blocked_plan(plan_id, payload, str(project_path or Path(str(project["path"]))), payload.prompt_path, payload.output_path, reason, now)
 
+        assert project_path is not None and prompt_path is not None and output_path is not None
         prompt = self.build_prompt(payload, project_path)
-        preview = self.build_command_preview(project_path, project_path / payload.prompt_path, project_path / payload.output_path, payload.sandbox_mode)
+        preview = self.build_command_preview(project_path, prompt_path, output_path, payload.sandbox_mode)
         risk_reasons = [risk.reason]
         risk_level = risk.risk_level if risk.approval_required else "medium"
         status = "waiting_for_approval"
@@ -100,19 +86,20 @@ class CodexPlanService:
             mode,
             status,
             str(project_path),
-            str(project_path / payload.prompt_path),
-            str(project_path / payload.output_path),
+            str(prompt_path),
+            str(output_path),
             json.dumps(COMMAND_TEMPLATE),
             json.dumps(preview),
+            prompt,
             approval_required,
             approval["approval_id"],
             risk_level,
             risk_reasons,
             now,
         )
-        self.runtime.validate(ActionRequest(payload.agent_id, "codex.prepare_prompt", str(project_path / payload.prompt_path), payload.task_id, payload.tool_id, risk_level))
+        self.runtime.validate(ActionRequest(payload.agent_id, "codex.prepare_prompt", str(prompt_path), payload.task_id, payload.tool_id, risk_level))
         self.runtime.validate(ActionRequest(payload.agent_id, "codex.preview_command", payload.project_name, payload.task_id, payload.tool_id, risk_level))
-        self.events.emit("codex.prompt_prepared", payload.task_id, {"plan_id": plan_id, "prompt_path": str(project_path / payload.prompt_path), "prompt_preview_length": len(prompt)})
+        self.events.emit("codex.prompt_prepared", payload.task_id, {"plan_id": plan_id, "prompt_path": str(prompt_path), "prompt_preview_length": len(prompt)})
         self.events.emit("codex.command_preview_created", payload.task_id, {"plan_id": plan_id})
         self.events.emit("codex.approval_requested", payload.task_id, {"plan_id": plan_id, "approval_id": approval["approval_id"]})
         self.events.emit("codex.plan_created", payload.task_id, {"plan_id": plan_id, "status": status})
@@ -218,19 +205,7 @@ class CodexPlanService:
         return {"argv": argv, "preview": preview, "executed": False}
 
     def _validate_plan_paths(self, project_path: Path, prompt_path: str, output_path: str, sandbox_mode: str) -> str | None:
-        if sandbox_mode != ALLOWED_SANDBOX_MODE:
-            return "sandbox mode must be workspace-write"
-        prompt = (project_path / prompt_path).resolve()
-        output = (project_path / output_path).resolve()
-        prompts_root = (project_path / ".jarvis" / "prompts").resolve()
-        reports_root = (project_path / ".jarvis" / "reports").resolve()
-        if not prompt.is_relative_to(prompts_root):
-            return "prompt path must stay under .jarvis/prompts"
-        if not output.is_relative_to(reports_root):
-            return "output path must stay under .jarvis/reports"
-        if is_protected_path(prompt) or is_protected_path(output):
-            return "protected prompt or output paths are blocked"
-        return None
+        return validate_codex_project_paths(project_path, prompt_path, output_path, sandbox_mode)[0]
 
     def _hard_block_reason(self, payload: CodexPlanInput) -> str | None:
         haystack = " ".join(
@@ -246,7 +221,7 @@ class CodexPlanService:
         return policy.reason if policy.status == "blocked" else None
 
     def _blocked_plan(self, plan_id: str, payload: CodexPlanInput, project_path: str, prompt_path: str, output_path: str, reason: str, now: str) -> dict[str, Any]:
-        self._insert_plan(plan_id, payload, "plan_only", "blocked", project_path, prompt_path, output_path, json.dumps(COMMAND_TEMPLATE), "{}", False, None, "high", [reason], now)
+        self._insert_plan(plan_id, payload, "plan_only", "blocked", project_path, prompt_path, output_path, json.dumps(COMMAND_TEMPLATE), "{}", "", False, None, "high", [reason], now)
         self.runtime.validate(ActionRequest(payload.agent_id, payload.action_type, reason, payload.task_id, payload.tool_id, "high"))
         self.events.emit("codex.plan_blocked", payload.task_id, {"plan_id": plan_id, "reason": reason})
         return self.get_plan(plan_id)  # type: ignore[return-value]
@@ -262,6 +237,7 @@ class CodexPlanService:
         output_path: str,
         command_template: str,
         command_preview: str,
+        prompt_content: str,
         approval_required: bool,
         approval_id: str | None,
         risk_level: str,
@@ -274,10 +250,10 @@ class CodexPlanService:
             """
             insert into codex_plans (
               plan_id, task_id, project_name, agent_id, tool_id, action_type, mode, status,
-              project_path, prompt_path, output_path, command_template, command_preview,
+              project_path, prompt_path, output_path, command_template, command_preview, prompt_content,
               sandbox_mode, approval_required, approval_id, risk_level, risk_reasons,
               created_at, updated_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 plan_id,
@@ -293,6 +269,7 @@ class CodexPlanService:
                 output_path,
                 command_template,
                 command_preview,
+                prompt_content,
                 payload.sandbox_mode,
                 int(approval_required),
                 approval_id,
@@ -313,7 +290,7 @@ class CodexPlanService:
     def _select_sql(self) -> str:
         return (
             "select plan_id, task_id, project_name, agent_id, tool_id, action_type, mode, status, "
-            "project_path, prompt_path, output_path, command_template, command_preview, sandbox_mode, "
+            "project_path, prompt_path, output_path, command_template, command_preview, prompt_content, sandbox_mode, "
             "approval_required, approval_id, risk_level, risk_reasons, created_at, updated_at from codex_plans"
         )
 
@@ -332,12 +309,12 @@ class CodexPlanService:
             "output_path": row[10],
             "command_template": json.loads(row[11]),
             "command_preview": json.loads(row[12]) if row[12] else {},
-            "sandbox_mode": row[13],
-            "approval_required": bool(row[14]),
-            "approval_id": row[15],
-            "risk_level": row[16],
-            "risk_reasons": json.loads(row[17]),
-            "created_at": row[18],
-            "updated_at": row[19],
+            "prompt_content": row[13],
+            "sandbox_mode": row[14],
+            "approval_required": bool(row[15]),
+            "approval_id": row[16],
+            "risk_level": row[17],
+            "risk_reasons": json.loads(row[18]),
+            "created_at": row[19],
+            "updated_at": row[20],
         }
-

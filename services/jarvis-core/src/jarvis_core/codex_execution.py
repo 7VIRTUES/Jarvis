@@ -9,9 +9,11 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .approvals import ApprovalQueue
-from .codex_plans import ALLOWED_SANDBOX_MODE, CodexPlanService
+from .codex_constants import ALLOWED_SANDBOX_MODE
+from .codex_paths import validate_codex_project_paths
+from .codex_plans import CodexPlanService
 from .events import EventBus
-from .permissions import check_action, check_command, is_protected_path
+from .permissions import check_action, check_command
 from .project_registry import ProjectRegistry
 from .risk import DEFAULT_RISK_BUDGET
 from .runtime import ActionRequest, SafeActionRuntime
@@ -130,18 +132,17 @@ class CodexExecutionService:
             return "registered project is required"
         registered_path = Path(str(project["path"])).resolve()
         project_path = Path(str(plan["project_path"])).resolve()
-        prompt_path = Path(str(plan["prompt_path"])).resolve()
-        output_path = Path(str(plan["output_path"])).resolve()
         if not project_path.is_relative_to(registered_path):
             return "project path must stay inside registered project"
-        prompts_root = (registered_path / ".jarvis" / "prompts").resolve()
-        reports_root = (registered_path / ".jarvis" / "reports").resolve()
-        if not prompt_path.is_relative_to(prompts_root):
-            return "prompt path must stay under .jarvis/prompts"
-        if not output_path.is_relative_to(reports_root):
-            return "output path must stay under .jarvis/reports"
-        if is_protected_path(prompt_path) or is_protected_path(output_path):
-            return "protected prompt or output paths are blocked"
+        validation, _, prompt_path, output_path = validate_codex_project_paths(
+            registered_path,
+            str(Path(str(plan["prompt_path"])).relative_to(registered_path)) if Path(str(plan["prompt_path"])).is_absolute() and Path(str(plan["prompt_path"])).is_relative_to(registered_path) else str(plan["prompt_path"]),
+            str(Path(str(plan["output_path"])).relative_to(registered_path)) if Path(str(plan["output_path"])).is_absolute() and Path(str(plan["output_path"])).is_relative_to(registered_path) else str(plan["output_path"]),
+            str(plan["sandbox_mode"]),
+        )
+        if validation:
+            return validation
+        assert prompt_path is not None and output_path is not None
         if plan["sandbox_mode"] != ALLOWED_SANDBOX_MODE:
             return "sandbox mode must be workspace-write"
         rebuilt = self.plans.build_command_preview(project_path, prompt_path, output_path, str(plan["sandbox_mode"]))
@@ -228,6 +229,22 @@ class CodexExecutionService:
         self.conn.commit()
 
     def _execution_prompt(self, plan: dict[str, Any]) -> str:
+        approved_prompt = str(plan.get("prompt_content") or "")
+        if approved_prompt:
+            return "\n".join(
+                [
+                    "# Jarvis Controlled Codex Execution",
+                    "",
+                    f"Plan ID: {plan['plan_id']}",
+                    "Execute only the approved plan represented by this prompt and command preview.",
+                    "",
+                    "## Approved Plan Prompt",
+                    approved_prompt.rstrip(),
+                    "",
+                    "## Execution Boundary",
+                    "Do not drift from the approved plan. Do not expand scope, read secrets, run destructive commands, push, merge, reset hard, send email, post publicly, make purchases, automate browsers, use paid APIs, or access future connectors.",
+                ]
+            ) + "\n"
         return "\n".join(
             [
                 "# Jarvis Controlled Codex Execution",

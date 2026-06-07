@@ -112,6 +112,7 @@ create table if not exists codex_plans (
   output_path text not null,
   command_template text not null,
   command_preview text not null,
+  prompt_content text not null default '',
   sandbox_mode text not null,
   approval_required integer not null,
   approval_id text,
@@ -145,5 +146,12 @@ def init_db(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.executescript(SCHEMA)
+    _ensure_column(conn, "codex_plans", "prompt_content", "text not null default ''")
     conn.commit()
     return conn
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row[1] for row in conn.execute(f"pragma table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"alter table {table} add column {column} {definition}")

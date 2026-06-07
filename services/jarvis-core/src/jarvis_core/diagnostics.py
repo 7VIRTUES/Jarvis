@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from . import APP_NAME, VERSION
+from .codex_execution import redact_output
 from .permissions import is_protected_path
 
 
@@ -69,10 +70,43 @@ class DiagnosticExporter:
         if not path.exists() or is_protected_path(path):
             return []
         lines = path.read_text(encoding="utf-8").splitlines()[-50:]
-        return [json.loads(line) for line in lines if line.strip()]
+        return [self._security_summary(json.loads(line)) for line in lines if line.strip()]
+
+    def _security_summary(self, event: dict[str, Any]) -> dict[str, Any]:
+        summary = {
+            "timestamp": event.get("timestamp"),
+            "eventType": event.get("eventType") or event.get("event_type"),
+            "actionType": event.get("action_type") or event.get("actionType"),
+            "approved": event.get("approved"),
+            "blocked": event.get("blocked"),
+            "approvalRequired": event.get("approval_required") or event.get("approvalRequired"),
+            "riskLevel": event.get("risk_level") or event.get("riskLevel"),
+        }
+        reason = event.get("reason") or event.get("message") or event.get("error") or event.get("details")
+        if reason:
+            summary["reasonSummary"] = _sanitize_security_value(reason)
+        return {key: value for key, value in summary.items() if value is not None}
 
     def _reports_index(self) -> list[str]:
         reports_root = self.workspace_root / "data" / "jarvis" / "reports"
         if not reports_root.exists():
             return []
         return [str(path.relative_to(self.workspace_root)) for path in reports_root.glob("*.md") if not is_protected_path(path)]
+
+
+def _sanitize_security_value(value: Any) -> str:
+    if isinstance(value, dict):
+        safe_items = {
+            key: "[REDACTED]" if key.lower() in {"target", "command", "stdout", "stderr", "error", "details", "receipt"} else _sanitize_security_value(inner)
+            for key, inner in value.items()
+        }
+        return redact_output(json.dumps(safe_items, sort_keys=True))[:300]
+    if isinstance(value, list):
+        return redact_output(json.dumps(["[REDACTED]" for _ in value]))[:300]
+    text = redact_output(str(value))
+    text = text.replace("\\", "/")
+    if "://" in text:
+        return "[REDACTED_URL]"
+    if ":/" in text or text.startswith("/"):
+        return "[REDACTED_PATH]"
+    return text[:300]

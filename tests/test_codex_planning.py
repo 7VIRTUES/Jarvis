@@ -1,9 +1,11 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from jarvis_core.approvals import ApprovalQueue
 from jarvis_core.audit import JsonlLogger
+from jarvis_core.codex_paths import validate_codex_project_paths
 from jarvis_core.codex_plans import ALLOWED_SANDBOX_MODE, CodexPlanInput, CodexPlanService
 from jarvis_core.db import init_db
 from jarvis_core.diagnostics import DiagnosticExporter
@@ -13,6 +15,13 @@ from jarvis_core.project_registry import ProjectRegistry
 from jarvis_core.registries import load_manifest
 from jarvis_core.reports import REQUIRED_IMPLEMENTATION_REPORT_SECTIONS, missing_implementation_report_sections
 from jarvis_core.runtime import SafeActionRuntime
+
+
+def symlink_or_skip(link, target):
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable in this environment: {exc}")
 
 
 def stack(tmp_path):
@@ -146,6 +155,86 @@ def test_output_path_outside_jarvis_reports_is_blocked(tmp_path):
 
     assert plan["status"] == "blocked"
     assert ".jarvis/reports" in plan["risk_reasons"][0]
+
+
+def test_symlinked_prompts_root_escaping_project_is_blocked(tmp_path):
+    _, _, _, _, _, _, service, project = stack(tmp_path)
+    outside = tmp_path / "outside-prompts"
+    outside.mkdir()
+    (project / ".jarvis").mkdir()
+    symlink_or_skip(project / ".jarvis" / "prompts", outside)
+
+    plan = service.create_plan(plan_payload())
+
+    assert plan["status"] == "blocked"
+    assert "prompts" in plan["risk_reasons"][0]
+
+
+def test_symlinked_reports_root_escaping_project_is_blocked(tmp_path):
+    _, _, _, _, _, _, service, project = stack(tmp_path)
+    outside = tmp_path / "outside-reports"
+    outside.mkdir()
+    (project / ".jarvis").mkdir()
+    symlink_or_skip(project / ".jarvis" / "reports", outside)
+
+    plan = service.create_plan(plan_payload())
+
+    assert plan["status"] == "blocked"
+    assert "reports" in plan["risk_reasons"][0]
+
+
+def test_resolved_prompt_and_report_roots_outside_project_are_blocked(tmp_path):
+    _, _, _, _, _, _, service, project = stack(tmp_path)
+    outside = tmp_path / "outside-jarvis"
+    outside.mkdir()
+    symlink_or_skip(project / ".jarvis", outside)
+
+    prompt_plan = service.create_plan(plan_payload())
+
+    assert prompt_plan["status"] == "blocked"
+    assert "project" in prompt_plan["risk_reasons"][0]
+
+
+def test_mocked_resolved_prompts_root_outside_project_is_blocked(tmp_path, monkeypatch):
+    project = tmp_path / "sample"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    original_resolve = Path.resolve
+
+    def fake_resolve(self, *args, **kwargs):
+        if self.parts[-3:] == (".jarvis", "prompts", "current-task.md"):
+            return outside / "current-task.md"
+        if self.parts[-2:] == (".jarvis", "prompts"):
+            return outside
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    reason, _, _, _ = validate_codex_project_paths(project, ".jarvis/prompts/current-task.md", ".jarvis/reports/latest-codex-output.md", "workspace-write")
+
+    assert reason is not None
+    assert "prompts" in reason
+
+
+def test_mocked_resolved_reports_root_outside_project_is_blocked(tmp_path, monkeypatch):
+    project = tmp_path / "sample"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    original_resolve = Path.resolve
+
+    def fake_resolve(self, *args, **kwargs):
+        if self.parts[-3:] == (".jarvis", "reports", "latest-codex-output.md"):
+            return outside / "latest-codex-output.md"
+        if self.parts[-2:] == (".jarvis", "reports"):
+            return outside
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    reason, _, _, _ = validate_codex_project_paths(project, ".jarvis/prompts/current-task.md", ".jarvis/reports/latest-codex-output.md", "workspace-write")
+
+    assert reason is not None
+    assert "reports" in reason
 
 
 def test_protected_file_paths_are_blocked(tmp_path):
