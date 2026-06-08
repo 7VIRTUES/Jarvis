@@ -6,9 +6,9 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
-The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, a narrow stop-task boundary, and desktop-shell placeholder status. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, desktop launch/install/update automation, telemetry, and OS service control must remain absent or unavailable.
+The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, a narrow stop-task boundary, desktop-shell placeholder status, and first-run wizard placeholder status. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, setup-state writes, token generation, account setup, OAuth, cloud sync, desktop launch/install/update automation, telemetry, and OS service control must remain absent or unavailable.
 
-Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, production desktop shell behavior, first-run wizard behavior, or installer packaging.
+Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, production desktop shell behavior, production first-run wizard behavior, or installer packaging.
 
 LAN setup guidance is loopback-only. Non-loopback requests to setup status and setup HTML are denied even with a valid dashboard token until a real pairing UX exists. The setup surface does not expose token values, token prefixes, token suffixes, token hashes, environment dumps, input fields, persistence, or token creation controls.
 
@@ -48,6 +48,14 @@ The v0.1C desktop shell slice is placeholder/readiness only. `apps/desktop` cont
 No Tauri dependencies, package manager dependencies, Rust toolchain setup, launch controls, install controls, auto-updater, telemetry, production packaging, Windows service behavior, OS-level permissions, or host-PC control are added in this slice.
 
 A future desktop shell must wrap the local dashboard without bypassing LAN/token protection, the Safe Action Runtime, approvals, or audit logging.
+
+## First-Run Placeholder
+
+The v0.1C first-run wizard slice is placeholder/readiness only. The first-run setup page and status endpoint are loopback-only.
+
+The placeholder may show future checklist items, but the checklist is informational only. It must not persist setup state, write configuration files, generate or store LAN tokens, ask for secrets, create accounts, use OAuth, enable cloud sync, add telemetry, add an auto-updater, or package an installer.
+
+A future first-run wizard must respect LAN/token protection, the Safe Action Runtime, approvals, and audit logging.
 
 ## Hard Blocks
 

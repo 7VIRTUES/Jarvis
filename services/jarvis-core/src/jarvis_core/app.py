@@ -12,7 +12,7 @@ from .audit import JsonlLogger
 from .codex_plans import CodexPlanInput, CodexPlanService
 from .codex_execution import CodexExecutionService
 from .db import init_db
-from .dashboard import DashboardService, dashboard_html
+from .dashboard import DashboardService, dashboard_html, first_run_setup_html
 from .diagnostics import DiagnosticExporter
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
@@ -114,6 +114,11 @@ def lan_setup_page(_: None = Depends(require_loopback_request)) -> HTMLResponse:
     return HTMLResponse(lan_setup_html())
 
 
+@app.get("/setup/first-run", response_class=HTMLResponse)
+def first_run_setup_page(_: None = Depends(require_loopback_request)) -> HTMLResponse:
+    return HTMLResponse(first_run_setup_html())
+
+
 @app.get("/api/dashboard/summary")
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
@@ -122,6 +127,11 @@ def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[s
 @app.get("/api/setup/lan/status")
 def lan_setup_status_endpoint(_: None = Depends(require_loopback_request)) -> dict[str, object]:
     return lan_setup_status()
+
+
+@app.get("/api/setup/first-run/status")
+def first_run_setup_status_endpoint(_: None = Depends(require_loopback_request)) -> dict[str, object]:
+    return dashboard.first_run_wizard_summary()
 
 
 @app.get("/api/safety/summary")

@@ -28,9 +28,10 @@ class DashboardService:
         settings = self.settings_summary()
         stop_task = self.stop_task_summary()
         desktop_shell = self.desktop_shell_summary()
+        first_run = self.first_run_wizard_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 6", "status": "Tauri desktop shell placeholder/readiness foundation"},
+            "phase": {"current": "v0.1C Slice 7", "status": "first-run wizard placeholder/readiness foundation"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
@@ -38,6 +39,7 @@ class DashboardService:
                 "projects": "read_only_summary",
                 "stopTask": "jarvis_task_queue_state_only",
                 "desktopShell": "placeholder_only",
+                "firstRunWizard": "placeholder_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -57,6 +59,7 @@ class DashboardService:
             "settings": settings,
             "stopTask": stop_task,
             "desktopShell": desktop_shell,
+            "firstRunWizard": first_run,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -70,7 +73,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "Tauri desktop shell placeholder/readiness foundation",
+            "currentSlice": "first-run wizard placeholder/readiness foundation",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -95,7 +98,16 @@ class DashboardService:
             "tauriShellStatus": "placeholder_only",
             "tauriShellImplemented": False,
             "tauriDependenciesInstalled": False,
-            "firstRunWizardStatus": "not_implemented_yet",
+            "firstRunWizardStatus": "placeholder_only",
+            "firstRunWizard": self.first_run_wizard_summary(),
+            "firstRunWizardImplemented": False,
+            "setupStatePersistenceImplemented": False,
+            "writesConfigFiles": False,
+            "tokenGenerationImplemented": False,
+            "tokenPersistenceImplemented": False,
+            "accountSetupImplemented": False,
+            "oauthImplemented": False,
+            "cloudSyncEnabled": False,
             "installerStatus": "not_implemented_yet",
             "privateAlphaPackagingStatus": "not_implemented_yet",
             "installerPackagingStatus": "not_implemented_yet",
@@ -108,7 +120,8 @@ class DashboardService:
                 "LAN dashboard access requires a configured header or bearer token.",
                 "Stop-task controls apply only to Jarvis-owned task records and do not kill OS processes.",
                 "Desktop shell is placeholder/readiness only and does not install or launch Tauri.",
-                "First-run wizard and installer packaging remain future v0.1C slices.",
+                "First-run wizard is placeholder/readiness only and does not persist setup state or write configuration.",
+                "Installer packaging remains a future v0.1C slice.",
             ],
         }
 
@@ -122,6 +135,7 @@ class DashboardService:
             "destructiveGitAutomation": False,
             "arbitraryProcessKill": False,
             "desktopShell": self.desktop_shell_summary(),
+            "firstRunWizard": self.first_run_wizard_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
@@ -132,7 +146,49 @@ class DashboardService:
                 "Report detail reads only approved Markdown reports under data/jarvis/reports.",
                 "Stop-task controls accept only Jarvis task IDs and do not accept PID, process-name, command, or OS service identifiers.",
                 "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
+                "First-run readiness is informational only; no setup persistence, token generation, account setup, OAuth, cloud sync, telemetry, or updater is exposed.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
+            ],
+        }
+
+    def first_run_wizard_summary(self) -> dict[str, Any]:
+        return {
+            "requirement": "v0.1C first-run wizard placeholder/readiness foundation",
+            "firstRunWizardStatus": "placeholder_only",
+            "firstRunWizardImplemented": False,
+            "setupPageImplemented": True,
+            "setupPageLoopbackOnly": True,
+            "setupStatePersistenceImplemented": False,
+            "writesConfigFiles": False,
+            "editableSettingsImplemented": False,
+            "tokenGenerationImplemented": False,
+            "tokenPersistenceImplemented": False,
+            "tokenInputFormImplemented": False,
+            "accountSetupImplemented": False,
+            "oauthImplemented": False,
+            "cloudSyncEnabled": False,
+            "telemetryEnabled": False,
+            "autoUpdaterEnabled": False,
+            "installerPackagingStatus": "not_implemented_yet",
+            "desktopShellStatus": "placeholder_only",
+            "lanSetupGuidanceAvailable": True,
+            "stopTaskBoundaryAvailable": True,
+            "lanTokenProtectionMustBeRespected": True,
+            "safeActionRuntimeMustBeRespected": True,
+            "futureChecklist": [
+                "confirm_local_service",
+                "review_lan_token_setup",
+                "register_first_project",
+                "review_safety_boundaries",
+                "open_dashboard",
+                "export_diagnostics",
+            ],
+            "checklistIsInformationalOnly": True,
+            "mutationEndpointsImplemented": False,
+            "notes": [
+                "First-run setup is a placeholder status surface only.",
+                "The checklist is informational and does not execute setup actions.",
+                "No setup state, token, account, OAuth, cloud, telemetry, updater, or installer behavior is implemented in this slice.",
             ],
         }
 
@@ -153,7 +209,7 @@ class DashboardService:
             "telemetryEnabled": False,
             "installerPackagingStatus": "not_implemented_yet",
             "privateAlphaPackagingStatus": "not_implemented_yet",
-            "firstRunWizardStatus": "not_implemented_yet",
+            "firstRunWizardStatus": "placeholder_only",
             "lanTokenProtectionMustBeRespected": True,
             "safeActionRuntimeMustBeRespected": True,
             "osLevelPermissionsAdded": False,
@@ -301,6 +357,66 @@ def unsupported_actions() -> list[dict[str, Any]]:
     ]
 
 
+def first_run_setup_html() -> str:
+    checklist = [
+        "confirm_local_service",
+        "review_lan_token_setup",
+        "register_first_project",
+        "review_safety_boundaries",
+        "open_dashboard",
+        "export_diagnostics",
+    ]
+    checklist_html = "\n".join(f"        <li><code>{item}</code></li>" for item in checklist)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis First-Run Placeholder</title>
+  <style>
+    body {{ margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f7f9; color: #1d2733; }}
+    header {{ background: #ffffff; border-bottom: 1px solid #d8dde5; padding: 18px 28px; }}
+    main {{ max-width: 920px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }}
+    section {{ background: #ffffff; border: 1px solid #d8dde5; border-radius: 8px; padding: 18px; }}
+    h1, h2 {{ margin: 0 0 10px; }}
+    code, pre {{ background: #eef1f5; border-radius: 4px; padding: 2px 4px; }}
+    .muted {{ color: #5e6b7a; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>First-Run Setup Placeholder</h1>
+    <div class="muted">Loopback-only readiness status for a future setup wizard</div>
+  </header>
+  <main>
+    <section>
+      <h2>Status</h2>
+      <pre id="first-run-status">Loading first-run placeholder status...</pre>
+    </section>
+    <section>
+      <h2>Future Checklist</h2>
+      <p>This checklist is informational only. It does not run setup actions or store setup state.</p>
+      <ul>
+{checklist_html}
+      </ul>
+    </section>
+    <section>
+      <h2>Boundaries</h2>
+      <p>The future wizard must respect LAN token protection, Safe Action Runtime decisions, approvals, and audit logging.</p>
+      <p>This placeholder does not persist setup state, write configuration files, create tokens, store tokens, provide account onboarding, use OAuth, sync cloud data, add telemetry, add an updater, or build installer packaging.</p>
+    </section>
+  </main>
+  <script>
+    async function loadFirstRunStatus() {{
+      const status = await fetch('/api/setup/first-run/status').then((response) => response.json());
+      document.getElementById('first-run-status').textContent = JSON.stringify(status, null, 2);
+    }}
+    loadFirstRunStatus();
+  </script>
+</body>
+</html>"""
+
+
 def dashboard_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -351,6 +467,11 @@ def dashboard_html() -> str:
       <h2>Desktop Shell / Tauri</h2>
       <pre id="desktop-shell">Loading desktop shell placeholder status...</pre>
     </section>
+    <section id="first-run-status">
+      <h2>First-Run / Setup</h2>
+      <pre id="first-run">Loading first-run placeholder status...</pre>
+      <p><a href="/setup/first-run">Open loopback first-run setup placeholder</a></p>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -377,6 +498,7 @@ def dashboard_html() -> str:
       document.getElementById('settings').textContent = JSON.stringify(summary.settings, null, 2);
       document.getElementById('stop-task-status').textContent = JSON.stringify(summary.stopTask, null, 2);
       document.getElementById('desktop-shell').textContent = JSON.stringify(summary.desktopShell, null, 2);
+      document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
       const activeTasks = summary.activeTasks || [];
       const stopButton = document.getElementById('stop-task-button');
       if (activeTasks.length) {

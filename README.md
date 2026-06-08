@@ -18,7 +18,7 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
-Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, and desktop-shell placeholder foundations. Later v0.1C slices must be planned before implementation begins.
+Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, desktop-shell placeholder, and first-run wizard placeholder foundations. Later v0.1C slices must be planned before implementation begins.
 
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
@@ -76,7 +76,9 @@ Slice 5 adds an Active Task / Stop Task boundary for Jarvis-owned task records. 
 
 Slice 6 adds a Tauri desktop shell placeholder/readiness foundation under `apps/desktop`. It is documentation and status metadata only. It does not install Tauri, add package dependencies, launch a desktop app, add an auto-updater, add telemetry, or implement installer/private-alpha packaging. A future desktop shell must wrap the local dashboard without bypassing LAN/token protection or Safe Action Runtime boundaries.
 
-Future v0.1C slices still need planning before implementation: full pairing wizard, QR/mobile pairing, first-run setup wizard placeholder, and installer/private-alpha packaging.
+Slice 7 adds a first-run wizard placeholder/readiness foundation. The first-run page and status are loopback-only and informational. They do not persist setup state, write configuration files, generate or store tokens, create accounts, use OAuth, enable cloud sync, add telemetry, add an auto-updater, or implement installer/private-alpha packaging.
+
+Future v0.1C slices still need planning before implementation: full pairing wizard, QR/mobile pairing, production first-run setup, and installer/private-alpha packaging.
 
 ## Run Jarvis Core
 
@@ -122,10 +124,12 @@ Key workflow endpoints:
 - `GET /api/reports/{report_id}`
 - `GET /setup/lan`
 - `GET /api/setup/lan/status`
+- `GET /setup/first-run`
+- `GET /api/setup/first-run/status`
 
 Dashboard and dashboard-related API endpoints, including task status and stop-task routes, are guarded for LAN access. Loopback requests can read or use them without a token; non-loopback requests require a valid configured token.
 
-LAN setup endpoints are loopback-only. Non-loopback requests are denied even with a token until a real pairing UX is planned and implemented.
+LAN setup and first-run setup placeholder endpoints are loopback-only. Non-loopback requests are denied even with a token until a real pairing/setup UX is planned and implemented.
 
 ## Run Tests
 
@@ -139,4 +143,4 @@ Jarvis validates actions before tools execute them. Dangerous commands, protecte
 
 ## v0.1 Exclusions
 
-Jarvis v0.1C Slice 6 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, run arbitrary process killing, run autonomous background repair, run unrestricted repair loops, implement token generation, implement a full pairing wizard, install Tauri dependencies, add an auto-updater, add telemetry, create installer packaging, or implement external account connectors. Stop-task controls apply only to Jarvis-owned task records. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.
+Jarvis v0.1C Slice 7 does not call paid AI APIs, run browser automation, send email, post publicly, process payments, sync to cloud, expose editable settings, run arbitrary process killing, run autonomous background repair, run unrestricted repair loops, implement token generation or persistence, implement account setup or OAuth, implement a full pairing wizard, install Tauri dependencies, add an auto-updater, add telemetry, create installer packaging, or implement external account connectors. Stop-task controls apply only to Jarvis-owned task records. Controlled Codex execution and bounded post-check repair remain limited to approved plans through the official local CLI.
