@@ -12,7 +12,7 @@ Future versions may add controlled execution, UI surfaces, and external connecto
 
 ## v0.1B Workflow Foundation
 
-Status: complete after v0.1B closeout validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, desktop-shell placeholder, first-run wizard placeholder, and private-alpha packaging readiness foundations. Later v0.1C slices must be planned and approved through ChatGPT Project and the user before implementation begins.
+Status: complete after v0.1B closeout validation. v0.1C is complete as a private-alpha readiness foundation with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, desktop-shell placeholder, first-run wizard placeholder, and private-alpha packaging readiness foundations. Post-v0.1C work must be planned and approved through ChatGPT Project and the user before implementation begins.
 
 The first v0.1B slice adds task orchestration, event history, approval records, project locks, dry-run planning, action receipts, risk budget checks, diagnostics export, and report validation. It does not execute Codex or shell commands.
 
@@ -68,4 +68,4 @@ v0.1C Slice 7 adds a first-run wizard placeholder/readiness foundation. The loop
 
 v0.1C Slice 8 adds private-alpha packaging documentation/readiness only. It adds short packaging and VM validation checklists plus dashboard/settings metadata. No installer artifact, Tauri production build, code signing, auto-updater, telemetry, GitHub release automation, public release, or cloud distribution is implemented. Manual local run remains the current path.
 
-Later v0.1C slices remain future work and must be planned before implementation: full pairing wizard, QR/mobile pairing, production first-run setup, and real installer/private-alpha packaging after readiness validation. Unsupported dashboard controls must remain disabled or absent.
+Post-v0.1C future work must be planned before implementation: full pairing wizard, QR/mobile pairing, production first-run setup, and real installer/private-alpha packaging after readiness validation. Unsupported dashboard controls must remain disabled or absent.

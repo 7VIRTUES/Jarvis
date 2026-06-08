@@ -18,7 +18,7 @@ Jarvis PC Local is a local-first Windows assistant platform foundation. Version 
 
 ## v0.1B Workflow Foundation
 
-Closeout status: v0.1B is complete after local validation. v0.1C has started with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, desktop-shell placeholder, first-run wizard placeholder, and private-alpha packaging readiness foundations. Later v0.1C slices must be planned before implementation begins.
+Closeout status: v0.1B is complete after local validation. v0.1C is complete as a private-alpha readiness foundation with dashboard, report, settings/status, LAN token protection, loopback-only setup guidance, stop-task control boundary, desktop-shell placeholder, first-run wizard placeholder, and private-alpha packaging readiness foundations. Post-v0.1C work must be planned before implementation begins.
 
 The first v0.1B slice adds local task orchestration without enabling Codex or shell execution:
 
@@ -64,7 +64,7 @@ The controlled repair loop slice may run at most two Codex repair attempts after
 
 ## v0.1C Dashboard Foundation
 
-v0.1C has started with a read-only dashboard and report visibility foundation. This slice adds local status, safety, connector-placeholder, report-list, and report-detail views without adding write controls or future automation.
+v0.1C closes with a read-only dashboard and report visibility foundation. This slice adds local status, safety, connector-placeholder, report-list, and report-detail views without adding write controls or future automation.
 
 Slice 2 adds read-only settings/status visibility. Settings are status placeholders only; there are no editable controls, no settings persistence, and no save actions.
 
@@ -80,7 +80,7 @@ Slice 7 adds a first-run wizard placeholder/readiness foundation. The first-run 
 
 Slice 8 adds private-alpha packaging documentation and readiness metadata. No installer artifact, Tauri production build, code signing, auto-updater, telemetry, GitHub release automation, public release, or cloud distribution is implemented. Manual local run remains the current path, and fresh Windows VM validation is required before any future private-alpha build.
 
-Future v0.1C slices still need planning before implementation: full pairing wizard, QR/mobile pairing, production first-run setup, and real installer/private-alpha packaging.
+Post-v0.1C future work still needs planning before implementation: full pairing wizard, QR/mobile pairing, production first-run setup, and real installer/private-alpha packaging.
 
 ## Run Jarvis Core
 
