@@ -6,7 +6,7 @@ The v0.1B workflow foundation keeps that model. Tasks may be created and dry-run
 
 Codex planning may create a command preview and approval request. Controlled execution is a separate endpoint and requires an already approved plan.
 
-The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, a narrow stop-task boundary, desktop-shell placeholder status, and first-run wizard placeholder status. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, setup-state writes, token generation, account setup, OAuth, cloud sync, desktop launch/install/update automation, telemetry, and OS service control must remain absent or unavailable.
+The first v0.1C dashboard slices expose local status, settings/status placeholders, safety, connector placeholder, report visibility, LAN setup guidance, a narrow stop-task boundary, desktop-shell placeholder status, first-run wizard placeholder status, and private-alpha packaging readiness status. Unsupported actions such as push, merge, deletion, dependency installation, connector enablement, email, public posting, purchases, arbitrary process killing, setup-state writes, token generation, account setup, OAuth, cloud sync, desktop launch/install/update automation, installer build automation, code signing, release publishing, telemetry, and OS service control must remain absent or unavailable.
 
 Settings/status visibility is not configuration editing. This slice does not create settings persistence, auth tokens, passwords, pairing codes, LAN pairing, production desktop shell behavior, production first-run wizard behavior, or installer packaging.
 
@@ -56,6 +56,14 @@ The v0.1C first-run wizard slice is placeholder/readiness only. The first-run se
 The placeholder may show future checklist items, but the checklist is informational only. It must not persist setup state, write configuration files, generate or store LAN tokens, ask for secrets, create accounts, use OAuth, enable cloud sync, add telemetry, add an auto-updater, or package an installer.
 
 A future first-run wizard must respect LAN/token protection, the Safe Action Runtime, approvals, and audit logging.
+
+## Private Alpha Packaging Placeholder
+
+The v0.1C private-alpha packaging slice is documentation/readiness only.
+
+No installer artifact, Tauri production build, code signing, auto-updater, telemetry, GitHub release automation, public release, cloud distribution, or release workflow is implemented. Manual local run remains the current path.
+
+Fresh Windows VM validation is required before any future private-alpha build. Existing LAN/token, setup loopback-only, stop-task task-record-only, desktop shell placeholder, first-run placeholder, and disabled connector boundaries remain unchanged.
 
 ## Hard Blocks
 

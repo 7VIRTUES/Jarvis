@@ -12,3 +12,5 @@ Future desktop work must preserve the existing Jarvis boundaries:
 - Keep installer/private-alpha packaging and first-run wizard work in later planned slices.
 
 This folder intentionally contains documentation only until a later approved slice adds a real desktop shell.
+
+Packaging readiness is also documentation-only. See `PACKAGING_PLACEHOLDER.md`; it does not define a build, installer, updater, signing, or release process.

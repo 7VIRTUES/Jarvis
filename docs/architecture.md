@@ -8,7 +8,7 @@ The Codex planning slice adds future execution plans, command previews, and appr
 
 The controlled execution slice can run only an approved Codex plan through the official local Codex CLI using fixed argv, `shell=False`, a registered project path, and the `workspace-write` sandbox.
 
-The first v0.1C slices add read-only local dashboard, report, settings/status visibility APIs, LAN token protection, loopback-only LAN setup guidance, a stop-task boundary for Jarvis-owned task records, a Tauri desktop-shell placeholder, and a first-run wizard placeholder. They do not add editable settings, full pairing UX, remote internet access, desktop shell packaging, setup persistence, token generation, account setup, OAuth, arbitrary process control, auto-update, telemetry, or connector execution.
+The first v0.1C slices add read-only local dashboard, report, settings/status visibility APIs, LAN token protection, loopback-only LAN setup guidance, a stop-task boundary for Jarvis-owned task records, a Tauri desktop-shell placeholder, a first-run wizard placeholder, and private-alpha packaging readiness docs. They do not add editable settings, full pairing UX, remote internet access, desktop shell packaging, setup persistence, token generation, account setup, OAuth, arbitrary process control, auto-update, telemetry, code signing, release automation, public distribution, or connector execution.
 
 ## Modules
 
@@ -44,6 +44,8 @@ Stop-task status is derived from the local task table. Active task controls appl
 The desktop shell placeholder lives under `apps/desktop` as documentation only. Dashboard/settings status reports it as `placeholder_only`; no Tauri app, dependency installation, production packaging, auto-updater, telemetry, OS permissions, or host-PC control is implemented. A future desktop shell must wrap the local dashboard while preserving LAN/token protection and Safe Action Runtime boundaries.
 
 The first-run wizard placeholder is loopback-only and informational. It exposes readiness status and a future checklist but does not persist setup state, write configuration files, generate or store tokens, create accounts, use OAuth, sync cloud data, add telemetry, add an updater, or package an installer. A future first-run wizard must preserve LAN/token protection and Safe Action Runtime boundaries.
+
+Private-alpha packaging readiness is documentation and dashboard metadata only. It does not produce installer artifacts, run a Tauri production build, sign code, publish releases, enable telemetry, enable auto-update, or add release automation. Fresh Windows VM validation is required before any future private-alpha build.
 
 ## Project Locks
 

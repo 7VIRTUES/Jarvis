@@ -21,12 +21,13 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1C Slice 7"
+    assert summary["phase"]["current"] == "v0.1C Slice 8"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
     assert summary["capabilities"]["desktopShell"] == "placeholder_only"
     assert summary["capabilities"]["firstRunWizard"] == "placeholder_only"
+    assert summary["capabilities"]["privateAlphaPackaging"] == "placeholder_only"
     assert summary["safety"]["paidApis"] is False
     assert summary["safety"]["connectorExecution"] is False
     assert summary["safety"]["arbitraryProcessKill"] is False
@@ -36,6 +37,7 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     assert summary["stopTask"]["pidAccepted"] is False
     assert summary["desktopShell"]["tauriShellImplemented"] is False
     assert summary["firstRunWizard"]["setupStatePersistenceImplemented"] is False
+    assert summary["privateAlphaPackaging"]["installerBuildImplemented"] is False
 
 
 def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, monkeypatch):
@@ -45,7 +47,7 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
 
     assert settings["appName"] == "Jarvis PC Local"
     assert settings["phase"] == "v0.1C"
-    assert settings["currentSlice"] == "first-run wizard placeholder/readiness foundation"
+    assert settings["currentSlice"] == "private-alpha packaging documentation/readiness foundation"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
@@ -86,6 +88,7 @@ def test_settings_summary_marks_lan_pairing_future_and_stop_task_boundary(tmp_pa
     assert settings["tauriShellStatus"] == "placeholder_only"
     assert settings["firstRunWizardStatus"] == "placeholder_only"
     assert settings["installerStatus"] == "not_implemented_yet"
+    assert settings["privateAlphaPackagingStatus"] == "placeholder_only"
 
 
 def test_settings_summary_reports_desktop_shell_placeholder_status(tmp_path, monkeypatch):
@@ -98,7 +101,7 @@ def test_settings_summary_reports_desktop_shell_placeholder_status(tmp_path, mon
     assert settings["tauriShellStatus"] == "placeholder_only"
     assert settings["tauriShellImplemented"] is False
     assert settings["tauriDependenciesInstalled"] is False
-    assert settings["installerPackagingStatus"] == "not_implemented_yet"
+    assert settings["installerPackagingStatus"] == "placeholder_only"
     assert settings["autoUpdaterEnabled"] is False
     assert settings["telemetryEnabled"] is False
     assert desktop["desktopShellStatus"] == "placeholder_only"
@@ -129,6 +132,29 @@ def test_settings_summary_reports_first_run_placeholder_status(tmp_path, monkeyp
     assert first_run["firstRunWizardStatus"] == "placeholder_only"
     assert first_run["checklistIsInformationalOnly"] is True
     assert first_run["mutationEndpointsImplemented"] is False
+
+
+def test_settings_summary_reports_packaging_placeholder_status(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    settings = app_module.settings_summary()
+    packaging = settings["privateAlphaPackaging"]
+
+    assert settings["privateAlphaPackagingStatus"] == "placeholder_only"
+    assert settings["installerPackagingStatus"] == "placeholder_only"
+    assert settings["installerBuildImplemented"] is False
+    assert settings["installerArtifactAvailable"] is False
+    assert settings["codeSigningImplemented"] is False
+    assert settings["autoUpdaterEnabled"] is False
+    assert settings["telemetryEnabled"] is False
+    assert settings["publicReleaseReady"] is False
+    assert settings["vmValidationRequired"] is True
+    assert settings["vmValidationStatus"] == "not_run_in_this_slice"
+    assert settings["manualLocalRunCurrentPath"] is True
+    assert settings["githubReleaseAutomationEnabled"] is False
+    assert packaging["documentationOnly"] is True
+    assert packaging["githubReleaseAutomationEnabled"] is False
+    assert packaging["freshWindowsVmRequiredBeforePrivateAlpha"] is True
 
 
 def test_settings_summary_shows_lan_protection_without_token_value(tmp_path, monkeypatch):
@@ -239,6 +265,11 @@ def test_unsupported_controls_are_not_exposed_as_working_automation(tmp_path, mo
     assert "launch desktop" not in page_text
     assert "install tauri" not in page_text
     assert "update app" not in page_text
+    assert "install now" not in page_text
+    assert "build installer" not in page_text
+    assert "publish release" not in page_text
+    assert "download installer" not in page_text
+    assert "sign build" not in page_text
     assert "generate token" not in page_text
     assert "create account" not in page_text
     assert "finish setup" not in page_text
@@ -262,6 +293,8 @@ def test_dashboard_html_includes_settings_status_section(tmp_path, monkeypatch):
     assert "desktop shell / tauri" in page_text
     assert 'id="first-run-status"' in page_text
     assert "first-run / setup" in page_text
+    assert 'id="private-alpha-packaging-status"' in page_text
+    assert "private alpha / packaging" in page_text
     assert "/setup/first-run" in page_text
     assert "/api/tasks/" in page_text
     assert "/setup/lan" in page_text

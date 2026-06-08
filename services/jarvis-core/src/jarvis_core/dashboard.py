@@ -29,9 +29,10 @@ class DashboardService:
         stop_task = self.stop_task_summary()
         desktop_shell = self.desktop_shell_summary()
         first_run = self.first_run_wizard_summary()
+        private_alpha = self.private_alpha_packaging_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 7", "status": "first-run wizard placeholder/readiness foundation"},
+            "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
             "capabilities": {
                 "dashboard": "read_only",
                 "reports": "read_only",
@@ -40,6 +41,7 @@ class DashboardService:
                 "stopTask": "jarvis_task_queue_state_only",
                 "desktopShell": "placeholder_only",
                 "firstRunWizard": "placeholder_only",
+                "privateAlphaPackaging": "placeholder_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -60,6 +62,7 @@ class DashboardService:
             "stopTask": stop_task,
             "desktopShell": desktop_shell,
             "firstRunWizard": first_run,
+            "privateAlphaPackaging": private_alpha,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -73,7 +76,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1C",
-            "currentSlice": "first-run wizard placeholder/readiness foundation",
+            "currentSlice": "private-alpha packaging documentation/readiness foundation",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -109,8 +112,17 @@ class DashboardService:
             "oauthImplemented": False,
             "cloudSyncEnabled": False,
             "installerStatus": "not_implemented_yet",
-            "privateAlphaPackagingStatus": "not_implemented_yet",
-            "installerPackagingStatus": "not_implemented_yet",
+            "privateAlphaPackagingStatus": "placeholder_only",
+            "privateAlphaPackaging": self.private_alpha_packaging_summary(),
+            "installerPackagingStatus": "placeholder_only",
+            "installerBuildImplemented": False,
+            "installerArtifactAvailable": False,
+            "codeSigningImplemented": False,
+            "publicReleaseReady": False,
+            "vmValidationRequired": True,
+            "vmValidationStatus": "not_run_in_this_slice",
+            "manualLocalRunCurrentPath": True,
+            "githubReleaseAutomationEnabled": False,
             "autoUpdaterEnabled": False,
             "telemetryEnabled": False,
             "notes": [
@@ -121,7 +133,7 @@ class DashboardService:
                 "Stop-task controls apply only to Jarvis-owned task records and do not kill OS processes.",
                 "Desktop shell is placeholder/readiness only and does not install or launch Tauri.",
                 "First-run wizard is placeholder/readiness only and does not persist setup state or write configuration.",
-                "Installer packaging remains a future v0.1C slice.",
+                "Private-alpha packaging is documentation/readiness only and does not build, sign, publish, or install artifacts.",
             ],
         }
 
@@ -136,6 +148,7 @@ class DashboardService:
             "arbitraryProcessKill": False,
             "desktopShell": self.desktop_shell_summary(),
             "firstRunWizard": self.first_run_wizard_summary(),
+            "privateAlphaPackaging": self.private_alpha_packaging_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
@@ -147,7 +160,66 @@ class DashboardService:
                 "Stop-task controls accept only Jarvis task IDs and do not accept PID, process-name, command, or OS service identifiers.",
                 "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
                 "First-run readiness is informational only; no setup persistence, token generation, account setup, OAuth, cloud sync, telemetry, or updater is exposed.",
+                "Private-alpha packaging readiness is documentation only; no installer build, signing, release automation, auto-updater, telemetry, or public release is exposed.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
+            ],
+        }
+
+    def private_alpha_packaging_summary(self) -> dict[str, Any]:
+        return {
+            "requirement": "v0.1C private-alpha packaging documentation/readiness foundation",
+            "privateAlphaPackagingStatus": "placeholder_only",
+            "documentationOnly": True,
+            "installerBuildImplemented": False,
+            "installerArtifactAvailable": False,
+            "installerPackagingStatus": "placeholder_only",
+            "tauriProductionBuildImplemented": False,
+            "codeSigningImplemented": False,
+            "autoUpdaterEnabled": False,
+            "telemetryEnabled": False,
+            "publicReleaseReady": False,
+            "cloudDistributionEnabled": False,
+            "githubReleaseAutomationEnabled": False,
+            "releaseWorkflowAdded": False,
+            "packagingScriptsAdded": False,
+            "dependencyChangesAdded": False,
+            "vmValidationRequired": True,
+            "vmValidationStatus": "not_run_in_this_slice",
+            "manualLocalRunCurrentPath": True,
+            "freshWindowsVmRequiredBeforePrivateAlpha": True,
+            "lanTokenRequiredForLanTesting": True,
+            "setupPagesRemainLoopbackOnly": True,
+            "stopTaskBoundary": "jarvis_task_record_only",
+            "desktopShellStatus": "placeholder_only",
+            "firstRunWizardStatus": "placeholder_only",
+            "futureConnectorsRemainDisabled": True,
+            "paidAiApisEnabled": False,
+            "browserAutomationEnabled": False,
+            "readinessChecklist": [
+                "fresh_windows_vm",
+                "clone_repo",
+                "create_python_venv",
+                "install_documented_python_dependencies",
+                "run_tests",
+                "start_jarvis_core",
+                "verify_loopback_dashboard",
+                "configure_lan_dashboard_token_for_lan_test",
+                "verify_lan_denied_without_token",
+                "verify_lan_allowed_with_token",
+                "verify_setup_pages_loopback_only",
+                "verify_reports_view",
+                "verify_settings_status_view",
+                "verify_stop_task_boundary",
+                "verify_diagnostic_export",
+                "confirm_future_connectors_disabled",
+                "confirm_no_paid_ai_apis",
+                "confirm_no_browser_automation",
+                "confirm_no_push_merge_delete_automation",
+            ],
+            "notes": [
+                "No installer artifact is produced in this slice.",
+                "No build signing, auto-updater, telemetry, public release, cloud distribution, or release automation is implemented.",
+                "Fresh Windows VM validation is required before any future private-alpha build.",
             ],
         }
 
@@ -208,7 +280,7 @@ class DashboardService:
             "autoUpdaterEnabled": False,
             "telemetryEnabled": False,
             "installerPackagingStatus": "not_implemented_yet",
-            "privateAlphaPackagingStatus": "not_implemented_yet",
+            "privateAlphaPackagingStatus": "placeholder_only",
             "firstRunWizardStatus": "placeholder_only",
             "lanTokenProtectionMustBeRespected": True,
             "safeActionRuntimeMustBeRespected": True,
@@ -472,6 +544,10 @@ def dashboard_html() -> str:
       <pre id="first-run">Loading first-run placeholder status...</pre>
       <p><a href="/setup/first-run">Open loopback first-run setup placeholder</a></p>
     </section>
+    <section id="private-alpha-packaging-status">
+      <h2>Private Alpha / Packaging</h2>
+      <pre id="private-alpha-packaging">Loading private-alpha packaging placeholder status...</pre>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -499,6 +575,7 @@ def dashboard_html() -> str:
       document.getElementById('stop-task-status').textContent = JSON.stringify(summary.stopTask, null, 2);
       document.getElementById('desktop-shell').textContent = JSON.stringify(summary.desktopShell, null, 2);
       document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
+      document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
       const activeTasks = summary.activeTasks || [];
       const stopButton = document.getElementById('stop-task-button');
       if (activeTasks.length) {
