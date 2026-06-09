@@ -739,7 +739,7 @@ def test_diagnostics_redacts_raw_security_event_fields(tmp_path):
         __import__("jarvis_core.runtime", fromlist=["ActionRequest"]).ActionRequest(
             "coding_agent",
             "codex.execute",
-            "https://example.test/path?token=SECRET_TOKEN C:/Users/russe/private/.env",
+            "https://example.test/path?token=SECRET_TOKEN C:/redaction-fixture/private/.env",
             "task-1",
             "codex_tool",
             "high",

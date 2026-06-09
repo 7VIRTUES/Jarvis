@@ -7,3 +7,22 @@ node_modules/
 dist/
 coverage/
 
+# Public-safety local files and generated runtime output
+.env
+.env.*
+*.pem
+*.key
+id_rsa
+id_ed25519
+service-account*.json
+firebase-adminsdk*
+supabase-service-role*
+*.sqlite
+*.sqlite3
+*.db
+*.log
+tmp/
+.jarvis/logs/
+.jarvis/runtime/
+.jarvis/reports/
+
