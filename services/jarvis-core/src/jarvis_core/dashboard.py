@@ -38,6 +38,8 @@ class DashboardService:
                 "reports": "read_only",
                 "settings": "read_only_status",
                 "projects": "read_only_summary",
+                "projectProfiles": "read_only_summary",
+                "securityReviews": "registered_project_read_only",
                 "stopTask": "jarvis_task_queue_state_only",
                 "desktopShell": "placeholder_only",
                 "firstRunWizard": "placeholder_only",
@@ -57,6 +59,17 @@ class DashboardService:
             "projects": self._rows("select name, path, created_at from projects order by name", ["name", "path", "created_at"]),
             "recentTasks": self._rows("select task_id, project_name, task_type, status, created_at from tasks order by created_at desc limit 10", ["taskId", "projectName", "taskType", "status", "createdAt"]),
             "reports": reports,
+            "profileSecuritySurfaces": {
+                "projectProfilesEndpoint": "/api/projects/profiles",
+                "securityReviewEndpointPattern": "/api/projects/{name}/security-review",
+                "latestSecurityReviewEndpointPattern": "/api/projects/{name}/security-review/latest",
+                "registeredProjectsOnly": True,
+                "rawPathInputAccepted": False,
+                "scriptExecution": False,
+                "externalServices": False,
+                "gitWrites": False,
+                "protectedFileContentsRead": False,
+            },
             "safety": self.safety_summary(),
             "settings": settings,
             "stopTask": stop_task,
@@ -146,6 +159,8 @@ class DashboardService:
             "connectorExecution": False,
             "destructiveGitAutomation": False,
             "arbitraryProcessKill": False,
+            "projectProfiles": "registered_project_metadata_only",
+            "securityReviewDashboardAction": "registered_project_read_only",
             "desktopShell": self.desktop_shell_summary(),
             "firstRunWizard": self.first_run_wizard_summary(),
             "privateAlphaPackaging": self.private_alpha_packaging_summary(),
@@ -157,6 +172,8 @@ class DashboardService:
                 "Dashboard endpoints are read-only.",
                 "Non-loopback dashboard requests require a configured token.",
                 "Report detail reads only approved Markdown reports under data/jarvis/reports.",
+                "Project profile and security review dashboard surfaces use registered projects only.",
+                "Security review dashboard actions are read-only local reviews and do not execute scripts, install dependencies, or write Git state.",
                 "Stop-task controls accept only Jarvis task IDs and do not accept PID, process-name, command, or OS service identifiers.",
                 "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
                 "First-run readiness is informational only; no setup persistence, token generation, account setup, OAuth, cloud sync, telemetry, or updater is exposed.",
@@ -505,6 +522,10 @@ def dashboard_html() -> str:
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     .metric { border: 1px solid #e2e6ed; border-radius: 6px; padding: 12px; }
     .metric strong { display: block; font-size: 24px; }
+    .list { display: grid; gap: 10px; }
+    .row { border: 1px solid #e2e6ed; border-radius: 6px; padding: 12px; }
+    button { border: 1px solid #9eb3cc; border-radius: 6px; background: #ffffff; color: #1d2733; padding: 7px 10px; cursor: pointer; }
+    button:disabled { color: #7a8794; cursor: default; }
     code, pre { background: #eef1f5; border-radius: 4px; padding: 2px 4px; }
     a { color: #0b5cad; }
     .muted { color: #5e6b7a; }
@@ -548,6 +569,15 @@ def dashboard_html() -> str:
       <h2>Private Alpha / Packaging</h2>
       <pre id="private-alpha-packaging">Loading private-alpha packaging placeholder status...</pre>
     </section>
+    <section id="project-profiles">
+      <h2>Project Profiles</h2>
+      <div id="project-profile-list" class="list muted">Loading project profiles...</div>
+    </section>
+    <section id="security-safety-review">
+      <h2>Security/Safety Review</h2>
+      <div id="security-review-list" class="list muted">Loading registered project review actions...</div>
+      <pre id="security-review-result">No local review run from this dashboard session.</pre>
+    </section>
     <section>
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
@@ -564,6 +594,7 @@ def dashboard_html() -> str:
   <script>
     async function loadDashboard() {
       const summary = await fetch('/api/dashboard/summary').then((response) => response.json());
+      const profiles = await fetch('/api/projects/profiles').then((response) => response.json());
       const counts = summary.counts;
       document.getElementById('metrics').innerHTML = Object.entries(counts)
         .map(([key, value]) => `<div class="metric"><span>${key}</span><strong>${value}</strong></div>`)
@@ -576,6 +607,8 @@ def dashboard_html() -> str:
       document.getElementById('desktop-shell').textContent = JSON.stringify(summary.desktopShell, null, 2);
       document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
       document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
+      renderProjectProfiles(profiles);
+      renderSecurityReviews(profiles);
       const activeTasks = summary.activeTasks || [];
       const stopButton = document.getElementById('stop-task-button');
       if (activeTasks.length) {
@@ -598,6 +631,35 @@ def dashboard_html() -> str:
       document.getElementById('connectors').innerHTML = summary.connectors.length
         ? summary.connectors.map((connector) => `<div>${connector.provider}: ${connector.status}</div>`).join('')
         : 'No connector placeholders found.';
+    }
+    function renderProjectProfiles(profiles) {
+      document.getElementById('project-profile-list').innerHTML = profiles.length
+        ? profiles.map((profile) => `<div class="row">
+            <strong>${profile.projectName}</strong>
+            <div class="muted">${profile.projectType || 'unknown'} · ${(profile.detectedLanguages || []).join(', ') || 'no languages detected'} · ${profile.packageManager || 'none'}</div>
+            <div>Mode: <code>${profile.recommendedMode}</code> · Warnings: <code>${profile.warningCount}</code> · Blocked: <code>${profile.blockedReasonCount}</code></div>
+            <div>Boundary: root <code>${profile.boundaryStatus.rootValidated ? 'validated' : 'not validated'}</code>, protected patterns <code>${profile.boundaryStatus.protectedPatternsActive ? 'active' : 'inactive'}</code>, runtime skips <code>${profile.boundaryStatus.runtimeSkipDirsActive ? 'active' : 'inactive'}</code></div>
+            <div>Checks: ${(profile.preferredCheckOrder || []).map((command) => `<code>${command}</code>`).join(' ') || '<span class="muted">No preferred checks detected.</span>'}</div>
+          </div>`).join('')
+        : 'No registered projects found.';
+    }
+    function renderSecurityReviews(profiles) {
+      document.getElementById('security-review-list').innerHTML = profiles.length
+        ? profiles.map((profile) => `<div class="row">
+            <strong>${profile.projectName}</strong>
+            <button type="button" data-project="${profile.projectName}">Run local security review</button>
+            <span class="muted">Read-only registered project review. No scripts, installs, or Git writes.</span>
+          </div>`).join('')
+        : 'Register a project before running a local security review.';
+      document.querySelectorAll('#security-review-list button').forEach((button) => {
+        button.onclick = async () => {
+          button.disabled = true;
+          const project = button.getAttribute('data-project');
+          const result = await fetch(`/api/projects/${encodeURIComponent(project)}/security-review`, { method: 'POST' }).then((response) => response.json());
+          document.getElementById('security-review-result').textContent = JSON.stringify(result, null, 2);
+          await loadDashboard();
+        };
+      });
     }
     loadDashboard();
   </script>

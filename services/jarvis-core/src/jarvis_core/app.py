@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -134,6 +135,60 @@ def first_run_setup_page(_: None = Depends(require_loopback_request)) -> HTMLRes
 @app.get("/api/dashboard/summary")
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
+
+
+@app.get("/api/projects/profiles")
+def dashboard_project_profiles(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for project in projects.list_projects():
+        profile = project_profiles.generate_profile(Path(project["path"]), str(project["name"]))
+        data = profile.to_dict()
+        summaries.append(_dashboard_profile_summary(data))
+    return summaries
+
+
+@app.post("/api/projects/{name}/security-review")
+def run_dashboard_project_security_review(name: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    project = projects.get_project(name)
+    if not project:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        result = security_reviews.review_project(Path(project["path"]), project_name=name, mode="read_only")
+        security_reviews.write_markdown_report(result)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _security_review_dashboard_summary(result.to_dict())
+
+
+@app.get("/api/projects/{name}/security-review/latest")
+def latest_dashboard_project_security_review(name: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    project = projects.get_project(name)
+    if not project:
+        raise HTTPException(status_code=404, detail="project not found")
+    safe_project = _safe_report_project_name(name)
+    reports_root = DATA_ROOT / "reports"
+    if not reports_root.exists():
+        return {"projectName": name, "available": False}
+    candidates = sorted(
+        reports_root.glob(f"security-safety-{safe_project}-*.md"),
+        key=lambda path: path.stat().st_mtime if path.is_file() else 0,
+        reverse=True,
+    )
+    for path in candidates:
+        resolved = path.resolve()
+        if not resolved.is_file() or not resolved.is_relative_to(reports_root.resolve()):
+            continue
+        stat = resolved.stat()
+        return {
+            "projectName": name,
+            "available": True,
+            "reportId": resolved.name,
+            "reportPath": str(resolved),
+            "sizeBytes": stat.st_size,
+        }
+    return {"projectName": name, "available": False}
 
 
 @app.get("/api/setup/lan/status")
@@ -370,6 +425,64 @@ def get_security_review(review_id: str, _: None = Depends(require_dashboard_lan_
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _dashboard_profile_summary(profile: dict[str, object]) -> dict[str, object]:
+    public_docs = profile.get("publicReadinessDocsPresent", {})
+    security_docs = profile.get("securityDocsPresent", {})
+    boundary = profile.get("boundary", {})
+    boundary_dict = boundary if isinstance(boundary, dict) else {}
+    return {
+        "projectName": profile.get("projectName"),
+        "projectType": profile.get("projectType"),
+        "detectedLanguages": profile.get("detectedLanguages", []),
+        "detectedFrameworks": profile.get("detectedFrameworks", []),
+        "packageManager": profile.get("packageManager"),
+        "preferredCheckOrder": profile.get("preferredCheckOrder", []),
+        "gitClean": profile.get("gitClean"),
+        "docsPresence": {
+            "publicReadiness": public_docs,
+            "security": security_docs,
+        },
+        "futureConnectorsPlaceholderOnly": profile.get("futureConnectorsPlaceholderOnly"),
+        "recommendedMode": profile.get("recommendedMode"),
+        "warningCount": len(profile.get("warnings", []) if isinstance(profile.get("warnings"), list) else []),
+        "blockedReasonCount": len(profile.get("blockedReasons", []) if isinstance(profile.get("blockedReasons"), list) else []),
+        "boundaryStatus": {
+            "rootValidated": profile.get("rootValidated"),
+            "protectedPatternsActive": bool(profile.get("protectedPatterns")),
+            "runtimeSkipDirsActive": bool(profile.get("runtimeSkipDirs")),
+            "blockedReasonCount": len(profile.get("blockedReasons", []) if isinstance(profile.get("blockedReasons"), list) else []),
+            "warningCount": len(profile.get("warnings", []) if isinstance(profile.get("warnings"), list) else []),
+            "rootStatus": (boundary_dict.get("root") or {}).get("status") if isinstance(boundary_dict.get("root"), dict) else None,
+        },
+    }
+
+
+def _security_review_dashboard_summary(review: dict[str, object]) -> dict[str, object]:
+    findings = review.get("findings", [])
+    findings_list = findings if isinstance(findings, list) else []
+    by_severity = {"high": 0, "medium": 0, "low": 0}
+    for finding in findings_list:
+        if isinstance(finding, dict):
+            severity = str(finding.get("severity", "low"))
+            by_severity[severity] = by_severity.get(severity, 0) + 1
+    metadata = review.get("metadata", {})
+    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    return {
+        "projectName": metadata_dict.get("projectName"),
+        "agentId": metadata_dict.get("agentId"),
+        "reviewMode": metadata_dict.get("reviewMode"),
+        "verdict": review.get("verdict"),
+        "findingCount": len(findings_list),
+        "findingsBySeverity": by_severity,
+        "reportId": review.get("reportId"),
+        "reportPath": review.get("reportPath"),
+    }
+
+
+def _safe_report_project_name(project_name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", project_name.strip()).strip("-") or "project"
 
 
 @app.post("/codex/plans")

@@ -73,6 +73,8 @@ These endpoints use the dashboard/LAN access guard. They do not edit project fil
 
 Project Profiles help the Coding Agent choose safer check commands and help the Security/Safety Review Agent share workspace boundary rules. The Security/Safety Review Agent still keeps its redaction and protected-file skipping behavior.
 
+Dashboard profile summaries are documented in [Dashboard Project Profile and Security Review Surfaces](dashboard-profile-security-surfaces.md).
+
 ## Safety Boundaries
 
 This foundation does not install dependencies, execute scripts, call external services, use paid APIs, enable OAuth or cloud sync, add telemetry, write Git history, push, merge, delete files, or implement future connectors.

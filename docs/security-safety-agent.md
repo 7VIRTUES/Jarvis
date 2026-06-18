@@ -64,6 +64,8 @@ Invoke-RestMethod -Uri http://127.0.0.1:8000/security/reviews/security-safety-sa
 
 The endpoints use the same dashboard/LAN access guard as other sensitive local report surfaces.
 
+Dashboard review actions and report visibility are documented in [Dashboard Project Profile and Security Review Surfaces](dashboard-profile-security-surfaces.md).
+
 ## Public Repo Readiness
 
 This agent supports the public-readiness checklist by surfacing likely issues before human review. It is a helper, not a replacement for GitHub secret scanning, secret rotation, history review, or a final release decision.
