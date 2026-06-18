@@ -77,6 +77,7 @@ python -m pytest
 - [Public Repository Readiness](docs/public-repo-readiness.md)
 - [Public Safety Boundaries](docs/public-safety-boundaries.md)
 - [Security/Safety Review Agent](docs/security-safety-agent.md)
+- [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 
 ## Roadmap Note
 

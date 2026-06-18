@@ -12,62 +12,26 @@ from urllib.parse import unquote
 
 from .permissions import BLOCKED_COMMAND_PATTERNS, is_protected_path
 from .security_review_models import AGENT_ID, AGENT_NAME, ReviewFinding, SecurityReviewResult
+from .workspace_boundary import (
+    DEFAULT_RUNTIME_SKIP_DIRS,
+    PROTECTED_FILE_PATTERNS as WORKSPACE_PROTECTED_FILE_PATTERNS,
+    SAFE_TEXT_SUFFIXES,
+    WorkspaceBoundaryValidator,
+)
 
 
-PROTECTED_FILE_PATTERNS = [
-    ".env",
-    ".env.*",
-    "*.pem",
-    "*.key",
-    "id_rsa",
-    "id_ed25519",
-    "service-account*.json",
-    "firebase-adminsdk*",
-    "supabase-service-role*",
-    "*.sqlite",
-    "*.sqlite3",
-    "*.db",
-    "*.log",
-]
+PROTECTED_FILE_PATTERNS = list(WORKSPACE_PROTECTED_FILE_PATTERNS)
 
 SKIP_DIRS = {
-    ".git",
     ".hg",
     ".svn",
-    ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
-    ".venv",
     ".jarvis",
-    "__pycache__",
-    "build",
     "coverage",
     "data",
-    "dist",
-    "node_modules",
     "target",
-    "venv",
-}
-
-SAFE_TEXT_SUFFIXES = {
-    "",
-    ".cfg",
-    ".css",
-    ".html",
-    ".ini",
-    ".js",
-    ".json",
-    ".jsx",
-    ".md",
-    ".ps1",
-    ".py",
-    ".sh",
-    ".toml",
-    ".ts",
-    ".tsx",
-    ".txt",
-    ".yaml",
-    ".yml",
+    *DEFAULT_RUNTIME_SKIP_DIRS,
 }
 
 MAX_TEXT_FILE_BYTES = 1_000_000
@@ -272,14 +236,13 @@ class SecurityReviewService:
         return "\n".join(lines)
 
     def _validate_project_path(self, project_path: Path | str) -> Path:
-        resolved = Path(project_path).expanduser().resolve()
-        if not resolved.exists() or not resolved.is_dir():
-            raise ValueError("project path is missing or is not a directory")
-        if not resolved.is_relative_to(self.workspace_root):
-            raise ValueError("project path must stay inside the allowed workspace root")
-        if is_protected_path(resolved):
-            raise PermissionError("protected paths cannot be reviewed")
-        return resolved
+        validator = WorkspaceBoundaryValidator(project_path, self.workspace_root)
+        decision = validator.validate_root()
+        if not decision.allowed:
+            if decision.protected:
+                raise PermissionError(decision.reason)
+            raise ValueError(decision.reason)
+        return validator.project_root
 
     def _tracked_files(self, root: Path) -> tuple[list[str], str]:
         if not self._inside_git(root):

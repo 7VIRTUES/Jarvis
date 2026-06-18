@@ -17,6 +17,7 @@ from .diagnostics import DiagnosticExporter
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
+from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
@@ -39,6 +40,7 @@ codex_execution = CodexExecutionService(conn, events, runtime, approvals, projec
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
 dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "connectors")
 security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
+project_profiles = ProjectProfileService(WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -208,6 +210,22 @@ def get_project(name: str) -> dict[str, str]:
     if not project:
         raise HTTPException(status_code=404, detail="project not found")
     return project
+
+
+@app.get("/projects/{name}/profile")
+def get_project_profile(name: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    project = projects.get_project(name)
+    if not project:
+        raise HTTPException(status_code=404, detail="project not found")
+    profile = project_profiles.generate_profile(Path(project["path"]), name)
+    if profile.blocked_reasons:
+        raise HTTPException(status_code=400, detail="; ".join(profile.blocked_reasons))
+    return profile.to_dict()
+
+
+@app.post("/projects/{name}/profile/refresh")
+def refresh_project_profile(name: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return get_project_profile(name)
 
 
 @app.get("/projects/{name}/inspect")
