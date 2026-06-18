@@ -1,0 +1,16 @@
+{
+  "id": "security_safety_agent",
+  "name": "Security/Safety Review Agent",
+  "implemented": true,
+  "capabilities": [
+    "review_registered_project_read_only",
+    "summarize_git_state",
+    "detect_tracked_protected_filenames",
+    "detect_redacted_secret_patterns",
+    "detect_redacted_private_paths",
+    "check_connector_placeholders",
+    "check_public_readiness_docs",
+    "write_local_markdown_report"
+  ],
+  "notes": "Local read-only public-readiness and safety-boundary review is implemented. The agent does not read protected file contents, rotate secrets, rewrite history, delete files, push, merge, call external services, enable connectors, or certify security."
+}

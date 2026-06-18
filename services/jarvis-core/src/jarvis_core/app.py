@@ -20,6 +20,7 @@ from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_la
 from .project_registry import ProjectRegistry
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
+from .security_review_agent import SecurityReviewService
 from .task_control import TaskControlService
 from .tasks import TaskQueue
 
@@ -37,6 +38,7 @@ codex_plans = CodexPlanService(conn, events, runtime, approvals, projects)
 codex_execution = CodexExecutionService(conn, events, runtime, approvals, projects, codex_plans)
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
 dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "connectors")
+security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -80,6 +82,14 @@ class ApprovalResolutionInput(BaseModel):
 
 class ReportValidationInput(BaseModel):
     text: str
+
+
+class SecurityReviewInput(BaseModel):
+    projectName: str | None = None
+    projectPath: str | None = None
+    project_name: str | None = None
+    project_path: str | None = None
+    mode: str = "read_only"
 
 
 class CodexPlanRequest(BaseModel):
@@ -310,6 +320,38 @@ def export_diagnostics() -> dict[str, object]:
 def validate_report(payload: ReportValidationInput) -> dict[str, object]:
     missing = missing_implementation_report_sections(payload.text)
     return {"valid": not missing, "missingSections": missing}
+
+
+@app.post("/security/reviews")
+def create_security_review(payload: SecurityReviewInput, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    project_name = payload.projectName or payload.project_name
+    project_path = payload.projectPath or payload.project_path
+    if project_name:
+        project = projects.get_project(project_name)
+        if not project:
+            raise HTTPException(status_code=404, detail="project not found")
+        project_path = project["path"]
+    elif not project_path:
+        project_name = "Jarvis"
+        project_path = str(WORKSPACE_ROOT)
+    try:
+        result = security_reviews.review_project(Path(project_path), project_name=project_name, mode=payload.mode)
+        security_reviews.write_markdown_report(result)
+        return result.to_dict()
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/security/reviews/{review_id:path}")
+def get_security_review(review_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, str]:
+    try:
+        return security_reviews.read_markdown_report(review_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/codex/plans")

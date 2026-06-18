@@ -76,6 +76,7 @@ python -m pytest
 - [ChatGPT and Codex Workflow](docs/chatgpt-codex-workflow.md)
 - [Public Repository Readiness](docs/public-repo-readiness.md)
 - [Public Safety Boundaries](docs/public-safety-boundaries.md)
+- [Security/Safety Review Agent](docs/security-safety-agent.md)
 
 ## Roadmap Note
 
