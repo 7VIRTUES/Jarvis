@@ -79,6 +79,7 @@ python -m pytest
 - [Public Safety Boundaries](docs/public-safety-boundaries.md)
 - [Security/Safety Review Agent](docs/security-safety-agent.md)
 - [Validation Agent](docs/validation-agent.md)
+- [Validation Dashboard Workflow](docs/validation-dashboard-workflow.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)

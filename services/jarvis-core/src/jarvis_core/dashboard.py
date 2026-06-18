@@ -534,6 +534,11 @@ def dashboard_html() -> str:
     .metric strong { display: block; font-size: 24px; }
     .list { display: grid; gap: 10px; }
     .row { border: 1px solid #e2e6ed; border-radius: 6px; padding: 12px; }
+    .stack { display: grid; gap: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    label { display: grid; gap: 4px; font-weight: 600; }
+    input, select, textarea { border: 1px solid #bac6d4; border-radius: 6px; padding: 7px 9px; font: inherit; }
+    textarea { min-height: 70px; resize: vertical; }
     button { border: 1px solid #9eb3cc; border-radius: 6px; background: #ffffff; color: #1d2733; padding: 7px 10px; cursor: pointer; }
     button:disabled { color: #7a8794; cursor: default; }
     code, pre { background: #eef1f5; border-radius: 4px; padding: 2px 4px; }
@@ -579,9 +584,64 @@ def dashboard_html() -> str:
       <h2>Private Alpha / Packaging</h2>
       <pre id="private-alpha-packaging">Loading private-alpha packaging placeholder status...</pre>
     </section>
-    <section id="validation-agent-status">
+    <section id="validation-agent-status" class="stack">
       <h2>Validation Agent</h2>
       <pre id="validation-agent">Loading validation evidence status...</pre>
+      <div id="validation-safety-note" class="row">
+        <strong>Manual evidence only.</strong>
+        <div class="muted">The Validation Agent records manual evidence only. It does not control VirtualBox, run commands, install dependencies, create installers, push to GitHub, or certify security or production readiness.</div>
+      </div>
+      <div class="actions">
+        <button id="validation-load-runbooks-button" type="button">Load runbooks</button>
+        <button id="validation-load-runs-button" type="button">Load recent runs</button>
+      </div>
+      <div id="validation-runbooks" class="list muted">Runbooks not loaded yet.</div>
+      <div id="validation-runbook-steps" class="list muted">Select or load the clean Windows VM runbook to inspect manual steps.</div>
+      <div class="row stack">
+        <h3>Create Manual Validation Run</h3>
+        <label>
+          Target environment
+          <input id="validation-target-environment" type="text" value="Clean Windows VM manual validation">
+        </label>
+        <button id="validation-create-run-button" type="button">Create manual validation run</button>
+      </div>
+      <div id="validation-runs" class="list muted">Recent validation runs not loaded yet.</div>
+      <div id="validation-run-detail" class="list muted">Open a run to view manual step result status.</div>
+      <div class="row stack">
+        <h3>Record Manual Step Result</h3>
+        <label>
+          Run ID
+          <input id="validation-step-run-id" type="text" placeholder="validation-run-...">
+        </label>
+        <label>
+          Step
+          <select id="validation-step-id"></select>
+        </label>
+        <label>
+          Status
+          <select id="validation-step-status">
+            <option value="passed">passed</option>
+            <option value="failed">failed</option>
+            <option value="blocked">blocked</option>
+            <option value="skipped">skipped</option>
+            <option value="not_started">not_started</option>
+          </select>
+        </label>
+        <label>
+          Notes
+          <textarea id="validation-step-notes" placeholder="Manual notes only. Do not paste secrets, .env contents, private keys, or full sensitive logs."></textarea>
+        </label>
+        <label>
+          Evidence
+          <textarea id="validation-step-evidence" placeholder="Manual evidence summary only. No files, screenshots, commands, or protected content."></textarea>
+        </label>
+        <button id="validation-record-step-button" type="button">Record step result</button>
+      </div>
+      <div class="actions">
+        <button id="validation-complete-run-button" type="button">Complete evidence record</button>
+        <button id="validation-report-run-button" type="button">Generate local report</button>
+      </div>
+      <pre id="validation-workflow-result">No validation workflow action from this dashboard session.</pre>
       <p><a href="/validation/runbooks">View validation runbooks API</a></p>
       <p><a href="/validation/runs">View validation runs API</a></p>
     </section>
@@ -624,6 +684,7 @@ def dashboard_html() -> str:
       document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
       document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
       document.getElementById('validation-agent').textContent = JSON.stringify(summary.validationAgent, null, 2);
+      await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
       const activeTasks = summary.activeTasks || [];
@@ -677,6 +738,171 @@ def dashboard_html() -> str:
           await loadDashboard();
         };
       });
+    }
+    async function loadValidationWorkflowSummary(refreshLists) {
+      bindValidationWorkflowControls();
+      if (refreshLists) {
+        await Promise.all([loadValidationRunbooks(), loadValidationRuns()]);
+      }
+    }
+    function bindValidationWorkflowControls() {
+      const loadRunbooksButton = document.getElementById('validation-load-runbooks-button');
+      const loadRunsButton = document.getElementById('validation-load-runs-button');
+      const createRunButton = document.getElementById('validation-create-run-button');
+      const recordStepButton = document.getElementById('validation-record-step-button');
+      const completeRunButton = document.getElementById('validation-complete-run-button');
+      const reportRunButton = document.getElementById('validation-report-run-button');
+      loadRunbooksButton.onclick = loadValidationRunbooks;
+      loadRunsButton.onclick = loadValidationRuns;
+      createRunButton.onclick = createManualValidationRun;
+      recordStepButton.onclick = recordValidationStepResult;
+      completeRunButton.onclick = completeValidationRun;
+      reportRunButton.onclick = generateValidationReport;
+    }
+    async function loadValidationRunbooks() {
+      const runbooks = await fetch('/validation/runbooks').then((response) => response.json());
+      const cleanRunbook = runbooks.find((runbook) => runbook.runbookId === 'clean_windows_vm_validation') || runbooks[0];
+      document.getElementById('validation-runbooks').innerHTML = runbooks.length
+        ? runbooks.map((runbook) => `<div class="row">
+            <strong>${escapeHtml(runbook.title)}</strong>
+            <div><code>${escapeHtml(runbook.runbookId)}</code></div>
+            <div class="muted">${escapeHtml(runbook.description)}</div>
+            <div>Target: ${escapeHtml(runbook.targetEnvironment)}</div>
+          </div>`).join('')
+        : 'No validation runbooks found.';
+      renderValidationRunbookSteps(cleanRunbook);
+    }
+    function renderValidationRunbookSteps(runbook) {
+      const stepSelect = document.getElementById('validation-step-id');
+      if (!runbook || !Array.isArray(runbook.steps)) {
+        document.getElementById('validation-runbook-steps').textContent = 'No runbook steps available.';
+        stepSelect.innerHTML = '';
+        return;
+      }
+      stepSelect.innerHTML = runbook.steps
+        .map((step) => `<option value="${escapeHtml(step.stepId)}">${escapeHtml(step.stepId)}</option>`)
+        .join('');
+      document.getElementById('validation-runbook-steps').innerHTML = runbook.steps
+        .map((step) => `<div class="row">
+          <strong>${escapeHtml(step.title)}</strong>
+          <div><code>${escapeHtml(step.stepId)}</code> · ${escapeHtml(step.category)} · required: <code>${step.required ? 'true' : 'false'}</code></div>
+          <div>Expected: ${escapeHtml(step.expectedResult)}</div>
+          <div>Evidence type: <code>${escapeHtml(step.evidenceType)}</code></div>
+        </div>`).join('');
+    }
+    async function createManualValidationRun() {
+      const targetEnvironment = document.getElementById('validation-target-environment').value || 'Clean Windows VM manual validation';
+      const run = await fetch('/validation/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runbookId: 'clean_windows_vm_validation', targetEnvironment }),
+      }).then((response) => response.json());
+      showValidationResult(run);
+      if (run.runId) {
+        document.getElementById('validation-step-run-id').value = run.runId;
+        renderValidationRunDetail(run);
+      }
+      await loadValidationRuns();
+      await loadDashboard();
+    }
+    async function loadValidationRuns() {
+      const runs = await fetch('/validation/runs').then((response) => response.json());
+      document.getElementById('validation-runs').innerHTML = runs.length
+        ? runs.map((run) => `<div class="row">
+            <strong>${escapeHtml(run.runId)}</strong>
+            <div>Status: <code>${escapeHtml(run.status)}</code> · Runbook: <code>${escapeHtml(run.runbookId)}</code></div>
+            <div class="muted">${escapeHtml(run.targetEnvironment)}</div>
+            <button type="button" data-validation-run-id="${escapeHtml(run.runId)}">Open run</button>
+          </div>`).join('')
+        : 'No validation runs found.';
+      document.querySelectorAll('[data-validation-run-id]').forEach((button) => {
+        button.onclick = async () => {
+          await openValidationRun(button.getAttribute('data-validation-run-id'));
+        };
+      });
+    }
+    async function openValidationRun(runId) {
+      if (!runId) {
+        return;
+      }
+      const run = await fetch(`/validation/runs/${encodeURIComponent(runId)}`).then((response) => response.json());
+      showValidationResult(run);
+      if (run.runId) {
+        document.getElementById('validation-step-run-id').value = run.runId;
+        renderValidationRunDetail(run);
+      }
+    }
+    function renderValidationRunDetail(run) {
+      const results = Array.isArray(run.stepResults) ? run.stepResults : [];
+      document.getElementById('validation-run-detail').innerHTML = `<div class="row">
+          <strong>${escapeHtml(run.runId)}</strong>
+          <div>Status: <code>${escapeHtml(run.status)}</code></div>
+          <div>Target: ${escapeHtml(run.targetEnvironment)}</div>
+        </div>` + results.map((result) => `<div class="row">
+          <strong>${escapeHtml(result.stepId)}</strong>
+          <div>Status: <code>${escapeHtml(result.status)}</code> · Updated: ${escapeHtml(result.updatedAt || '')}</div>
+          <div>Notes: ${escapeHtml(result.notes || 'None recorded.')}</div>
+          <div>Evidence: ${escapeHtml(result.redactedEvidence || 'None recorded.')}</div>
+        </div>`).join('');
+    }
+    async function recordValidationStepResult() {
+      const runId = document.getElementById('validation-step-run-id').value.trim();
+      const stepId = document.getElementById('validation-step-id').value;
+      if (!runId || !stepId) {
+        showValidationResult({ error: 'Open or enter a validation run and choose a step first.' });
+        return;
+      }
+      const payload = {
+        status: document.getElementById('validation-step-status').value,
+        notes: document.getElementById('validation-step-notes').value,
+        evidence: document.getElementById('validation-step-evidence').value,
+      };
+      const run = await fetch(`/validation/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then((response) => response.json());
+      showValidationResult(run);
+      if (run.runId) {
+        renderValidationRunDetail(run);
+      }
+      await loadValidationRuns();
+      await loadDashboard();
+    }
+    async function completeValidationRun() {
+      const runId = document.getElementById('validation-step-run-id').value.trim();
+      if (!runId) {
+        showValidationResult({ error: 'Open or enter a validation run first.' });
+        return;
+      }
+      const run = await fetch(`/validation/runs/${encodeURIComponent(runId)}/complete`, { method: 'POST' }).then((response) => response.json());
+      showValidationResult({ status: run.status, runId: run.runId, summary: run.summary, note: 'Completed evidence record. This is local validation evidence, not certification.' });
+      if (run.runId) {
+        renderValidationRunDetail(run);
+      }
+      await loadValidationRuns();
+      await loadDashboard();
+    }
+    async function generateValidationReport() {
+      const runId = document.getElementById('validation-step-run-id').value.trim();
+      if (!runId) {
+        showValidationResult({ error: 'Open or enter a validation run first.' });
+        return;
+      }
+      const report = await fetch(`/validation/runs/${encodeURIComponent(runId)}/report`, { method: 'POST' }).then((response) => response.json());
+      showValidationResult({ ...report, note: 'Generated local validation evidence report. This is not certification.' });
+      await loadDashboard();
+    }
+    function showValidationResult(value) {
+      document.getElementById('validation-workflow-result').textContent = JSON.stringify(value, null, 2);
+    }
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     }
     loadDashboard();
   </script>

@@ -149,7 +149,8 @@ def test_dashboard_html_includes_validation_section(tmp_path, monkeypatch):
 
     assert 'id="validation-agent-status"' in page_text
     assert "validation agent" in page_text
+    assert "manual evidence only" in page_text
     assert "/validation/runbooks" in page_text
     assert "/validation/runs" in page_text
-    assert "virtualbox" not in page_text
+    assert "run vm validation" not in page_text
     assert "build installer" not in page_text

@@ -42,6 +42,8 @@ This runbook describes manual clean Windows VM validation for Jarvis PC Local. T
 
 ## Recording A Run Through The API
 
+The same manual runbook can also be recorded from the local dashboard Validation Agent workflow.
+
 Create a run:
 
 ```powershell

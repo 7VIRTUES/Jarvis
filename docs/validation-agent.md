@@ -88,6 +88,8 @@ Example step update body:
 
 The dashboard summary includes Validation Agent status, available runbook count, recent runs, last run status, and endpoint references. The dashboard does not expose controls that claim to run VM checks, install dependencies, create installers, or automate tests.
 
+See [Validation Dashboard Workflow](validation-dashboard-workflow.md) for the manual dashboard evidence workflow.
+
 ## Reports
 
 Validation reports include run summary, runbook, target environment, verdict/status, step results, failed or blocked steps, evidence notes, safety boundaries, next actions, and a limitation note.
