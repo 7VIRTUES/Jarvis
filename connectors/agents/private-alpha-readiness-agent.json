@@ -1,0 +1,26 @@
+{
+  "id": "private_alpha_readiness_agent",
+  "name": "Private-Alpha Readiness Snapshot Agent",
+  "implemented": true,
+  "localOnly": true,
+  "capabilities": [
+    "aggregate_safe_local_readiness_metadata",
+    "summarize_validation_evidence_status",
+    "summarize_security_review_report_metadata",
+    "summarize_project_profile_boundary_status",
+    "summarize_dashboard_readiness_surfaces",
+    "summarize_public_readiness_docs",
+    "summarize_connector_and_cost_boundaries",
+    "write_local_markdown_readiness_reports"
+  ],
+  "readWriteScope": "Safe local readiness metadata and local readiness reports only",
+  "commandExecution": false,
+  "externalServices": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "virtualBoxAutomation": false,
+  "installerAutomation": false,
+  "secretReads": false,
+  "certification": false,
+  "notes": "Local private-alpha readiness evidence aggregation is implemented. The agent reads safe local metadata and existing evidence summaries, writes local Markdown readiness reports, and does not run commands, build installers, create release artifacts, control VirtualBox, push to GitHub, call external services, read protected secret file contents, or certify security or production readiness."
+}

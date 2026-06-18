@@ -20,6 +20,7 @@ from .inspector import inspect_project, write_markdown_report
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
+from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
 from .security_review_agent import SecurityReviewService
@@ -44,6 +45,12 @@ dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "
 security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 project_profiles = ProjectProfileService(WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 validation_agent = ValidationAgentService(conn, DATA_ROOT / "reports")
+readiness_snapshots = PrivateAlphaReadinessSnapshotService(
+    conn,
+    DATA_ROOT / "reports",
+    WORKSPACE_ROOT,
+    WORKSPACE_ROOT / "connectors",
+)
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -445,6 +452,24 @@ def get_security_review(review_id: str, _: None = Depends(require_dashboard_lan_
 @app.get("/validation/runbooks")
 def list_validation_runbooks(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
     return validation_agent.list_runbooks()
+
+
+@app.get("/readiness/snapshot")
+def get_readiness_snapshot(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return readiness_snapshots.generate_snapshot()
+
+
+@app.post("/readiness/snapshot/report")
+def write_readiness_snapshot_report(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return readiness_snapshots.write_markdown_report()
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/readiness/snapshot/latest")
+def get_latest_readiness_snapshot(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return readiness_snapshots.get_latest_snapshot_metadata()
 
 
 @app.get("/validation/runbooks/{runbook_id}")

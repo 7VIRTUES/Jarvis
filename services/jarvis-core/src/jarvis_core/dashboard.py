@@ -10,6 +10,7 @@ from .config import load_json_config
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
+from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
 from .task_control import ACTIVE_TASK_STATUSES
 from .tasks import TERMINAL_STATUSES
 from .validation_agent import ValidationAgentService
@@ -32,6 +33,7 @@ class DashboardService:
         first_run = self.first_run_wizard_summary()
         private_alpha = self.private_alpha_packaging_summary()
         validation = self.validation_summary()
+        readiness = self.readiness_snapshot_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -47,6 +49,7 @@ class DashboardService:
                 "firstRunWizard": "placeholder_only",
                 "privateAlphaPackaging": "placeholder_only",
                 "validationAgent": "local_evidence_tracking",
+                "privateAlphaReadinessSnapshot": "local_readiness_snapshot",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -81,6 +84,7 @@ class DashboardService:
             "firstRunWizard": first_run,
             "privateAlphaPackaging": private_alpha,
             "validationAgent": validation,
+            "privateAlphaReadinessSnapshot": readiness,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -170,6 +174,7 @@ class DashboardService:
             "firstRunWizard": self.first_run_wizard_summary(),
             "privateAlphaPackaging": self.private_alpha_packaging_summary(),
             "validationAgent": self.validation_summary(),
+            "privateAlphaReadinessSnapshot": self.readiness_snapshot_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
@@ -184,13 +189,22 @@ class DashboardService:
                 "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
                 "First-run readiness is informational only; no setup persistence, token generation, account setup, OAuth, cloud sync, telemetry, or updater is exposed.",
                 "Private-alpha packaging readiness is documentation only; no installer build, signing, release automation, auto-updater, telemetry, or public release is exposed.",
-                "Validation Agent records manual local evidence only; it does not execute commands, control VirtualBox, build installers, or write Git state.",
+                "Validation Agent records manual local evidence only; it does not execute commands, control VirtualBox, create installer artifacts, or write Git state.",
+                "Private-Alpha Readiness Snapshot aggregates local metadata/evidence only; it does not create installer artifacts, certify readiness, run VM automation, or push to GitHub.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
 
     def validation_summary(self) -> dict[str, Any]:
         return ValidationAgentService(self.conn, self.reports_root).dashboard_summary()
+
+    def readiness_snapshot_summary(self) -> dict[str, Any]:
+        return PrivateAlphaReadinessSnapshotService(
+            self.conn,
+            self.reports_root,
+            self.workspace_root,
+            self.connector_root,
+        ).dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -645,6 +659,21 @@ def dashboard_html() -> str:
       <p><a href="/validation/runbooks">View validation runbooks API</a></p>
       <p><a href="/validation/runs">View validation runs API</a></p>
     </section>
+    <section id="private-alpha-readiness-snapshot" class="stack">
+      <h2>Private-Alpha Readiness Snapshot</h2>
+      <pre id="readiness-snapshot">Loading private-alpha readiness snapshot...</pre>
+      <div id="readiness-safety-note" class="row">
+        <strong>Local readiness summary only.</strong>
+        <div class="muted">Does not create installer artifacts. Does not certify production readiness. Does not run VM automation. Does not push to GitHub.</div>
+      </div>
+      <div id="readiness-snapshot-summary" class="grid"></div>
+      <div class="actions">
+        <button id="readiness-report-button" type="button">Generate local readiness report</button>
+      </div>
+      <pre id="readiness-report-result">No readiness report generated from this dashboard session.</pre>
+      <p><a href="/readiness/snapshot">View readiness snapshot API</a></p>
+      <p><a href="/readiness/snapshot/latest">View latest readiness snapshot report metadata</a></p>
+    </section>
     <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -684,6 +713,9 @@ def dashboard_html() -> str:
       document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
       document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
       document.getElementById('validation-agent').textContent = JSON.stringify(summary.validationAgent, null, 2);
+      document.getElementById('readiness-snapshot').textContent = JSON.stringify(summary.privateAlphaReadinessSnapshot, null, 2);
+      renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
+      bindReadinessSnapshotControls();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -738,6 +770,30 @@ def dashboard_html() -> str:
           await loadDashboard();
         };
       });
+    }
+    function renderReadinessSnapshotSummary(snapshot) {
+      const values = {
+        verdict: snapshot.overallVerdict,
+        blockers: snapshot.blockerCount,
+        warnings: snapshot.warningCount,
+        validation: snapshot.validationEvidenceStatus,
+        security: snapshot.securityReviewStatus,
+        publicDocs: snapshot.publicRepoDocsStatus,
+        connectors: snapshot.connectorCostBoundaryStatus,
+      };
+      document.getElementById('readiness-snapshot-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function bindReadinessSnapshotControls() {
+      const reportButton = document.getElementById('readiness-report-button');
+      reportButton.onclick = async () => {
+        reportButton.disabled = true;
+        const result = await fetch('/readiness/snapshot/report', { method: 'POST' }).then((response) => response.json());
+        document.getElementById('readiness-report-result').textContent = JSON.stringify(result, null, 2);
+        reportButton.disabled = false;
+        await loadDashboard();
+      };
     }
     async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();
