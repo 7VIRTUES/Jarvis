@@ -25,6 +25,7 @@ v0.1C is a private-alpha readiness foundation. This repository is not yet a prod
 - Audit/event logs
 - Dashboard/report visibility
 - Settings/status visibility
+- Local validation evidence tracking
 - LAN dashboard token protection
 - Loopback-only setup guidance
 - Stop-task boundary for Jarvis-owned task records
@@ -77,6 +78,8 @@ python -m pytest
 - [Public Repository Readiness](docs/public-repo-readiness.md)
 - [Public Safety Boundaries](docs/public-safety-boundaries.md)
 - [Security/Safety Review Agent](docs/security-safety-agent.md)
+- [Validation Agent](docs/validation-agent.md)
+- [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)
 

@@ -1,0 +1,22 @@
+{
+  "id": "validation_agent",
+  "name": "Validation Agent",
+  "implemented": true,
+  "localOnly": true,
+  "capabilities": [
+    "list_manual_validation_runbooks",
+    "create_local_validation_run_records",
+    "record_redacted_manual_step_results",
+    "complete_validation_runs",
+    "write_local_markdown_validation_reports",
+    "summarize_validation_status_for_dashboard"
+  ],
+  "readWriteScope": "Jarvis validation records and local validation reports only",
+  "commandExecution": false,
+  "externalServices": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "virtualBoxAutomation": false,
+  "installerAutomation": false,
+  "notes": "Local validation evidence tracking is implemented for private-alpha readiness. The agent records manual runbook results and redacted notes only; it does not run commands, control VirtualBox, install dependencies, create installers, call external services, push, merge, delete files, or read protected secret file contents."
+}

@@ -143,6 +143,30 @@ create table if not exists codex_executions (
   check_results text not null default '{}',
   repair_results text not null default '{}'
 );
+
+create table if not exists validation_runs (
+  run_id text primary key,
+  runbook_id text not null,
+  status text not null,
+  target_environment text not null,
+  created_at text not null,
+  updated_at text not null,
+  started_at text,
+  completed_at text,
+  summary text not null default ''
+);
+
+create table if not exists validation_step_results (
+  id integer primary key autoincrement,
+  run_id text not null,
+  step_id text not null,
+  status text not null,
+  notes text not null default '',
+  redacted_evidence text not null default '',
+  updated_at text not null,
+  unique(run_id, step_id),
+  foreign key(run_id) references validation_runs(run_id)
+);
 """
 
 

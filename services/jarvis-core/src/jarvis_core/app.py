@@ -25,6 +25,7 @@ from .runtime import ActionRequest, SafeActionRuntime
 from .security_review_agent import SecurityReviewService
 from .task_control import TaskControlService
 from .tasks import TaskQueue
+from .validation_agent import ValidationAgentService
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 DATA_ROOT = WORKSPACE_ROOT / "data" / "jarvis"
@@ -42,6 +43,7 @@ diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKS
 dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "connectors")
 security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 project_profiles = ProjectProfileService(WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
+validation_agent = ValidationAgentService(conn, DATA_ROOT / "reports")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -110,6 +112,19 @@ class CodexPlanRequest(BaseModel):
     sandboxMode: str = "workspace-write"
     promptPath: str = ".jarvis/prompts/current-task.md"
     outputPath: str = ".jarvis/reports/latest-codex-output.md"
+
+
+class ValidationRunInput(BaseModel):
+    runbookId: str | None = None
+    runbook_id: str | None = None
+    targetEnvironment: str | None = None
+    target_environment: str | None = None
+
+
+class ValidationStepResultInput(BaseModel):
+    status: str
+    notes: str | None = None
+    evidence: str | None = None
 
 
 @app.get("/health")
@@ -425,6 +440,76 @@ def get_security_review(review_id: str, _: None = Depends(require_dashboard_lan_
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/validation/runbooks")
+def list_validation_runbooks(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
+    return validation_agent.list_runbooks()
+
+
+@app.get("/validation/runbooks/{runbook_id}")
+def get_validation_runbook(runbook_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return validation_agent.get_runbook(runbook_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/validation/runs")
+def create_validation_run(payload: ValidationRunInput, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    runbook_id = payload.runbookId or payload.runbook_id
+    if not runbook_id:
+        raise HTTPException(status_code=400, detail="runbookId is required")
+    try:
+        return validation_agent.create_run(runbook_id, payload.targetEnvironment or payload.target_environment)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/validation/runs")
+def list_validation_runs(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
+    return validation_agent.list_runs()
+
+
+@app.get("/validation/runs/{run_id}")
+def get_validation_run(run_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return validation_agent.get_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/validation/runs/{run_id}/steps/{step_id}")
+def update_validation_step_result(
+    run_id: str,
+    step_id: str,
+    payload: ValidationStepResultInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return validation_agent.update_step_result(run_id, step_id, payload.status, payload.notes, payload.evidence)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/validation/runs/{run_id}/complete")
+def complete_validation_run(run_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return validation_agent.complete_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/validation/runs/{run_id}/report")
+def write_validation_report(run_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, str]:
+    try:
+        return validation_agent.write_markdown_report(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _dashboard_profile_summary(profile: dict[str, object]) -> dict[str, object]:

@@ -12,6 +12,7 @@ from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 from .task_control import ACTIVE_TASK_STATUSES
 from .tasks import TERMINAL_STATUSES
+from .validation_agent import ValidationAgentService
 
 
 class DashboardService:
@@ -30,6 +31,7 @@ class DashboardService:
         desktop_shell = self.desktop_shell_summary()
         first_run = self.first_run_wizard_summary()
         private_alpha = self.private_alpha_packaging_summary()
+        validation = self.validation_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -44,6 +46,7 @@ class DashboardService:
                 "desktopShell": "placeholder_only",
                 "firstRunWizard": "placeholder_only",
                 "privateAlphaPackaging": "placeholder_only",
+                "validationAgent": "local_evidence_tracking",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -53,6 +56,7 @@ class DashboardService:
                 "approvals": self._count("approvals"),
                 "codexPlans": self._count("codex_plans"),
                 "codexExecutions": self._count("codex_executions"),
+                "validationRuns": self._count("validation_runs"),
                 "reports": len(reports),
                 "connectors": len(connectors),
             },
@@ -76,6 +80,7 @@ class DashboardService:
             "desktopShell": desktop_shell,
             "firstRunWizard": first_run,
             "privateAlphaPackaging": private_alpha,
+            "validationAgent": validation,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -164,6 +169,7 @@ class DashboardService:
             "desktopShell": self.desktop_shell_summary(),
             "firstRunWizard": self.first_run_wizard_summary(),
             "privateAlphaPackaging": self.private_alpha_packaging_summary(),
+            "validationAgent": self.validation_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_files_only",
@@ -178,9 +184,13 @@ class DashboardService:
                 "Desktop shell readiness is documentation and status only; no Tauri launch, install, update, telemetry, or packaging controls are exposed.",
                 "First-run readiness is informational only; no setup persistence, token generation, account setup, OAuth, cloud sync, telemetry, or updater is exposed.",
                 "Private-alpha packaging readiness is documentation only; no installer build, signing, release automation, auto-updater, telemetry, or public release is exposed.",
+                "Validation Agent records manual local evidence only; it does not execute commands, control VirtualBox, build installers, or write Git state.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
+
+    def validation_summary(self) -> dict[str, Any]:
+        return ValidationAgentService(self.conn, self.reports_root).dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -569,6 +579,12 @@ def dashboard_html() -> str:
       <h2>Private Alpha / Packaging</h2>
       <pre id="private-alpha-packaging">Loading private-alpha packaging placeholder status...</pre>
     </section>
+    <section id="validation-agent-status">
+      <h2>Validation Agent</h2>
+      <pre id="validation-agent">Loading validation evidence status...</pre>
+      <p><a href="/validation/runbooks">View validation runbooks API</a></p>
+      <p><a href="/validation/runs">View validation runs API</a></p>
+    </section>
     <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -607,6 +623,7 @@ def dashboard_html() -> str:
       document.getElementById('desktop-shell').textContent = JSON.stringify(summary.desktopShell, null, 2);
       document.getElementById('first-run').textContent = JSON.stringify(summary.firstRunWizard, null, 2);
       document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
+      document.getElementById('validation-agent').textContent = JSON.stringify(summary.validationAgent, null, 2);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
       const activeTasks = summary.activeTasks || [];
