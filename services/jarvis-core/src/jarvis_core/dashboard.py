@@ -11,6 +11,7 @@ from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_st
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
+from .redacted_diagnostics_agent import RedactedDiagnosticsBundleService
 from .task_control import ACTIVE_TASK_STATUSES
 from .tasks import TERMINAL_STATUSES
 from .validation_agent import ValidationAgentService
@@ -34,6 +35,7 @@ class DashboardService:
         private_alpha = self.private_alpha_packaging_summary()
         validation = self.validation_summary()
         readiness = self.readiness_snapshot_summary()
+        diagnostics_bundle = self.diagnostics_bundle_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -50,6 +52,7 @@ class DashboardService:
                 "privateAlphaPackaging": "placeholder_only",
                 "validationAgent": "local_evidence_tracking",
                 "privateAlphaReadinessSnapshot": "local_readiness_snapshot",
+                "redactedDiagnosticsBundle": "local_redacted_diagnostics",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -85,6 +88,7 @@ class DashboardService:
             "privateAlphaPackaging": private_alpha,
             "validationAgent": validation,
             "privateAlphaReadinessSnapshot": readiness,
+            "redactedDiagnosticsBundle": diagnostics_bundle,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -191,6 +195,7 @@ class DashboardService:
                 "Private-alpha packaging readiness is documentation only; no installer build, signing, release automation, auto-updater, telemetry, or public release is exposed.",
                 "Validation Agent records manual local evidence only; it does not execute commands, control VirtualBox, create installer artifacts, or write Git state.",
                 "Private-Alpha Readiness Snapshot aggregates local metadata/evidence only; it does not create installer artifacts, certify readiness, run VM automation, or push to GitHub.",
+                "Redacted Diagnostics Bundle reports aggregate safe local metadata only; they do not upload, run commands, read protected secrets, or certify production/security readiness.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -200,6 +205,14 @@ class DashboardService:
 
     def readiness_snapshot_summary(self) -> dict[str, Any]:
         return PrivateAlphaReadinessSnapshotService(
+            self.conn,
+            self.reports_root,
+            self.workspace_root,
+            self.connector_root,
+        ).dashboard_summary()
+
+    def diagnostics_bundle_summary(self) -> dict[str, Any]:
+        return RedactedDiagnosticsBundleService(
             self.conn,
             self.reports_root,
             self.workspace_root,
@@ -674,6 +687,21 @@ def dashboard_html() -> str:
       <p><a href="/readiness/snapshot">View readiness snapshot API</a></p>
       <p><a href="/readiness/snapshot/latest">View latest readiness snapshot report metadata</a></p>
     </section>
+    <section id="redacted-diagnostics-bundle" class="stack">
+      <h2>Redacted Diagnostics Bundle</h2>
+      <pre id="diagnostics-bundle">Loading redacted diagnostics bundle status...</pre>
+      <div id="diagnostics-bundle-safety-note" class="row">
+        <strong>Local redacted diagnostics only.</strong>
+        <div class="muted">Does not upload. Does not run commands. Does not read protected secrets. Does not certify production/security readiness.</div>
+      </div>
+      <div id="diagnostics-bundle-summary" class="grid"></div>
+      <div class="actions">
+        <button id="diagnostics-bundle-report-button" type="button">Generate local diagnostics report</button>
+      </div>
+      <pre id="diagnostics-bundle-report-result">No diagnostics report generated from this dashboard session.</pre>
+      <p><a href="/diagnostics/bundle">View redacted diagnostics bundle API</a></p>
+      <p><a href="/diagnostics/bundle/latest">View latest diagnostics bundle report metadata</a></p>
+    </section>
     <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -714,8 +742,11 @@ def dashboard_html() -> str:
       document.getElementById('private-alpha-packaging').textContent = JSON.stringify(summary.privateAlphaPackaging, null, 2);
       document.getElementById('validation-agent').textContent = JSON.stringify(summary.validationAgent, null, 2);
       document.getElementById('readiness-snapshot').textContent = JSON.stringify(summary.privateAlphaReadinessSnapshot, null, 2);
+      document.getElementById('diagnostics-bundle').textContent = JSON.stringify(summary.redactedDiagnosticsBundle, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
+      renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
+      bindDiagnosticsBundleControls();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -791,6 +822,30 @@ def dashboard_html() -> str:
         reportButton.disabled = true;
         const result = await fetch('/readiness/snapshot/report', { method: 'POST' }).then((response) => response.json());
         document.getElementById('readiness-report-result').textContent = JSON.stringify(result, null, 2);
+        reportButton.disabled = false;
+        await loadDashboard();
+      };
+    }
+    function renderDiagnosticsBundleSummary(bundle) {
+      const latest = bundle.latestReport || {};
+      const values = {
+        warnings: bundle.warningCount,
+        sections: bundle.sectionCount,
+        latest: latest.available ? latest.reportId : 'none',
+        uploads: bundle.uploads ? 'enabled' : 'disabled',
+        commands: bundle.commandExecution ? 'enabled' : 'disabled',
+        certification: bundle.certification ? 'yes' : 'no',
+      };
+      document.getElementById('diagnostics-bundle-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function bindDiagnosticsBundleControls() {
+      const reportButton = document.getElementById('diagnostics-bundle-report-button');
+      reportButton.onclick = async () => {
+        reportButton.disabled = true;
+        const result = await fetch('/diagnostics/bundle/report', { method: 'POST' }).then((response) => response.json());
+        document.getElementById('diagnostics-bundle-report-result').textContent = JSON.stringify(result, null, 2);
         reportButton.disabled = false;
         await loadDashboard();
       };

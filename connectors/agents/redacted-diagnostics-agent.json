@@ -1,0 +1,45 @@
+{
+  "id": "redacted_diagnostics_agent",
+  "name": "Redacted Diagnostics Bundle Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Generate local redacted diagnostics bundle JSON and Markdown reports from safe Jarvis metadata and summaries.",
+  "capabilities": [
+    "generate_redacted_diagnostics_bundle",
+    "write_local_markdown_diagnostics_report",
+    "write_local_json_diagnostics_report",
+    "summarize_dashboard_safety_settings_metadata",
+    "summarize_validation_readiness_security_metadata",
+    "summarize_connector_boundaries",
+    "summarize_recent_task_event_approval_metadata"
+  ],
+  "reads": [
+    "safe local app metadata",
+    "safe dashboard, safety, settings, and LAN status summaries",
+    "safe project and profile summaries",
+    "validation run metadata",
+    "readiness snapshot metadata",
+    "security review report metadata",
+    "recent task, event, and approval metadata",
+    "connector placeholder status"
+  ],
+  "writes": [
+    "local redacted diagnostics Markdown reports under the Jarvis reports directory",
+    "local redacted diagnostics JSON reports under the Jarvis reports directory"
+  ],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "protectedSecretReads": false,
+  "rawLogsIncluded": false,
+  "certification": false,
+  "safetyNotes": [
+    "Local diagnostics only; no diagnostics are uploaded or sent.",
+    "No shell commands, Git writes, VirtualBox automation, installer creation, or external services are used.",
+    "Protected secret file contents, token stores, private keys, raw databases, and raw full logs are not read.",
+    "Reports are troubleshooting evidence only and do not certify production or security readiness."
+  ]
+}

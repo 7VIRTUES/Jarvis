@@ -82,6 +82,8 @@ python -m pytest
 - [Validation Dashboard Workflow](docs/validation-dashboard-workflow.md)
 - [Private-Alpha Readiness Snapshot Agent](docs/private-alpha-readiness-snapshot-agent.md)
 - [Private-Alpha Readiness Snapshot Runbook](docs/private-alpha-readiness-snapshot-runbook.md)
+- [Redacted Diagnostics Bundle Agent](docs/redacted-diagnostics-agent.md)
+- [Diagnostics Bundle Runbook](docs/diagnostics-bundle-runbook.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)

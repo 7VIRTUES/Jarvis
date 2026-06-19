@@ -21,6 +21,7 @@ from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_la
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
+from .redacted_diagnostics_agent import RedactedDiagnosticsBundleService
 from .reports import missing_implementation_report_sections
 from .runtime import ActionRequest, SafeActionRuntime
 from .security_review_agent import SecurityReviewService
@@ -46,6 +47,12 @@ security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, 
 project_profiles = ProjectProfileService(WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 validation_agent = ValidationAgentService(conn, DATA_ROOT / "reports")
 readiness_snapshots = PrivateAlphaReadinessSnapshotService(
+    conn,
+    DATA_ROOT / "reports",
+    WORKSPACE_ROOT,
+    WORKSPACE_ROOT / "connectors",
+)
+redacted_diagnostics = RedactedDiagnosticsBundleService(
     conn,
     DATA_ROOT / "reports",
     WORKSPACE_ROOT,
@@ -409,6 +416,24 @@ def reject_approval(approval_id: str, payload: ApprovalResolutionInput) -> dict[
 @app.get("/diagnostics/export")
 def export_diagnostics() -> dict[str, object]:
     return diagnostics.export()
+
+
+@app.get("/diagnostics/bundle")
+def get_redacted_diagnostics_bundle(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return redacted_diagnostics.generate_bundle()
+
+
+@app.post("/diagnostics/bundle/report")
+def write_redacted_diagnostics_bundle_report(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return redacted_diagnostics.write_reports()
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/diagnostics/bundle/latest")
+def get_latest_redacted_diagnostics_bundle(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return redacted_diagnostics.get_latest_report_metadata()
 
 
 @app.post("/reports/validate")

@@ -18,4 +18,6 @@ The Validation Agent is local evidence tracking only. It records manual validati
 
 The Private-Alpha Readiness Snapshot Agent is local evidence aggregation only. It reads safe local metadata and existing report metadata, writes local Markdown readiness reports, and does not build installers, create release artifacts, run commands, automate VirtualBox, push to GitHub, call external services, read protected secret file contents, or certify security or production readiness.
 
+The Redacted Diagnostics Bundle Agent is local troubleshooting evidence aggregation only. It reads safe metadata and summaries, writes local redacted Markdown/JSON diagnostics reports, and does not upload diagnostics, run commands, call external services, read protected secret file contents, or certify security or production readiness.
+
 These boundaries should remain visible in documentation, tests, and connector status until future work is separately planned and reviewed.
