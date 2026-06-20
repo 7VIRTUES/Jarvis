@@ -86,6 +86,8 @@ python -m pytest
 - [Diagnostics Bundle Runbook](docs/diagnostics-bundle-runbook.md)
 - [Evidence Report Center](docs/evidence-report-center.md)
 - [Evidence Report Center Runbook](docs/evidence-report-center-runbook.md)
+- [Agent Manifest Health Center](docs/agent-manifest-health-center.md)
+- [Agent Manifest Health Runbook](docs/agent-manifest-health-runbook.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)

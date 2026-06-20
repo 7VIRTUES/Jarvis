@@ -1,0 +1,35 @@
+{
+  "id": "agent_manifest_health_agent",
+  "name": "Agent Manifest Health Center Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Validate safe local metadata for Jarvis agent manifests and future connector placeholders.",
+  "capabilities": [
+    "index_known_local_manifest_metadata",
+    "validate_required_manifest_fields",
+    "check_local_agent_safety_booleans",
+    "check_future_connector_placeholder_bounds",
+    "return_redacted_manifest_health"
+  ],
+  "reads": [
+    "JSON manifests under connectors/agents",
+    "JSON manifests under connectors/placeholders"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "manifestMutation": false,
+  "connectorMutation": false,
+  "certification": false,
+  "safetyNotes": [
+    "Reads only known Jarvis manifest directories.",
+    "Returns redacted metadata, warning counts, and bounded per-manifest summaries.",
+    "Does not mutate manifests, change connector state, execute tools, contact external services, or claim readiness."
+  ]
+}

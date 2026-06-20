@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from . import APP_NAME, VERSION
+from .agent_manifest_health import AgentManifestHealthService
 from .config import load_json_config
 from .evidence_report_center import EvidenceReportCenterService
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
@@ -38,6 +39,7 @@ class DashboardService:
         readiness = self.readiness_snapshot_summary()
         diagnostics_bundle = self.diagnostics_bundle_summary()
         evidence_reports = self.evidence_report_center_summary()
+        manifest_health = self.agent_manifest_health_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -56,6 +58,7 @@ class DashboardService:
                 "privateAlphaReadinessSnapshot": "local_readiness_snapshot",
                 "redactedDiagnosticsBundle": "local_redacted_diagnostics",
                 "evidenceReportCenter": "local_report_metadata_only",
+                "agentManifestHealth": "local_manifest_metadata_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -93,6 +96,7 @@ class DashboardService:
             "privateAlphaReadinessSnapshot": readiness,
             "redactedDiagnosticsBundle": diagnostics_bundle,
             "evidenceReportCenter": evidence_reports,
+            "agentManifestHealth": manifest_health,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -184,6 +188,7 @@ class DashboardService:
             "validationAgent": self.validation_summary(),
             "privateAlphaReadinessSnapshot": self.readiness_snapshot_summary(),
             "evidenceReportCenter": self.evidence_report_center_summary(),
+            "agentManifestHealth": self.agent_manifest_health_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -202,6 +207,7 @@ class DashboardService:
                 "Private-Alpha Readiness Snapshot aggregates local metadata/evidence only; it does not create installer artifacts, certify readiness, run VM automation, or push to GitHub.",
                 "Redacted Diagnostics Bundle reports aggregate safe local metadata only; they do not upload, run commands, read protected secrets, or certify production/security readiness.",
                 "Evidence Report Center indexes bounded local report metadata only; it does not mutate reports, transfer reports off machine, or claim readiness.",
+                "Agent Manifest Health Center reads known local manifest directories only; it does not mutate manifests, change connector state, execute tools, or contact external services.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -227,6 +233,9 @@ class DashboardService:
 
     def evidence_report_center_summary(self) -> dict[str, Any]:
         return EvidenceReportCenterService(self.reports_root).dashboard_summary()
+
+    def agent_manifest_health_summary(self) -> dict[str, Any]:
+        return AgentManifestHealthService(self.connector_root).dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -726,6 +735,20 @@ def dashboard_html() -> str:
       <p><a href="/evidence/reports">View evidence report index API</a></p>
       <p><a href="/evidence/reports/{report_id}/metadata">View evidence report metadata endpoint pattern</a></p>
     </section>
+    <section id="agent-manifest-health-center" class="stack">
+      <h2>Agent Manifest Health Center</h2>
+      <pre id="agent-manifest-health-status">Loading agent manifest health...</pre>
+      <div id="agent-manifest-health-note" class="row">
+        <strong>Known local manifest directories only.</strong>
+        <div class="muted">Read-only metadata view. No connector state changes, manifest mutation, tool execution, network transfer, publication, or readiness attestation is available.</div>
+      </div>
+      <div id="agent-manifest-health-counts" class="grid"></div>
+      <div class="actions">
+        <button id="agent-manifest-health-refresh-button" type="button">Refresh manifest health</button>
+      </div>
+      <div id="agent-manifest-health-list" class="list muted">Loading safe manifest metadata...</div>
+      <p><a href="/agents/manifest-health">View agent manifest health API</a></p>
+    </section>
     <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -768,12 +791,15 @@ def dashboard_html() -> str:
       document.getElementById('readiness-snapshot').textContent = JSON.stringify(summary.privateAlphaReadinessSnapshot, null, 2);
       document.getElementById('diagnostics-bundle').textContent = JSON.stringify(summary.redactedDiagnosticsBundle, null, 2);
       document.getElementById('evidence-report-center-status').textContent = JSON.stringify(summary.evidenceReportCenter, null, 2);
+      document.getElementById('agent-manifest-health-status').textContent = JSON.stringify(summary.agentManifestHealth, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
       bindDiagnosticsBundleControls();
       renderEvidenceReportCenter(summary.evidenceReportCenter);
       bindEvidenceReportControls();
+      renderAgentManifestHealth(summary.agentManifestHealth);
+      bindAgentManifestHealthControls();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -896,6 +922,35 @@ def dashboard_html() -> str:
     }
     function bindEvidenceReportControls() {
       const refreshButton = document.getElementById('evidence-report-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadDashboard();
+        refreshButton.disabled = false;
+      };
+    }
+    function renderAgentManifestHealth(health) {
+      const values = {
+        total: health.totalManifests || 0,
+        localAgents: health.implementedLocalAgents || 0,
+        placeholders: health.disabledPlaceholders || 0,
+        warnings: health.warningCount || 0,
+      };
+      document.getElementById('agent-manifest-health-counts').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const manifests = health.recentOrFlaggedManifests || [];
+      document.getElementById('agent-manifest-health-list').innerHTML = manifests.length
+        ? manifests.map((manifest) => `<div class="row">
+            <strong>${escapeHtml(manifest.name || manifest.filename)}</strong>
+            <div><code>${escapeHtml(manifest.manifestType)}</code> · implemented: <code>${escapeHtml(manifest.implemented)}</code> · default: <code>${escapeHtml(manifest.defaultEnabled)}</code></div>
+            <div>Warnings: <code>${escapeHtml(manifest.warningCount || 0)}</code></div>
+            <div class="muted">${escapeHtml((manifest.warnings || []).join('; ') || 'No warnings.')}</div>
+            <div><a href="/agents/manifest-health/${encodeURIComponent(manifest.manifestId)}">Safe metadata</a></div>
+          </div>`).join('')
+        : 'No manifests found.';
+    }
+    function bindAgentManifestHealthControls() {
+      const refreshButton = document.getElementById('agent-manifest-health-refresh-button');
       refreshButton.onclick = async () => {
         refreshButton.disabled = true;
         await loadDashboard();

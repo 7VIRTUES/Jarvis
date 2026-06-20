@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from . import APP_NAME, VERSION
+from .agent_manifest_health import AgentManifestHealthService
 from .approvals import ApprovalQueue
 from .audit import JsonlLogger
 from .codex_plans import CodexPlanInput, CodexPlanService
@@ -60,6 +61,7 @@ redacted_diagnostics = RedactedDiagnosticsBundleService(
     WORKSPACE_ROOT / "connectors",
 )
 evidence_reports = EvidenceReportCenterService(DATA_ROOT / "reports")
+agent_manifest_health = AgentManifestHealthService(WORKSPACE_ROOT / "connectors")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -301,6 +303,20 @@ def get_evidence_report_detail(report_id: str, _: None = Depends(require_dashboa
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+
+@app.get("/agents/manifest-health")
+def get_agent_manifest_health(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return agent_manifest_health.manifest_health()
+
+
+@app.get("/agents/manifest-health/{manifest_id}")
+def get_agent_manifest_detail(manifest_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return agent_manifest_health.manifest_detail(manifest_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 @app.get("/projects")
 def list_projects() -> list[dict[str, str]]:
