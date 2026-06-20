@@ -58,12 +58,11 @@ TOKEN_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 
 PRIVATE_PATH_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("windowsUserPath", re.compile(r"C:\\Users\\[^\\\s\"')]+(?:\\[^\\\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
-    ("windowsUserPath", re.compile(r"C:/Users/[^/\s\"')]+(?:/[^/\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
-    ("ndusOneDrivePath", re.compile(re.escape("OneDrive - North Dakota University System"), re.IGNORECASE), "<redacted-org-path>"),
-    ("localHostName", re.compile(re.escape("Russell-Desktop"), re.IGNORECASE), "<redacted-host>"),
-    ("localEmailUser", re.compile(re.escape("russe@"), re.IGNORECASE), "<redacted-user>@"),
-    ("linuxUserPath", re.compile(r"/home/russe(?:/[^\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
-    ("macUserPath", re.compile(r"/Users/russe(?:/[^\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
+    ("windowsUserPath", re.compile("C:" + r"/Users/[^/\s\"')]+(?:/[^/\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
+    ("oneDriveOrgPath", re.compile(r"OneDrive\s+-\s+[^\\/\"\r\n]+", re.IGNORECASE), "<redacted-org-path>"),
+    ("emailAddress", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\b"), "<redacted-email>"),
+    ("linuxUserPath", re.compile(r"/home/[^/\s\"')]+(?:/[^\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
+    ("macUserPath", re.compile(r"/Users/[^/\s\"')]+(?:/[^\s\"')]+)*", re.IGNORECASE), "<redacted-user-path>"),
 ]
 
 

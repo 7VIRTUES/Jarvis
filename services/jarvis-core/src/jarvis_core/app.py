@@ -15,6 +15,7 @@ from .codex_execution import CodexExecutionService
 from .db import init_db
 from .dashboard import DashboardService, dashboard_html, first_run_setup_html
 from .diagnostics import DiagnosticExporter
+from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
@@ -58,6 +59,7 @@ redacted_diagnostics = RedactedDiagnosticsBundleService(
     WORKSPACE_ROOT,
     WORKSPACE_ROOT / "connectors",
 )
+evidence_reports = EvidenceReportCenterService(DATA_ROOT / "reports")
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -269,6 +271,31 @@ def list_dashboard_reports(_: None = Depends(require_dashboard_lan_access)) -> l
 def get_dashboard_report(report_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     try:
         return dashboard.read_report(report_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/evidence/reports")
+def list_evidence_reports(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return evidence_reports.index_reports()
+
+
+@app.get("/evidence/reports/{report_id}/metadata")
+def get_evidence_report_metadata(report_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return evidence_reports.get_report_metadata(report_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/evidence/reports/{report_id}")
+def get_evidence_report_detail(report_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return evidence_reports.get_report_detail(report_id)
     except PermissionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:

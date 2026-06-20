@@ -1,0 +1,38 @@
+{
+  "id": "evidence_report_center_agent",
+  "name": "Evidence Report Center Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Index safe local Markdown and JSON evidence report metadata under the Jarvis reports directory.",
+  "capabilities": [
+    "index_safe_local_report_metadata",
+    "infer_report_type_from_filename",
+    "extract_bounded_markdown_metadata",
+    "extract_bounded_json_metadata",
+    "return_generated_safe_markdown_detail",
+    "return_json_metadata_only"
+  ],
+  "reads": [
+    "bounded Markdown snippets under the Jarvis reports directory",
+    "bounded JSON report metadata under the Jarvis reports directory",
+    "report filenames, extensions, sizes, and timestamps"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "rawLogsIncluded": false,
+  "certification": false,
+  "safetyNotes": [
+    "Local report metadata only; reports are not transferred off machine, mutated, or marked as readiness proof.",
+    "Only allowed Markdown and JSON report files under the configured Jarvis reports directory are indexed.",
+    "Markdown detail is generated from safe metadata and sanitized summary text; JSON detail returns safe metadata only.",
+    "The report center does not browse arbitrary folders or read protected secret file contents."
+  ]
+}
+

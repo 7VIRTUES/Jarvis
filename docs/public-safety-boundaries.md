@@ -20,4 +20,6 @@ The Private-Alpha Readiness Snapshot Agent is local evidence aggregation only. I
 
 The Redacted Diagnostics Bundle Agent is local troubleshooting evidence aggregation only. It reads safe metadata and summaries, writes local redacted Markdown/JSON diagnostics reports, and does not upload diagnostics, run commands, call external services, read protected secret file contents, or certify security or production readiness.
 
+The Evidence Report Center is local report visibility only. It indexes bounded safe metadata from allowed Markdown/JSON reports under the Jarvis reports directory, redacts summaries/detail, and does not upload, send, share, edit, delete, rewrite, certify, browse arbitrary folders, call external services, or read protected secret file contents.
+
 These boundaries should remain visible in documentation, tests, and connector status until future work is separately planned and reviewed.

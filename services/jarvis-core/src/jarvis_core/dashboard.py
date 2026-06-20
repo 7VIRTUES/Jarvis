@@ -7,6 +7,7 @@ from urllib.parse import unquote
 
 from . import APP_NAME, VERSION
 from .config import load_json_config
+from .evidence_report_center import EvidenceReportCenterService
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
@@ -36,6 +37,7 @@ class DashboardService:
         validation = self.validation_summary()
         readiness = self.readiness_snapshot_summary()
         diagnostics_bundle = self.diagnostics_bundle_summary()
+        evidence_reports = self.evidence_report_center_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -53,6 +55,7 @@ class DashboardService:
                 "validationAgent": "local_evidence_tracking",
                 "privateAlphaReadinessSnapshot": "local_readiness_snapshot",
                 "redactedDiagnosticsBundle": "local_redacted_diagnostics",
+                "evidenceReportCenter": "local_report_metadata_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -89,6 +92,7 @@ class DashboardService:
             "validationAgent": validation,
             "privateAlphaReadinessSnapshot": readiness,
             "redactedDiagnosticsBundle": diagnostics_bundle,
+            "evidenceReportCenter": evidence_reports,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -179,9 +183,10 @@ class DashboardService:
             "privateAlphaPackaging": self.private_alpha_packaging_summary(),
             "validationAgent": self.validation_summary(),
             "privateAlphaReadinessSnapshot": self.readiness_snapshot_summary(),
+            "evidenceReportCenter": self.evidence_report_center_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
-            "reportPathValidation": "contained_md_files_only",
+            "reportPathValidation": "contained_md_json_reports_only",
             "stopTask": self.stop_task_summary(),
             "notes": [
                 "Dashboard endpoints are read-only.",
@@ -196,6 +201,7 @@ class DashboardService:
                 "Validation Agent records manual local evidence only; it does not execute commands, control VirtualBox, create installer artifacts, or write Git state.",
                 "Private-Alpha Readiness Snapshot aggregates local metadata/evidence only; it does not create installer artifacts, certify readiness, run VM automation, or push to GitHub.",
                 "Redacted Diagnostics Bundle reports aggregate safe local metadata only; they do not upload, run commands, read protected secrets, or certify production/security readiness.",
+                "Evidence Report Center indexes bounded local report metadata only; it does not mutate reports, transfer reports off machine, or claim readiness.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -218,6 +224,9 @@ class DashboardService:
             self.workspace_root,
             self.connector_root,
         ).dashboard_summary()
+
+    def evidence_report_center_summary(self) -> dict[str, Any]:
+        return EvidenceReportCenterService(self.reports_root).dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -702,6 +711,21 @@ def dashboard_html() -> str:
       <p><a href="/diagnostics/bundle">View redacted diagnostics bundle API</a></p>
       <p><a href="/diagnostics/bundle/latest">View latest diagnostics bundle report metadata</a></p>
     </section>
+    <section id="evidence-report-center" class="stack">
+      <h2>Evidence Report Center</h2>
+      <pre id="evidence-report-center-status">Loading evidence report center status...</pre>
+      <div id="evidence-report-center-safety-note" class="row">
+        <strong>Local report metadata only.</strong>
+        <div class="muted">Metadata view only. No report mutation, network transfer, publication, or readiness attestation is available. Reads only allowed report files under Jarvis reports directory. Redacts summaries.</div>
+      </div>
+      <div id="evidence-report-counts" class="grid"></div>
+      <div class="actions">
+        <button id="evidence-report-refresh-button" type="button">Refresh report index</button>
+      </div>
+      <div id="evidence-report-list" class="list muted">Loading safe report metadata...</div>
+      <p><a href="/evidence/reports">View evidence report index API</a></p>
+      <p><a href="/evidence/reports/{report_id}/metadata">View evidence report metadata endpoint pattern</a></p>
+    </section>
     <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -743,10 +767,13 @@ def dashboard_html() -> str:
       document.getElementById('validation-agent').textContent = JSON.stringify(summary.validationAgent, null, 2);
       document.getElementById('readiness-snapshot').textContent = JSON.stringify(summary.privateAlphaReadinessSnapshot, null, 2);
       document.getElementById('diagnostics-bundle').textContent = JSON.stringify(summary.redactedDiagnosticsBundle, null, 2);
+      document.getElementById('evidence-report-center-status').textContent = JSON.stringify(summary.evidenceReportCenter, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
       bindDiagnosticsBundleControls();
+      renderEvidenceReportCenter(summary.evidenceReportCenter);
+      bindEvidenceReportControls();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -848,6 +875,31 @@ def dashboard_html() -> str:
         document.getElementById('diagnostics-bundle-report-result').textContent = JSON.stringify(result, null, 2);
         reportButton.disabled = false;
         await loadDashboard();
+      };
+    }
+    function renderEvidenceReportCenter(center) {
+      const counts = center.reportCountsByType || {};
+      document.getElementById('evidence-report-counts').innerHTML = Object.entries(counts).length
+        ? Object.entries(counts)
+          .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+          .join('')
+        : '<div class="metric"><span>reports</span><strong>0</strong></div>';
+      const reports = center.recentReports || [];
+      document.getElementById('evidence-report-list').innerHTML = reports.length
+        ? reports.map((report) => `<div class="row">
+            <strong>${escapeHtml(report.title || report.filename)}</strong>
+            <div><code>${escapeHtml(report.reportType)}</code> - ${escapeHtml(report.sizeBytes)} bytes - readable: <code>${report.readable ? 'true' : 'false'}</code></div>
+            <div class="muted">${escapeHtml(report.summary || 'No summary available.')}</div>
+            <div><a href="/evidence/reports/${encodeURIComponent(report.reportId)}">Safe detail</a> - <a href="/evidence/reports/${encodeURIComponent(report.reportId)}/metadata">Metadata</a></div>
+          </div>`).join('')
+        : 'No evidence reports found.';
+    }
+    function bindEvidenceReportControls() {
+      const refreshButton = document.getElementById('evidence-report-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadDashboard();
+        refreshButton.disabled = false;
       };
     }
     async function loadValidationWorkflowSummary(refreshLists) {

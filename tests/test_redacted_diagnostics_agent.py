@@ -106,10 +106,15 @@ def test_bundle_redacts_synthetic_secret_and_path_values(tmp_path):
     raw_github = "ghp_" + "b" * 24
     raw_password = "synthetic-password-value"
     private_path = "C:" + "/Users/" + "synthetic-user/Documents/Jarvis"
+    backslash_path = "C:" + "\\Users\\" + "synthetic-user\\Documents\\Jarvis"
+    one_drive = "OneDrive - Example Organization"
+    linux_path = "/" + "home" + "/example/private/.env"
+    mac_path = "/" + "Users" + "/example/private/.env"
+    email = "user@example.test"
     conn.execute(
         "insert into projects (name, path, created_at) values (?, ?, ?)",
         (
-            f"OPENAI_API_KEY={raw_openai} password: {raw_password} Bearer {raw_github} {private_path}",
+            f"OPENAI_API_KEY={raw_openai} password: {raw_password} Bearer {raw_github} {private_path} {backslash_path} {one_drive} {linux_path} {mac_path} {email}",
             "C:/safe/Jarvis",
             "2026-01-01T00:00:00Z",
         ),
@@ -122,6 +127,11 @@ def test_bundle_redacts_synthetic_secret_and_path_values(tmp_path):
     assert raw_github not in text
     assert raw_password not in text
     assert private_path not in text
+    assert backslash_path not in text
+    assert one_drive not in text
+    assert linux_path not in text
+    assert mac_path not in text
+    assert email not in text
     assert "<redacted" in text
 
 
