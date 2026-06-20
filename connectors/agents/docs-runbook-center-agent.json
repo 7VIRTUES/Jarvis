@@ -1,0 +1,33 @@
+{
+  "id": "docs_runbook_center_agent",
+  "name": "Docs/Runbook Center Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Index safe local README and direct docs Markdown metadata for dashboard review.",
+  "capabilities": [
+    "index_readme_and_direct_docs_markdown",
+    "extract_safe_doc_metadata",
+    "return_bounded_redacted_markdown_detail",
+    "categorize_docs_and_runbooks"
+  ],
+  "reads": [
+    "README.md",
+    "direct Markdown files under docs"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "docMutation": false,
+  "certification": false,
+  "safetyNotes": [
+    "Reads only README.md and direct docs Markdown files.",
+    "Does not scan arbitrary folders or docs subdirectories.",
+    "Does not mutate, upload, share, publish, certify, fix, or run docs."
+  ]
+}

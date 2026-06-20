@@ -8,6 +8,7 @@ from urllib.parse import unquote
 from . import APP_NAME, VERSION
 from .agent_manifest_health import AgentManifestHealthService
 from .config import load_json_config
+from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .permissions import is_protected_path
@@ -40,6 +41,7 @@ class DashboardService:
         diagnostics_bundle = self.diagnostics_bundle_summary()
         evidence_reports = self.evidence_report_center_summary()
         manifest_health = self.agent_manifest_health_summary()
+        docs_center = self.docs_center_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -59,6 +61,7 @@ class DashboardService:
                 "redactedDiagnosticsBundle": "local_redacted_diagnostics",
                 "evidenceReportCenter": "local_report_metadata_only",
                 "agentManifestHealth": "local_manifest_metadata_only",
+                "docsCenter": "local_docs_metadata_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -97,6 +100,7 @@ class DashboardService:
             "redactedDiagnosticsBundle": diagnostics_bundle,
             "evidenceReportCenter": evidence_reports,
             "agentManifestHealth": manifest_health,
+            "docsCenter": docs_center,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -189,6 +193,7 @@ class DashboardService:
             "privateAlphaReadinessSnapshot": self.readiness_snapshot_summary(),
             "evidenceReportCenter": self.evidence_report_center_summary(),
             "agentManifestHealth": self.agent_manifest_health_summary(),
+            "docsCenter": self.docs_center_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -208,6 +213,7 @@ class DashboardService:
                 "Redacted Diagnostics Bundle reports aggregate safe local metadata only; they do not upload, run commands, read protected secrets, or certify production/security readiness.",
                 "Evidence Report Center indexes bounded local report metadata only; it does not mutate reports, transfer reports off machine, or claim readiness.",
                 "Agent Manifest Health Center reads known local manifest directories only; it does not mutate manifests, change connector state, execute tools, or contact external services.",
+                "Docs/Runbook Center reads README.md and direct docs Markdown files only; it does not mutate docs, transfer docs, or claim readiness.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -236,6 +242,9 @@ class DashboardService:
 
     def agent_manifest_health_summary(self) -> dict[str, Any]:
         return AgentManifestHealthService(self.connector_root).dashboard_summary()
+
+    def docs_center_summary(self) -> dict[str, Any]:
+        return DocsCenterService(self.workspace_root).dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -749,7 +758,20 @@ def dashboard_html() -> str:
       <div id="agent-manifest-health-list" class="list muted">Loading safe manifest metadata...</div>
       <p><a href="/agents/manifest-health">View agent manifest health API</a></p>
     </section>
-    <section id="project-profiles">
+    <section id="docs-runbook-center" class="stack">
+      <h2>Docs/Runbook Center</h2>
+      <pre id="docs-center-status">Loading docs index...</pre>
+      <div id="docs-center-note" class="row">
+        <strong>Approved local Markdown docs only.</strong>
+        <div class="muted">Read-only metadata and bounded detail for README.md and direct docs Markdown files. No doc mutation, network transfer, publication, or readiness attestation is available.</div>
+      </div>
+      <div id="docs-center-counts" class="grid"></div>
+      <div class="actions">
+        <button id="docs-center-refresh-button" type="button">Refresh docs index</button>
+      </div>
+      <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
+      <p><a href="/docs/index">View docs index API</a></p>
+    </section>    <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
     </section>
@@ -792,6 +814,7 @@ def dashboard_html() -> str:
       document.getElementById('diagnostics-bundle').textContent = JSON.stringify(summary.redactedDiagnosticsBundle, null, 2);
       document.getElementById('evidence-report-center-status').textContent = JSON.stringify(summary.evidenceReportCenter, null, 2);
       document.getElementById('agent-manifest-health-status').textContent = JSON.stringify(summary.agentManifestHealth, null, 2);
+      document.getElementById('docs-center-status').textContent = JSON.stringify(summary.docsCenter, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -800,6 +823,8 @@ def dashboard_html() -> str:
       bindEvidenceReportControls();
       renderAgentManifestHealth(summary.agentManifestHealth);
       bindAgentManifestHealthControls();
+      renderDocsCenter(summary.docsCenter);
+      bindDocsCenterControls();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -957,7 +982,32 @@ def dashboard_html() -> str:
         refreshButton.disabled = false;
       };
     }
-    async function loadValidationWorkflowSummary(refreshLists) {
+    function renderDocsCenter(center) {
+      const counts = center.countsByCategory || {};
+      const values = { total: center.totalDocs || 0, ...counts };
+      document.getElementById('docs-center-counts').innerHTML = Object.entries(values).length
+        ? Object.entries(values)
+          .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+          .join('')
+        : '<div class="metric"><span>docs</span><strong>0</strong></div>';
+      const docs = center.recentDocs || [];
+      document.getElementById('docs-center-list').innerHTML = docs.length
+        ? docs.map((doc) => `<div class="row">
+            <strong>${escapeHtml(doc.title || doc.filename)}</strong>
+            <div><code>${escapeHtml(doc.category)}</code> · ${escapeHtml(doc.sizeBytes)} bytes · readable: <code>${doc.readable ? 'true' : 'false'}</code></div>
+            <div class="muted">${escapeHtml(doc.summary || 'No safe summary available.')}</div>
+            <div><a href="/docs/${encodeURIComponent(doc.docId)}">Safe doc</a> · <a href="/docs/${encodeURIComponent(doc.docId)}/metadata">Metadata</a></div>
+          </div>`).join('')
+        : 'No docs found.';
+    }
+    function bindDocsCenterControls() {
+      const refreshButton = document.getElementById('docs-center-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadDashboard();
+        refreshButton.disabled = false;
+      };
+    }    async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();
       if (refreshLists) {
         await Promise.all([loadValidationRunbooks(), loadValidationRuns()]);

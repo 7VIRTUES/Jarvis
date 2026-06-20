@@ -16,6 +16,7 @@ from .codex_execution import CodexExecutionService
 from .db import init_db
 from .dashboard import DashboardService, dashboard_html, first_run_setup_html
 from .diagnostics import DiagnosticExporter
+from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
@@ -62,6 +63,7 @@ redacted_diagnostics = RedactedDiagnosticsBundleService(
 )
 evidence_reports = EvidenceReportCenterService(DATA_ROOT / "reports")
 agent_manifest_health = AgentManifestHealthService(WORKSPACE_ROOT / "connectors")
+docs_center = DocsCenterService(WORKSPACE_ROOT)
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -317,6 +319,32 @@ def get_agent_manifest_detail(manifest_id: str, _: None = Depends(require_dashbo
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/docs/index")
+def get_docs_index(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return docs_center.index_docs()
+
+
+@app.get("/docs/{doc_id}/metadata")
+def get_doc_metadata(doc_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return docs_center.get_doc_metadata(doc_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/docs/{doc_id}")
+def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return docs_center.get_doc_detail(doc_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 
 @app.get("/projects")
 def list_projects() -> list[dict[str, str]]:
