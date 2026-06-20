@@ -598,6 +598,11 @@ def dashboard_html() -> str:
     code, pre { background: #eef1f5; border-radius: 4px; padding: 2px 4px; }
     a { color: #0b5cad; }
     .muted { color: #5e6b7a; }
+    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+    .home-card { border: 1px solid #d6dee8; border-radius: 6px; padding: 10px; background: #fff; display: grid; gap: 6px; }
+    .home-card a { font-weight: 700; text-decoration: none; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { border: 1px solid #cad5e1; border-radius: 999px; padding: 4px 8px; background: #f8fafc; color: #314154; }
   </style>
 </head>
 <body>
@@ -606,7 +611,25 @@ def dashboard_html() -> str:
     <div class="muted">Read-only dashboard, report, and settings/status visibility</div>
   </header>
   <main>
-    <section>
+    <section id="dashboard-home" class="stack">
+      <h2>Dashboard Home</h2>
+      <div id="dashboard-home-status-chips" class="chips" aria-label="Dashboard status chips">Loading dashboard status...</div>
+      <div class="home-grid" aria-label="Dashboard section navigation">
+        <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
+        <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
+        <div class="home-card"><a href="#security-safety-review">View Security/Safety Reviews</a><span class="muted">Registered project review surface.</span></div>
+        <div class="home-card"><a href="#validation-agent-status">View Validation Workflow</a><span class="muted">Manual evidence workflow.</span></div>
+        <div class="home-card"><a href="#private-alpha-readiness-snapshot">View Private-Alpha Readiness Snapshot</a><span class="muted">Local readiness metadata.</span></div>
+        <div class="home-card"><a href="#redacted-diagnostics-bundle">View Redacted Diagnostics Bundle</a><span class="muted">Local redacted diagnostics.</span></div>
+        <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
+        <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
+        <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#settings-status">View Settings / Status</a><span class="muted">Read-only configuration state.</span></div>
+        <div class="home-card"><a href="#lan-protection">View LAN Protection</a><span class="muted">Dashboard access boundary.</span></div>
+        <div class="home-card"><a href="#dashboard-status">View Dashboard Status</a><span class="muted">Local summary counts.</span></div>
+      </div>
+    </section>
+    <section id="dashboard-status">
       <h2>Status</h2>
       <div id="metrics" class="grid"></div>
     </section>
@@ -771,7 +794,8 @@ def dashboard_html() -> str:
       </div>
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
-    </section>    <section id="project-profiles">
+    </section>
+    <section id="project-profiles">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
     </section>
@@ -784,11 +808,11 @@ def dashboard_html() -> str:
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
     </section>
-    <section>
+    <section id="safety-summary">
       <h2>Safety</h2>
       <pre id="safety">Loading safety summary...</pre>
     </section>
-    <section>
+    <section id="connector-placeholders">
       <h2>Connectors</h2>
       <div id="connectors" class="muted">Loading connector placeholders...</div>
     </section>
@@ -798,6 +822,7 @@ def dashboard_html() -> str:
       const summary = await fetch('/api/dashboard/summary').then((response) => response.json());
       const profiles = await fetch('/api/projects/profiles').then((response) => response.json());
       const counts = summary.counts;
+      renderDashboardHome(summary);
       document.getElementById('metrics').innerHTML = Object.entries(counts)
         .map(([key, value]) => `<div class="metric"><span>${key}</span><strong>${value}</strong></div>`)
         .join('');
@@ -851,7 +876,20 @@ def dashboard_html() -> str:
         ? summary.connectors.map((connector) => `<div>${connector.provider}: ${connector.status}</div>`).join('')
         : 'No connector placeholders found.';
     }
-    function renderProjectProfiles(profiles) {
+    function renderDashboardHome(summary) {
+      const chips = {
+        phase: summary.phase && summary.phase.status,
+        projects: summary.counts && summary.counts.projects,
+        reports: summary.counts && summary.counts.reports,
+        connectors: summary.counts && summary.counts.connectors,
+        lan: summary.lanProtection && summary.lanProtection.status,
+        docs: summary.docsCenter && summary.docsCenter.totalDocs,
+      };
+      document.getElementById('dashboard-home-status-chips').innerHTML = Object.entries(chips)
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => `<span class="chip"><strong>${escapeHtml(key)}</strong>: ${escapeHtml(value)}</span>`)
+        .join('') || '<span class="chip">No status loaded.</span>';
+    }    function renderProjectProfiles(profiles) {
       document.getElementById('project-profile-list').innerHTML = profiles.length
         ? profiles.map((profile) => `<div class="row">
             <strong>${profile.projectName}</strong>
@@ -1007,7 +1045,8 @@ def dashboard_html() -> str:
         await loadDashboard();
         refreshButton.disabled = false;
       };
-    }    async function loadValidationWorkflowSummary(refreshLists) {
+    }
+    async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();
       if (refreshLists) {
         await Promise.all([loadValidationRunbooks(), loadValidationRuns()]);

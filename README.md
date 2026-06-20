@@ -93,6 +93,7 @@ python -m pytest
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)
+- [Dashboard Home Navigation](docs/dashboard-home-navigation.md)
 
 ## Roadmap Note
 
