@@ -1,0 +1,35 @@
+{
+  "id": "backup_readiness_agent",
+  "name": "Backup Readiness Checklist Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Show manual backup readiness checklist metadata before future VM/private-alpha work.",
+  "capabilities": [
+    "return_static_backup_readiness_checklist",
+    "return_manual_backup_readiness_runbook",
+    "summarize_protected_file_exclusion_notes"
+  ],
+  "reads": [
+    "static checklist metadata",
+    "static runbook metadata"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "fileCopy": false,
+  "archiveWrites": false,
+  "externalDriveDetection": false,
+  "backupAutomation": false,
+  "certification": false,
+  "safetyNotes": [
+    "Checklist/evidence surface only; it does not create or verify backups.",
+    "Does not copy files, create archives, delete files, inspect removable media, or read secrets.",
+    "Does not claim backup completion automatically."
+  ]
+}

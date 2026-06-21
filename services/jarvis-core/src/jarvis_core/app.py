@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from . import APP_NAME, VERSION
 from .activity_timeline import ActivityTimelineService
+from .backup_readiness import BackupReadinessService
 from .agent_manifest_health import AgentManifestHealthService
 from .approvals import ApprovalQueue
 from .audit import JsonlLogger
@@ -67,6 +68,7 @@ evidence_reports = EvidenceReportCenterService(DATA_ROOT / "reports")
 agent_manifest_health = AgentManifestHealthService(WORKSPACE_ROOT / "connectors")
 docs_center = DocsCenterService(WORKSPACE_ROOT)
 activity_timeline = ActivityTimelineService(conn)
+backup_readiness = BackupReadinessService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -176,6 +178,16 @@ def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[s
 
 
 
+
+
+@app.get("/backup/readiness")
+def get_backup_readiness(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return backup_readiness.readiness()
+
+
+@app.get("/backup/readiness/runbook")
+def get_backup_readiness_runbook(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return backup_readiness.runbook()
 
 @app.get("/activity/timeline")
 def get_activity_timeline(limit: int = 25, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:

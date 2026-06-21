@@ -98,6 +98,8 @@ python -m pytest
 - [Dashboard Accessibility And Keyboard Navigation](docs/dashboard-accessibility-keyboard.md)
 - [Recent Activity / Audit Trail Center](docs/activity-timeline.md)
 - [Recent Activity / Audit Trail Runbook](docs/activity-timeline-runbook.md)
+- [Backup Readiness Checklist Center](docs/backup-readiness-center.md)
+- [Backup Readiness Runbook](docs/backup-readiness-runbook.md)
 
 ## Roadmap Note
 

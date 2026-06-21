@@ -645,6 +645,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
         <div class="home-card"><a href="#dashboard-surface-health-center">View Dashboard Surface Health Center</a><span class="muted">Local surface wiring checks.</span></div>
         <div class="home-card"><a href="#settings-status">View Settings / Status</a><span class="muted">Read-only configuration state.</span></div>
@@ -818,6 +819,22 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
+    <section id="backup-readiness-center" class="stack dashboard-section" data-section-title="Backup Readiness Checklist" data-section-keywords="backup readiness checklist manual restore protected files reports data">
+      <h2>Backup Readiness Checklist</h2>
+      <pre id="backup-readiness-status">Loading backup readiness checklist...</pre>
+      <div id="backup-readiness-note" class="row">
+        <strong>Manual checklist only.</strong>
+        <div class="muted">Read-only backup readiness metadata for repo, reports, local data, protected-file exclusions, offline preservation, and restore-test reminders. No file transfer, archive creation, media inspection, deletion, upload, publication, or readiness attestation is available.</div>
+      </div>
+      <div id="backup-readiness-counts" class="grid"></div>
+      <div class="actions">
+        <button id="backup-readiness-refresh-button" type="button">Refresh backup checklist</button>
+      </div>
+      <div id="backup-readiness-list" class="list muted">Loading safe checklist metadata...</div>
+      <p><a href="/backup/readiness">View backup readiness API</a></p>
+      <p><a href="/backup/readiness/runbook">View backup readiness runbook API</a></p>
+      <p><a href="/docs/backup-readiness-center.md">Backup readiness docs</a> · <a href="/docs/backup-readiness-runbook.md">Backup readiness runbook</a></p>
+    </section>
     <section id="activity-timeline-center" class="stack dashboard-section" data-section-title="Recent Activity Audit Trail" data-section-keywords="recent activity audit trail tasks events approvals security reports metadata">
       <h2>Recent Activity / Audit Trail</h2>
       <pre id="activity-timeline-status">Loading recent activity timeline...</pre>
@@ -905,6 +922,7 @@ def dashboard_html() -> str:
       bindAgentManifestHealthControls();
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
+      await loadBackupReadiness();
       await loadActivityTimeline();
       await loadDashboardSurfaceHealth();
       await loadValidationWorkflowSummary(false);
@@ -1046,6 +1064,40 @@ def dashboard_html() -> str:
           button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
       });
+    }
+    async function loadBackupReadiness() {
+      const readiness = await fetch('/backup/readiness').then((response) => response.json());
+      document.getElementById('backup-readiness-status').textContent = JSON.stringify(readiness, null, 2);
+      renderBackupReadiness(readiness);
+      bindBackupReadinessControls();
+    }
+    function renderBackupReadiness(readiness) {
+      const statusCounts = readiness.countsByStatus || {};
+      const values = {
+        items: readiness.checklistItemCount || 0,
+        ready: statusCounts.ready || 0,
+        manual: statusCounts.manual || 0,
+        warning: statusCounts.warning || 0,
+      };
+      document.getElementById('backup-readiness-counts').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const items = readiness.items || [];
+      document.getElementById('backup-readiness-list').innerHTML = items.length
+        ? items.map((item) => `<div class="row">
+            <strong>${escapeHtml(item.title || item.itemId)}</strong>
+            <div><code>${escapeHtml(item.status)}</code> · ${escapeHtml(item.category || '')}</div>
+            <div class="muted">${escapeHtml(item.summary || 'Manual checklist metadata only.')}</div>
+          </div>`).join('')
+        : 'No backup readiness checklist items found.';
+    }
+    function bindBackupReadinessControls() {
+      const refreshButton = document.getElementById('backup-readiness-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadBackupReadiness();
+        refreshButton.disabled = false;
+      };
     }
     async function loadActivityTimeline() {
       const timeline = await fetch('/activity/timeline').then((response) => response.json());
