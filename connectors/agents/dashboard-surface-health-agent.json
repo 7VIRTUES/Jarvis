@@ -1,0 +1,38 @@
+{
+  "id": "dashboard_surface_health_agent",
+  "name": "Dashboard Surface Health Center Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Summarize whether existing local dashboard surfaces are wired, documented, guarded, and visibly bounded.",
+  "capabilities": [
+    "inspect_fastapi_route_metadata",
+    "inspect_dashboard_summary_snapshot",
+    "inspect_dashboard_html_snapshot",
+    "return_dashboard_surface_health"
+  ],
+  "reads": [
+    "FastAPI route metadata",
+    "dashboard summary data",
+    "dashboard HTML string"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "routeMutation": false,
+  "reportMutation": false,
+  "docMutation": false,
+  "manifestMutation": false,
+  "settingsMutation": false,
+  "certification": false,
+  "safetyNotes": [
+    "Inspects only existing route metadata, dashboard summary data, and dashboard HTML strings.",
+    "Does not mutate routes, reports, docs, manifests, settings, or connector state.",
+    "Does not execute commands, call external services, upload, share, publish, or certify readiness."
+  ]
+}

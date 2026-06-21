@@ -95,6 +95,7 @@ python -m pytest
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)
 - [Dashboard Home Navigation](docs/dashboard-home-navigation.md)
 - [Dashboard Section Search](docs/dashboard-section-search.md)
+- [Dashboard Accessibility And Keyboard Navigation](docs/dashboard-accessibility-keyboard.md)
 
 ## Roadmap Note
 

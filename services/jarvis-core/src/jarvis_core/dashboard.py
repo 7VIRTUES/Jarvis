@@ -597,6 +597,10 @@ def dashboard_html() -> str:
     button:disabled { color: #7a8794; cursor: default; }
     code, pre { background: #eef1f5; border-radius: 4px; padding: 2px 4px; }
     a { color: #0b5cad; }
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #1b74d1; outline-offset: 2px; }
+    .skip-link { position: absolute; left: 12px; top: -48px; background: #ffffff; color: #0b3d75; border: 2px solid #1b74d1; border-radius: 6px; padding: 8px 10px; z-index: 10; }
+    .skip-link:focus { top: 12px; }
+    .shortcut-help { font-size: 13px; }
     .muted { color: #5e6b7a; }
     .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
     .home-card { border: 1px solid #d6dee8; border-radius: 6px; padding: 10px; background: #fff; display: grid; gap: 6px; }
@@ -611,6 +615,7 @@ def dashboard_html() -> str:
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#dashboard-home">Skip to Dashboard Home</a>
   <header>
     <h1>Jarvis PC Local</h1>
     <div class="muted">Read-only dashboard, report, and settings/status visibility</div>
@@ -629,6 +634,7 @@ def dashboard_html() -> str:
         <button id="dashboard-clear-filter-button" type="button">Clear filter</button>
       </div>
       <div id="dashboard-section-filter-status" class="muted">Showing all dashboard sections.</div>
+      <div id="dashboard-shortcut-help" class="muted shortcut-help">Keyboard shortcuts: / focuses section search, Escape clears the filter, e expands all sections, c collapses all sections.</div>
       <div class="home-grid" aria-label="Dashboard section navigation">
         <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
         <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
@@ -639,6 +645,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#dashboard-surface-health-center">View Dashboard Surface Health Center</a><span class="muted">Local surface wiring checks.</span></div>
         <div class="home-card"><a href="#settings-status">View Settings / Status</a><span class="muted">Read-only configuration state.</span></div>
         <div class="home-card"><a href="#lan-protection">View LAN Protection</a><span class="muted">Dashboard access boundary.</span></div>
         <div class="home-card"><a href="#dashboard-status">View Dashboard Status</a><span class="muted">Local summary counts.</span></div>
@@ -810,6 +817,22 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
+    <section id="dashboard-surface-health-center" class="stack dashboard-section" data-section-title="Dashboard Surface Health Center" data-section-keywords="dashboard surface health sections endpoints docs safety guards">
+      <h2>Dashboard Surface Health Center</h2>
+      <pre id="dashboard-surface-health-status">Loading dashboard surface health...</pre>
+      <div id="dashboard-surface-health-note" class="row">
+        <strong>Local dashboard/API wiring check only.</strong>
+        <div class="muted">Read-only visibility for existing dashboard sections, local docs links, guarded endpoints, and safety notes. No route mutation, report mutation, doc mutation, manifest mutation, settings changes, external calls, or readiness attestation is available.</div>
+      </div>
+      <div id="dashboard-surface-health-counts" class="grid"></div>
+      <div class="actions">
+        <button id="dashboard-surface-health-refresh-button" type="button">Refresh surface health</button>
+      </div>
+      <div id="dashboard-surface-health-list" class="list muted">Loading checked surfaces...</div>
+      <p><a href="/dashboard/surface-health">View dashboard surface health API</a></p>
+      <p><a href="/dashboard/surface-health/{surface_id}">View dashboard surface detail endpoint pattern</a></p>
+      <p><a href="/docs/dashboard-surface-health.md">Dashboard surface health docs</a> · <a href="/docs/dashboard-surface-health-runbook.md">Dashboard surface health runbook</a></p>
+    </section>
     <section id="project-profiles" class="dashboard-section" data-section-title="Project Profiles" data-section-keywords="project profiles workspace boundaries">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
@@ -866,6 +889,7 @@ def dashboard_html() -> str:
       bindAgentManifestHealthControls();
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
+      await loadDashboardSurfaceHealth();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
       renderSecurityReviews(profiles);
@@ -939,6 +963,45 @@ def dashboard_html() -> str:
         filterDashboardSections('');
       };
       filterDashboardSections(search.value || '');
+      bindDashboardKeyboardShortcuts();
+    }
+    function isDashboardTypingTarget(target) {
+      const tagName = target && target.tagName ? target.tagName.toLowerCase() : '';
+      return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    }
+    function clearDashboardSectionFilter() {
+      const search = document.getElementById('dashboard-section-search');
+      search.value = '';
+      filterDashboardSections('');
+    }
+    function bindDashboardKeyboardShortcuts() {
+      if (window.dashboardKeyboardShortcutsBound) {
+        return;
+      }
+      window.dashboardKeyboardShortcutsBound = true;
+      document.addEventListener('keydown', (event) => {
+        const search = document.getElementById('dashboard-section-search');
+        if (!search) {
+          return;
+        }
+        if (event.key === 'Escape') {
+          clearDashboardSectionFilter();
+          return;
+        }
+        if (event.key === '/' && !isDashboardTypingTarget(event.target)) {
+          event.preventDefault();
+          search.focus();
+          return;
+        }
+        if (isDashboardTypingTarget(event.target)) {
+          return;
+        }
+        if (event.key.toLowerCase() === 'e') {
+          setDashboardSectionsCollapsed(false);
+        } else if (event.key.toLowerCase() === 'c') {
+          setDashboardSectionsCollapsed(true);
+        }
+      });
     }
     function filterDashboardSections(query) {
       const normalized = String(query || '').trim().toLowerCase();
@@ -966,6 +1029,39 @@ def dashboard_html() -> str:
           button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
       });
+    }
+    async function loadDashboardSurfaceHealth() {
+      const health = await fetch('/dashboard/surface-health').then((response) => response.json());
+      document.getElementById('dashboard-surface-health-status').textContent = JSON.stringify(health, null, 2);
+      renderDashboardSurfaceHealth(health);
+      bindDashboardSurfaceHealthControls();
+    }
+    function renderDashboardSurfaceHealth(health) {
+      const values = {
+        total: health.totalSurfaces || 0,
+        healthy: health.healthySurfaces || 0,
+        warnings: health.warningCount || 0,
+      };
+      document.getElementById('dashboard-surface-health-counts').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const surfaces = health.surfaces || [];
+      document.getElementById('dashboard-surface-health-list').innerHTML = surfaces.length
+        ? surfaces.map((surface) => `<div class="row">
+            <strong>${escapeHtml(surface.name || surface.surfaceId)}</strong>
+            <div>Status: <code>${escapeHtml(surface.status)}</code> · Section: <code>${escapeHtml(surface.sectionId)}</code></div>
+            <div class="muted">Warnings: ${escapeHtml((surface.warnings || []).join('; ') || 'No warnings.')}</div>
+            <div><a href="/dashboard/surface-health/${encodeURIComponent(surface.surfaceId)}">Safe metadata</a></div>
+          </div>`).join('')
+        : 'No dashboard surfaces checked.';
+    }
+    function bindDashboardSurfaceHealthControls() {
+      const refreshButton = document.getElementById('dashboard-surface-health-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadDashboardSurfaceHealth();
+        refreshButton.disabled = false;
+      };
     }
     function renderProjectProfiles(profiles) {
       document.getElementById('project-profile-list').innerHTML = profiles.length

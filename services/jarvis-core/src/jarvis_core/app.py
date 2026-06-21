@@ -15,6 +15,7 @@ from .codex_plans import CodexPlanInput, CodexPlanService
 from .codex_execution import CodexExecutionService
 from .db import init_db
 from .dashboard import DashboardService, dashboard_html, first_run_setup_html
+from .dashboard_surface_health import DashboardSurfaceHealthService
 from .diagnostics import DiagnosticExporter
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
@@ -171,6 +172,23 @@ def first_run_setup_page(_: None = Depends(require_loopback_request)) -> HTMLRes
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
 
+
+
+@app.get("/dashboard/surface-health")
+def get_dashboard_surface_health(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    service = DashboardSurfaceHealthService(app.routes, dashboard.summary(), dashboard_html())
+    return service.surface_health()
+
+
+@app.get("/dashboard/surface-health/{surface_id}")
+def get_dashboard_surface_health_detail(surface_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    service = DashboardSurfaceHealthService(app.routes, dashboard.summary(), dashboard_html())
+    try:
+        return service.surface_detail(surface_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 @app.get("/api/projects/profiles")
 def dashboard_project_profiles(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
