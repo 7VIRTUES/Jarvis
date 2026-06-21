@@ -603,6 +603,11 @@ def dashboard_html() -> str:
     .home-card a { font-weight: 700; text-decoration: none; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .chip { border: 1px solid #cad5e1; border-radius: 999px; padding: 4px 8px; background: #f8fafc; color: #314154; }
+    .home-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+    .home-controls label { min-width: min(100%, 280px); }
+    .section-toggle { float: right; margin-left: 10px; }
+    .dashboard-section.collapsed > :not(h2):not(.section-toggle) { display: none; }
+    .section-filter-hidden { display: none; }
   </style>
 </head>
 <body>
@@ -614,6 +619,16 @@ def dashboard_html() -> str:
     <section id="dashboard-home" class="stack">
       <h2>Dashboard Home</h2>
       <div id="dashboard-home-status-chips" class="chips" aria-label="Dashboard status chips">Loading dashboard status...</div>
+      <div class="home-controls" aria-label="Dashboard section controls">
+        <label>
+          Search dashboard sections
+          <input id="dashboard-section-search" type="search" placeholder="Search safety, validation, docs..." autocomplete="off">
+        </label>
+        <button id="dashboard-expand-all-button" type="button">Expand all sections</button>
+        <button id="dashboard-collapse-all-button" type="button">Collapse all sections</button>
+        <button id="dashboard-clear-filter-button" type="button">Clear filter</button>
+      </div>
+      <div id="dashboard-section-filter-status" class="muted">Showing all dashboard sections.</div>
       <div class="home-grid" aria-label="Dashboard section navigation">
         <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
         <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
@@ -629,39 +644,39 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#dashboard-status">View Dashboard Status</a><span class="muted">Local summary counts.</span></div>
       </div>
     </section>
-    <section id="dashboard-status">
+    <section id="dashboard-status" class="dashboard-section" data-section-title="Dashboard Status" data-section-keywords="status metrics counts dashboard home">
       <h2>Status</h2>
       <div id="metrics" class="grid"></div>
     </section>
-    <section id="settings-status">
+    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
       <pre id="settings">Loading settings/status summary...</pre>
     </section>
-    <section id="lan-protection">
+    <section id="lan-protection" class="dashboard-section" data-section-title="LAN Protection" data-section-keywords="lan protection token access setup">
       <h2>LAN Protection</h2>
       <pre id="lan">Loading LAN protection status...</pre>
       <p><a href="/setup/lan">Open loopback LAN setup guidance</a></p>
     </section>
-    <section id="stop-task-control">
+    <section id="stop-task-control" class="dashboard-section" data-section-title="Active Task Stop Task" data-section-keywords="active task stop queued running">
       <h2>Active Task / Stop Task</h2>
       <div id="active-tasks" class="muted">Loading active task status...</div>
       <button id="stop-task-button" type="button" disabled>Stop Task</button>
       <pre id="stop-task-status">Loading stop-task status...</pre>
     </section>
-    <section id="desktop-shell-status">
+    <section id="desktop-shell-status" class="dashboard-section" data-section-title="Desktop Shell Tauri" data-section-keywords="desktop shell tauri placeholder">
       <h2>Desktop Shell / Tauri</h2>
       <pre id="desktop-shell">Loading desktop shell placeholder status...</pre>
     </section>
-    <section id="first-run-status">
+    <section id="first-run-status" class="dashboard-section" data-section-title="First Run Setup" data-section-keywords="first run setup placeholder">
       <h2>First-Run / Setup</h2>
       <pre id="first-run">Loading first-run placeholder status...</pre>
       <p><a href="/setup/first-run">Open loopback first-run setup placeholder</a></p>
     </section>
-    <section id="private-alpha-packaging-status">
+    <section id="private-alpha-packaging-status" class="dashboard-section" data-section-title="Private Alpha Packaging" data-section-keywords="private alpha packaging readiness">
       <h2>Private Alpha / Packaging</h2>
       <pre id="private-alpha-packaging">Loading private-alpha packaging placeholder status...</pre>
     </section>
-    <section id="validation-agent-status" class="stack">
+    <section id="validation-agent-status" class="stack dashboard-section" data-section-title="Validation Workflow" data-section-keywords="validation workflow manual evidence runbook">
       <h2>Validation Agent</h2>
       <pre id="validation-agent">Loading validation evidence status...</pre>
       <div id="validation-safety-note" class="row">
@@ -722,7 +737,7 @@ def dashboard_html() -> str:
       <p><a href="/validation/runbooks">View validation runbooks API</a></p>
       <p><a href="/validation/runs">View validation runs API</a></p>
     </section>
-    <section id="private-alpha-readiness-snapshot" class="stack">
+    <section id="private-alpha-readiness-snapshot" class="stack dashboard-section" data-section-title="Private Alpha Readiness Snapshot" data-section-keywords="private alpha readiness snapshot local report">
       <h2>Private-Alpha Readiness Snapshot</h2>
       <pre id="readiness-snapshot">Loading private-alpha readiness snapshot...</pre>
       <div id="readiness-safety-note" class="row">
@@ -737,7 +752,7 @@ def dashboard_html() -> str:
       <p><a href="/readiness/snapshot">View readiness snapshot API</a></p>
       <p><a href="/readiness/snapshot/latest">View latest readiness snapshot report metadata</a></p>
     </section>
-    <section id="redacted-diagnostics-bundle" class="stack">
+    <section id="redacted-diagnostics-bundle" class="stack dashboard-section" data-section-title="Redacted Diagnostics Bundle" data-section-keywords="redacted diagnostics bundle local report">
       <h2>Redacted Diagnostics Bundle</h2>
       <pre id="diagnostics-bundle">Loading redacted diagnostics bundle status...</pre>
       <div id="diagnostics-bundle-safety-note" class="row">
@@ -752,7 +767,7 @@ def dashboard_html() -> str:
       <p><a href="/diagnostics/bundle">View redacted diagnostics bundle API</a></p>
       <p><a href="/diagnostics/bundle/latest">View latest diagnostics bundle report metadata</a></p>
     </section>
-    <section id="evidence-report-center" class="stack">
+    <section id="evidence-report-center" class="stack dashboard-section" data-section-title="Evidence Report Center" data-section-keywords="evidence report center metadata safe detail">
       <h2>Evidence Report Center</h2>
       <pre id="evidence-report-center-status">Loading evidence report center status...</pre>
       <div id="evidence-report-center-safety-note" class="row">
@@ -767,7 +782,7 @@ def dashboard_html() -> str:
       <p><a href="/evidence/reports">View evidence report index API</a></p>
       <p><a href="/evidence/reports/{report_id}/metadata">View evidence report metadata endpoint pattern</a></p>
     </section>
-    <section id="agent-manifest-health-center" class="stack">
+    <section id="agent-manifest-health-center" class="stack dashboard-section" data-section-title="Agent Manifest Health Center" data-section-keywords="agent manifest health connector placeholder local">
       <h2>Agent Manifest Health Center</h2>
       <pre id="agent-manifest-health-status">Loading agent manifest health...</pre>
       <div id="agent-manifest-health-note" class="row">
@@ -781,7 +796,7 @@ def dashboard_html() -> str:
       <div id="agent-manifest-health-list" class="list muted">Loading safe manifest metadata...</div>
       <p><a href="/agents/manifest-health">View agent manifest health API</a></p>
     </section>
-    <section id="docs-runbook-center" class="stack">
+    <section id="docs-runbook-center" class="stack dashboard-section" data-section-title="Docs Runbook Center" data-section-keywords="docs runbook center markdown readme">
       <h2>Docs/Runbook Center</h2>
       <pre id="docs-center-status">Loading docs index...</pre>
       <div id="docs-center-note" class="row">
@@ -795,11 +810,11 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
-    <section id="project-profiles">
+    <section id="project-profiles" class="dashboard-section" data-section-title="Project Profiles" data-section-keywords="project profiles workspace boundaries">
       <h2>Project Profiles</h2>
       <div id="project-profile-list" class="list muted">Loading project profiles...</div>
     </section>
-    <section id="security-safety-review">
+    <section id="security-safety-review" class="dashboard-section" data-section-title="Security Safety Reviews" data-section-keywords="security safety reviews registered project">
       <h2>Security/Safety Review</h2>
       <div id="security-review-list" class="list muted">Loading registered project review actions...</div>
       <pre id="security-review-result">No local review run from this dashboard session.</pre>
@@ -808,11 +823,11 @@ def dashboard_html() -> str:
       <h2>Reports</h2>
       <div id="reports" class="muted">Loading reports...</div>
     </section>
-    <section id="safety-summary">
+    <section id="safety-summary" class="dashboard-section" data-section-title="Safety Summary" data-section-keywords="safety summary boundaries local read only">
       <h2>Safety</h2>
       <pre id="safety">Loading safety summary...</pre>
     </section>
-    <section id="connector-placeholders">
+    <section id="connector-placeholders" class="dashboard-section" data-section-title="Connector Placeholders" data-section-keywords="connectors placeholders disabled future">
       <h2>Connectors</h2>
       <div id="connectors" class="muted">Loading connector placeholders...</div>
     </section>
@@ -823,6 +838,7 @@ def dashboard_html() -> str:
       const profiles = await fetch('/api/projects/profiles').then((response) => response.json());
       const counts = summary.counts;
       renderDashboardHome(summary);
+      initializeDashboardSectionControls();
       document.getElementById('metrics').innerHTML = Object.entries(counts)
         .map(([key, value]) => `<div class="metric"><span>${key}</span><strong>${value}</strong></div>`)
         .join('');
@@ -889,7 +905,69 @@ def dashboard_html() -> str:
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
         .map(([key, value]) => `<span class="chip"><strong>${escapeHtml(key)}</strong>: ${escapeHtml(value)}</span>`)
         .join('') || '<span class="chip">No status loaded.</span>';
-    }    function renderProjectProfiles(profiles) {
+    }
+    function dashboardSections() {
+      return Array.from(document.querySelectorAll('main section.dashboard-section'));
+    }
+    function initializeDashboardSectionControls() {
+      dashboardSections().forEach((section) => {
+        const heading = section.querySelector('h2');
+        if (!heading || section.querySelector(':scope > .section-toggle')) {
+          return;
+        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'section-toggle';
+        button.textContent = 'View';
+        button.setAttribute('aria-label', `View ${heading.textContent}`);
+        button.setAttribute('aria-expanded', 'true');
+        button.onclick = () => {
+          const collapsed = section.classList.toggle('collapsed');
+          button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        };
+        heading.insertAdjacentElement('afterend', button);
+      });
+      const search = document.getElementById('dashboard-section-search');
+      const expandAll = document.getElementById('dashboard-expand-all-button');
+      const collapseAll = document.getElementById('dashboard-collapse-all-button');
+      const clearFilter = document.getElementById('dashboard-clear-filter-button');
+      search.oninput = () => filterDashboardSections(search.value);
+      expandAll.onclick = () => setDashboardSectionsCollapsed(false);
+      collapseAll.onclick = () => setDashboardSectionsCollapsed(true);
+      clearFilter.onclick = () => {
+        search.value = '';
+        filterDashboardSections('');
+      };
+      filterDashboardSections(search.value || '');
+    }
+    function filterDashboardSections(query) {
+      const normalized = String(query || '').trim().toLowerCase();
+      let visibleCount = 0;
+      dashboardSections().forEach((section) => {
+        const haystack = [section.dataset.sectionTitle, section.dataset.sectionKeywords, section.querySelector('h2')?.textContent]
+          .join(' ')
+          .toLowerCase();
+        const visible = !normalized || haystack.includes(normalized);
+        section.classList.toggle('section-filter-hidden', !visible);
+        if (visible) {
+          visibleCount += 1;
+        }
+      });
+      const status = document.getElementById('dashboard-section-filter-status');
+      status.textContent = normalized
+        ? `${visibleCount} dashboard sections match the current filter.`
+        : 'Showing all dashboard sections.';
+    }
+    function setDashboardSectionsCollapsed(collapsed) {
+      dashboardSections().forEach((section) => {
+        section.classList.toggle('collapsed', collapsed);
+        const button = section.querySelector(':scope > .section-toggle');
+        if (button) {
+          button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+      });
+    }
+    function renderProjectProfiles(profiles) {
       document.getElementById('project-profile-list').innerHTML = profiles.length
         ? profiles.map((profile) => `<div class="row">
             <strong>${profile.projectName}</strong>

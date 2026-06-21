@@ -94,6 +94,7 @@ python -m pytest
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)
 - [Dashboard Home Navigation](docs/dashboard-home-navigation.md)
+- [Dashboard Section Search](docs/dashboard-section-search.md)
 
 ## Roadmap Note
 
