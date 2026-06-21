@@ -1,0 +1,36 @@
+{
+  "id": "vm_validation_prep_agent",
+  "name": "Clean Windows VM Validation Prep Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Show manual checklist metadata for preparing clean Windows VM validation.",
+  "capabilities": [
+    "return_static_vm_validation_prep_checklist",
+    "return_manual_vm_validation_prep_runbook",
+    "summarize_dashboard_and_connector_boundary_reminders"
+  ],
+  "reads": [
+    "static prep checklist metadata",
+    "static prep runbook metadata"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "softwareSetupAutomation": false,
+  "vmAutomation": false,
+  "vmStateDetection": false,
+  "installerCreation": false,
+  "releaseArtifactCreation": false,
+  "certification": false,
+  "safetyNotes": [
+    "Checklist/evidence preparation surface only; it does not validate the VM automatically.",
+    "Does not run commands, prepare software, control VM software, create installer artifacts, or publish releases.",
+    "Does not claim validation completion."
+  ]
+}

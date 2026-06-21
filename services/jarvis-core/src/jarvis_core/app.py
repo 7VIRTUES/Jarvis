@@ -34,6 +34,7 @@ from .security_review_agent import SecurityReviewService
 from .task_control import TaskControlService
 from .tasks import TaskQueue
 from .validation_agent import ValidationAgentService
+from .vm_validation_prep import VmValidationPrepService
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 DATA_ROOT = WORKSPACE_ROOT / "data" / "jarvis"
@@ -69,6 +70,7 @@ agent_manifest_health = AgentManifestHealthService(WORKSPACE_ROOT / "connectors"
 docs_center = DocsCenterService(WORKSPACE_ROOT)
 activity_timeline = ActivityTimelineService(conn)
 backup_readiness = BackupReadinessService()
+vm_validation_prep = VmValidationPrepService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -179,6 +181,16 @@ def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[s
 
 
 
+
+
+@app.get("/vm-validation/prep")
+def get_vm_validation_prep(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return vm_validation_prep.prep()
+
+
+@app.get("/vm-validation/prep/runbook")
+def get_vm_validation_prep_runbook(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return vm_validation_prep.runbook()
 
 @app.get("/backup/readiness")
 def get_backup_readiness(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:

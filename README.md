@@ -100,6 +100,8 @@ python -m pytest
 - [Recent Activity / Audit Trail Runbook](docs/activity-timeline-runbook.md)
 - [Backup Readiness Checklist Center](docs/backup-readiness-center.md)
 - [Backup Readiness Runbook](docs/backup-readiness-runbook.md)
+- [Clean Windows VM Validation Prep Center](docs/vm-validation-prep-center.md)
+- [Clean Windows VM Validation Prep Runbook](docs/vm-validation-prep-runbook.md)
 
 ## Roadmap Note
 

@@ -645,6 +645,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
         <div class="home-card"><a href="#dashboard-surface-health-center">View Dashboard Surface Health Center</a><span class="muted">Local surface wiring checks.</span></div>
@@ -819,6 +820,22 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
+    <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
+      <h2>Clean Windows VM Validation Prep</h2>
+      <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
+      <div id="vm-validation-prep-note" class="row">
+        <strong>Manual preparation only.</strong>
+        <div class="muted">Read-only prep metadata for clean Windows VM validation. No command execution, software setup automation, VM control, VM state detection, artifact creation, external calls, or readiness attestation is available.</div>
+      </div>
+      <div id="vm-validation-prep-counts" class="grid"></div>
+      <div class="actions">
+        <button id="vm-validation-prep-refresh-button" type="button">Refresh VM validation prep</button>
+      </div>
+      <div id="vm-validation-prep-list" class="list muted">Loading safe prep checklist metadata...</div>
+      <p><a href="/vm-validation/prep">View VM validation prep API</a></p>
+      <p><a href="/vm-validation/prep/runbook">View VM validation prep runbook API</a></p>
+      <p><a href="/docs/vm-validation-prep-center.md">VM validation prep docs</a> · <a href="/docs/vm-validation-prep-runbook.md">VM validation prep runbook</a></p>
+    </section>
     <section id="backup-readiness-center" class="stack dashboard-section" data-section-title="Backup Readiness Checklist" data-section-keywords="backup readiness checklist manual restore protected files reports data">
       <h2>Backup Readiness Checklist</h2>
       <pre id="backup-readiness-status">Loading backup readiness checklist...</pre>
@@ -922,6 +939,7 @@ def dashboard_html() -> str:
       bindAgentManifestHealthControls();
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
+      await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
       await loadDashboardSurfaceHealth();
@@ -1064,6 +1082,39 @@ def dashboard_html() -> str:
           button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
       });
+    }
+    async function loadVmValidationPrep() {
+      const prep = await fetch('/vm-validation/prep').then((response) => response.json());
+      document.getElementById('vm-validation-prep-status').textContent = JSON.stringify(prep, null, 2);
+      renderVmValidationPrep(prep);
+      bindVmValidationPrepControls();
+    }
+    function renderVmValidationPrep(prep) {
+      const statusCounts = prep.countsByStatus || {};
+      const values = {
+        items: prep.checklistItemCount || 0,
+        manual: statusCounts.manual || 0,
+        warning: statusCounts.warning || 0,
+      };
+      document.getElementById('vm-validation-prep-counts').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const items = prep.items || [];
+      document.getElementById('vm-validation-prep-list').innerHTML = items.length
+        ? items.map((item) => `<div class="row">
+            <strong>${escapeHtml(item.title || item.itemId)}</strong>
+            <div><code>${escapeHtml(item.status)}</code> · ${escapeHtml(item.category || '')}</div>
+            <div class="muted">${escapeHtml(item.summary || 'Manual prep metadata only.')}</div>
+          </div>`).join('')
+        : 'No VM validation prep checklist items found.';
+    }
+    function bindVmValidationPrepControls() {
+      const refreshButton = document.getElementById('vm-validation-prep-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadVmValidationPrep();
+        refreshButton.disabled = false;
+      };
     }
     async function loadBackupReadiness() {
       const readiness = await fetch('/backup/readiness').then((response) => response.json());
