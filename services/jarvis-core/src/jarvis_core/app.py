@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from . import APP_NAME, VERSION
+from .activity_timeline import ActivityTimelineService
 from .agent_manifest_health import AgentManifestHealthService
 from .approvals import ApprovalQueue
 from .audit import JsonlLogger
@@ -65,6 +66,7 @@ redacted_diagnostics = RedactedDiagnosticsBundleService(
 evidence_reports = EvidenceReportCenterService(DATA_ROOT / "reports")
 agent_manifest_health = AgentManifestHealthService(WORKSPACE_ROOT / "connectors")
 docs_center = DocsCenterService(WORKSPACE_ROOT)
+activity_timeline = ActivityTimelineService(conn)
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -174,6 +176,22 @@ def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[s
 
 
 
+
+@app.get("/activity/timeline")
+def get_activity_timeline(limit: int = 25, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return activity_timeline.timeline(limit)
+
+
+@app.get("/activity/timeline/{item_id}")
+def get_activity_timeline_detail(item_id: str, _: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    try:
+        return activity_timeline.item_detail(item_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/dashboard/surface-health")
 def get_dashboard_surface_health(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     service = DashboardSurfaceHealthService(app.routes, dashboard.summary(), dashboard_html())
@@ -189,6 +207,7 @@ def get_dashboard_surface_health_detail(surface_id: str, _: None = Depends(requi
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 
 @app.get("/api/projects/profiles")
 def dashboard_project_profiles(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:

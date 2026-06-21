@@ -1,0 +1,41 @@
+{
+  "id": "activity_timeline_agent",
+  "name": "Recent Activity / Audit Trail Agent",
+  "implemented": true,
+  "defaultEnabled": true,
+  "mode": "local_only",
+  "purpose": "Summarize recent safe local Jarvis activity metadata for dashboard review.",
+  "capabilities": [
+    "summarize_recent_task_metadata",
+    "summarize_recent_event_metadata_without_payloads",
+    "summarize_recent_approval_metadata",
+    "summarize_recent_security_notes",
+    "return_redacted_activity_timeline"
+  ],
+  "reads": [
+    "SQLite task metadata",
+    "SQLite event metadata",
+    "SQLite approval metadata",
+    "SQLite security note metadata",
+    "SQLite action receipt metadata"
+  ],
+  "writes": [],
+  "uploads": false,
+  "externalServices": false,
+  "commandExecution": false,
+  "gitWrites": false,
+  "fileDeletion": false,
+  "arbitraryFilesystemBrowsing": false,
+  "protectedSecretReads": false,
+  "rawLogReads": false,
+  "rawCommandOutput": false,
+  "activityMutation": false,
+  "approvalMutation": false,
+  "reportTransfer": false,
+  "certification": false,
+  "safetyNotes": [
+    "Reads only structured local SQLite metadata through the Jarvis database connection.",
+    "Does not read raw logs, expose event payloads, or include raw command output.",
+    "Does not mutate tasks, approvals, events, reports, docs, manifests, settings, or connector state."
+  ]
+}

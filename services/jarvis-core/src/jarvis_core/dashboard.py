@@ -645,6 +645,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
         <div class="home-card"><a href="#dashboard-surface-health-center">View Dashboard Surface Health Center</a><span class="muted">Local surface wiring checks.</span></div>
         <div class="home-card"><a href="#settings-status">View Settings / Status</a><span class="muted">Read-only configuration state.</span></div>
         <div class="home-card"><a href="#lan-protection">View LAN Protection</a><span class="muted">Dashboard access boundary.</span></div>
@@ -817,6 +818,21 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
+    <section id="activity-timeline-center" class="stack dashboard-section" data-section-title="Recent Activity Audit Trail" data-section-keywords="recent activity audit trail tasks events approvals security reports metadata">
+      <h2>Recent Activity / Audit Trail</h2>
+      <pre id="activity-timeline-status">Loading recent activity timeline...</pre>
+      <div id="activity-timeline-note" class="row">
+        <strong>Safe local metadata only.</strong>
+        <div class="muted">Read-only recent task, event, approval, security note, and action receipt metadata. No raw logs, command output, protected file contents, approval decisions, retries, report transfer, or readiness attestation is available.</div>
+      </div>
+      <div id="activity-timeline-counts" class="grid"></div>
+      <div class="actions">
+        <button id="activity-timeline-refresh-button" type="button">Refresh activity timeline</button>
+      </div>
+      <div id="activity-timeline-list" class="list muted">Loading safe activity metadata...</div>
+      <p><a href="/activity/timeline">View activity timeline API</a></p>
+      <p><a href="/activity/timeline/{item_id}">View activity timeline detail endpoint pattern</a></p>
+    </section>
     <section id="dashboard-surface-health-center" class="stack dashboard-section" data-section-title="Dashboard Surface Health Center" data-section-keywords="dashboard surface health sections endpoints docs safety guards">
       <h2>Dashboard Surface Health Center</h2>
       <pre id="dashboard-surface-health-status">Loading dashboard surface health...</pre>
@@ -889,6 +905,7 @@ def dashboard_html() -> str:
       bindAgentManifestHealthControls();
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
+      await loadActivityTimeline();
       await loadDashboardSurfaceHealth();
       await loadValidationWorkflowSummary(false);
       renderProjectProfiles(profiles);
@@ -1029,6 +1046,39 @@ def dashboard_html() -> str:
           button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
       });
+    }
+    async function loadActivityTimeline() {
+      const timeline = await fetch('/activity/timeline').then((response) => response.json());
+      document.getElementById('activity-timeline-status').textContent = JSON.stringify(timeline, null, 2);
+      renderActivityTimeline(timeline);
+      bindActivityTimelineControls();
+    }
+    function renderActivityTimeline(timeline) {
+      const values = {
+        recent: timeline.totalRecentItems || 0,
+        types: Object.keys(timeline.countsByType || {}).length,
+        statuses: Object.keys(timeline.countsByStatus || {}).length,
+      };
+      document.getElementById('activity-timeline-counts').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const items = timeline.items || [];
+      document.getElementById('activity-timeline-list').innerHTML = items.length
+        ? items.map((item) => `<div class="row">
+            <strong>${escapeHtml(item.title || item.itemId)}</strong>
+            <div><code>${escapeHtml(item.itemType)}</code> · status: <code>${escapeHtml(item.status)}</code> · ${escapeHtml(item.createdAt || '')}</div>
+            <div class="muted">${escapeHtml(item.summary || 'Safe local activity metadata recorded.')}</div>
+            <div><a href="/activity/timeline/${encodeURIComponent(item.itemId)}">Safe metadata</a></div>
+          </div>`).join('')
+        : 'No recent activity metadata found.';
+    }
+    function bindActivityTimelineControls() {
+      const refreshButton = document.getElementById('activity-timeline-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadActivityTimeline();
+        refreshButton.disabled = false;
+      };
     }
     async function loadDashboardSurfaceHealth() {
       const health = await fetch('/dashboard/surface-health').then((response) => response.json());

@@ -96,6 +96,8 @@ python -m pytest
 - [Dashboard Home Navigation](docs/dashboard-home-navigation.md)
 - [Dashboard Section Search](docs/dashboard-section-search.md)
 - [Dashboard Accessibility And Keyboard Navigation](docs/dashboard-accessibility-keyboard.md)
+- [Recent Activity / Audit Trail Center](docs/activity-timeline.md)
+- [Recent Activity / Audit Trail Runbook](docs/activity-timeline-runbook.md)
 
 ## Roadmap Note
 
