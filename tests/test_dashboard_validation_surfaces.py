@@ -41,8 +41,9 @@ def test_list_runbooks_endpoint_works(tmp_path, monkeypatch):
 
     runbooks = app_module.list_validation_runbooks()
 
-    assert len(runbooks) == 1
-    assert runbooks[0]["runbookId"] == "clean_windows_vm_validation"
+    runbook_ids = {runbook["runbookId"] for runbook in runbooks}
+    assert "clean_windows_vm_validation" in runbook_ids
+    assert len(runbooks) >= 8
 
 
 def test_create_list_get_run_endpoints_work(tmp_path, monkeypatch):
@@ -133,7 +134,8 @@ def test_dashboard_summary_includes_validation_section(tmp_path, monkeypatch):
     assert summary["capabilities"]["validationAgent"] == "local_evidence_tracking"
     assert summary["counts"]["validationRuns"] == 1
     assert validation["agentId"] == "validation_agent"
-    assert validation["availableRunbooksCount"] == 1
+    assert validation["availableRunbooksCount"] == len(app_module.list_validation_runbooks())
+    assert validation["availableRunbooksCount"] >= 8
     assert validation["lastRunStatus"] == "in_progress"
     assert validation["commandExecution"] is False
     assert validation["virtualBoxAutomation"] is False

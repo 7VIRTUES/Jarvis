@@ -91,6 +91,7 @@ python -m pytest
 - [Docs/Runbook Center](docs/docs-runbook-center.md)
 - [Docs/Runbook Center Runbook](docs/docs-runbook-center-runbook.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
+- [Clean Windows VM Validation Runbook Pack](docs/vm-validation-runbook-pack.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
 - [Dashboard Project Profile and Security Review Surfaces](docs/dashboard-profile-security-surfaces.md)
 - [Dashboard Home Navigation](docs/dashboard-home-navigation.md)

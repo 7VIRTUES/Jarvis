@@ -2,6 +2,8 @@
 
 This runbook describes manual clean Windows VM validation for Jarvis PC Local. The Validation Agent can record evidence for these steps, but it does not run commands, control VirtualBox, install dependencies, package installers, or automate browser/VM behavior.
 
+See also: [Clean Windows VM Validation Runbook Pack](vm-validation-runbook-pack.md) for focused manual smoke templates that use the same Validation Agent workflow.
+
 ## Manual Steps
 
 1. Confirm VM environment.

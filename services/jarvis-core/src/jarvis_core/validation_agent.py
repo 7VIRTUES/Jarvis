@@ -166,7 +166,7 @@ def clean_windows_vm_runbook() -> ValidationRunbook:
         safety_notes=[
             "This runbook records manual validation evidence only.",
             "Do not paste .env contents, private keys, token values, or full sensitive log dumps.",
-            "The Validation Agent does not run commands, control VirtualBox, install dependencies, create installers, push, merge, or delete files.",
+            "The Validation Agent does not run commands, use VM-control tooling, install dependencies, produce packaging artifactss, push, merge, or delete files.",
         ],
         non_goals=[
             "VirtualBox automation",
@@ -174,17 +174,63 @@ def clean_windows_vm_runbook() -> ValidationRunbook:
             "Production Tauri work",
             "Pairing wizard or QR/mobile pairing",
             "Paid AI APIs",
-            "External services",
+            "networked services",
             "GitHub write actions",
         ],
     )
 
 
+
+def clean_windows_vm_runbook_pack() -> list[ValidationRunbook]:
+    return [
+        _manual_vm_runbook("clean_vm_core_service_smoke", "Clean VM Core Service Smoke", "Manual smoke evidence for the Jarvis core service in a clean Windows VM.", "Clean Windows VM with Jarvis repo cloned manually", [("record_environment", "Record environment", "Capture Windows edition, Python availability, repo branch, and virtual environment status from manual observation.", "Evidence fields: windows_version, python_status, repo_branch, venv_status. Pass: required context is recorded. Fail: required context is missing. Warning: context is partial or ambiguous.", "environment_fields", "environment"), ("record_service_health", "Record service health", "Start the service through the approved manual workflow and record whether the local health response is safe.", "Evidence fields: startup_status, health_status, blocker_summary. Pass: local health status is safe. Fail: service cannot start. Warning: service starts with documented caveats.", "service_smoke_fields", "service"), ("record_no_completion_claim", "Record scope boundary", "Confirm the evidence is a smoke check only and not full validation completion.", "Evidence fields: scope_note, remaining_validation. Pass: boundary is recorded. Fail: evidence claims full completion. Warning: boundary note needs clarification.", "scope_fields", "safety")]),
+        _manual_vm_runbook("clean_vm_dashboard_loopback_smoke", "Clean VM Dashboard Loopback Smoke", "Manual evidence for dashboard loopback access in a clean Windows VM.", "Clean Windows VM with Jarvis dashboard started manually", [("record_loopback_page", "Record loopback page access", "Open the dashboard on loopback through a browser and record page availability.", "Evidence fields: loopback_url, page_status, visible_sections. Pass: dashboard loads on loopback. Fail: dashboard is unavailable. Warning: dashboard loads with missing sections.", "loopback_fields", "dashboard"), ("record_safe_summary", "Record safe summary visibility", "Review that dashboard summary content is safe status metadata only.", "Evidence fields: summary_visible, unsafe_content_seen, notes. Pass: only safe metadata is visible. Fail: unsafe content is exposed. Warning: reviewer is unsure about one field.", "summary_fields", "dashboard")]),
+        _manual_vm_runbook("clean_vm_lan_guard_smoke", "Clean VM LAN Guard Smoke", "Manual evidence that LAN dashboard access remains guarded in a clean Windows VM.", "Clean Windows VM on a local network test context", [("record_loopback_baseline", "Record loopback baseline", "Confirm loopback dashboard access behavior before checking LAN behavior.", "Evidence fields: loopback_status, local_address, notes. Pass: loopback behavior is understood. Fail: baseline cannot be established. Warning: baseline has caveats.", "loopback_baseline_fields", "LAN"), ("record_lan_without_token", "Record LAN denied without token", "Attempt the documented manual LAN access check without a token and record the denial result.", "Evidence fields: lan_address_used, denied_without_token, response_summary. Pass: LAN access is denied. Fail: LAN access is allowed without token. Warning: network condition prevents a clear result.", "lan_guard_fields", "LAN"), ("record_no_token_values", "Record token handling boundary", "Confirm evidence does not include token values or authorization headers.", "Evidence fields: token_values_included, redaction_note. Pass: no token values included. Fail: token values were pasted. Warning: evidence needs redaction review.", "token_boundary_fields", "security")]),
+        _manual_vm_runbook("clean_vm_codex_available_scenario", "Clean VM Codex Available Scenario", "Manual evidence for the scenario where Codex is available in the clean Windows VM.", "Clean Windows VM with Codex availability reviewed manually", [("record_codex_presence", "Record Codex availability", "Record whether Codex is available without exposing account, token, or secret details.", "Evidence fields: codex_available, version_or_channel_summary, account_details_excluded. Pass: availability is recorded safely. Fail: secret/account detail is exposed. Warning: availability is unclear.", "codex_presence_fields", "codex"), ("record_local_boundaries", "Record local workflow boundaries", "Confirm Codex use remains inside approved local Jarvis workflow boundaries.", "Evidence fields: local_only_confirmed, external_account_actions, notes. Pass: boundaries are preserved. Fail: external account automation is used. Warning: boundary needs review.", "codex_boundary_fields", "codex")]),
+        _manual_vm_runbook("clean_vm_codex_missing_scenario", "Clean VM Codex Missing Scenario", "Manual evidence for the scenario where Codex is not available in the clean Windows VM.", "Clean Windows VM with Codex absence reviewed manually", [("record_codex_missing", "Record Codex missing state", "Record that Codex is unavailable without attempting automated setup from Jarvis.", "Evidence fields: codex_available, blocker_summary, setup_attempted_by_jarvis. Pass: missing state is recorded safely. Fail: Jarvis attempted setup. Warning: availability is uncertain.", "codex_missing_fields", "codex"), ("record_blocker_handling", "Record blocker handling", "Confirm the blocker is captured for planning rather than treated as validation completion.", "Evidence fields: blocker_recorded, completion_claimed, next_review_needed. Pass: blocker is clear. Fail: completion is claimed. Warning: blocker needs detail.", "blocker_fields", "codex")]),
+        _manual_vm_runbook("clean_vm_future_connectors_disabled", "Clean VM Future Connectors Disabled", "Manual evidence that future connector placeholders remain disabled in a clean Windows VM.", "Clean Windows VM with Jarvis connector manifests reviewed manually", [("record_connector_manifest_summary", "Record connector manifest summary", "Review known connector manifest metadata and record implemented/default-enabled states.", "Evidence fields: manifests_reviewed, unexpected_enabled, unexpected_implemented. Pass: placeholders remain disabled. Fail: future placeholder is enabled or implemented. Warning: manifest shape needs review.", "connector_manifest_fields", "connectors"), ("record_no_connector_execution", "Record connector execution boundary", "Confirm no connector account action or networked service action is performed.", "Evidence fields: connector_actions_performed, external_services_used, notes. Pass: no such actions occurred. Fail: connector action occurred. Warning: reviewer is unsure.", "connector_boundary_fields", "connectors")]),
+        _manual_vm_runbook("clean_vm_backup_restore_reminder", "Clean VM Backup Restore Reminder", "Manual reminder evidence for backup and restore readiness around clean Windows VM validation.", "Clean Windows VM validation planning context", [("record_backup_readiness_review", "Record backup readiness review", "Review backup readiness checklist status and record whether backup scope is understood.", "Evidence fields: backup_scope_understood, protected_files_excluded, notes. Pass: scope and exclusions are understood. Fail: protected files are included. Warning: scope needs review.", "backup_readiness_fields", "backup"), ("record_restore_test_plan", "Record restore-test plan", "Record the manual restore-test plan or blocker before relying on VM validation evidence.", "Evidence fields: restore_test_planned, restore_blocker, follow_up_owner. Pass: plan or blocker is recorded. Fail: no restore consideration exists. Warning: plan lacks owner/date.", "restore_plan_fields", "backup")]),
+    ]
+
+
+def _manual_vm_runbook(
+    runbook_id: str,
+    title: str,
+    purpose: str,
+    target_environment: str,
+    step_specs: list[tuple[str, str, str, str, str, str]],
+) -> ValidationRunbook:
+    return ValidationRunbook(
+        runbook_id=runbook_id,
+        title=title,
+        description=purpose,
+        target_environment=target_environment,
+        steps=[
+            _step(step_id, step_title, instructions, expected_result, evidence_type, True, category)
+            for step_id, step_title, instructions, expected_result, evidence_type, category in step_specs
+        ],
+        safety_notes=[
+            "Manual-only validation evidence template.",
+            "Do not paste secrets, token values, private keys, protected file contents, or raw sensitive logs.",
+            "The Validation Agent does not run commands, install software, control or infer VM environment automatically, create artifacts, transfer evidence, or certify readiness.",
+        ],
+        non_goals=[
+            "Command execution",
+            "Software setup automation",
+            "VM automation or VM state detection",
+            "Artifact creation",
+            "Release work",
+            "networked services",
+            "Upload or sharing behavior",
+            "Readiness certification",
+        ],
+    )
 class ValidationAgentService:
     def __init__(self, conn: sqlite3.Connection, reports_root: Path):
         self.conn = conn
         self.reports_root = reports_root
-        self._runbooks = {clean_windows_vm_runbook().runbook_id: clean_windows_vm_runbook()}
+        runbooks = [clean_windows_vm_runbook(), *clean_windows_vm_runbook_pack()]
+        self._runbooks = {runbook.runbook_id: runbook for runbook in runbooks}
 
     def list_runbooks(self) -> list[dict[str, Any]]:
         return [runbook.to_dict() for runbook in self._runbooks.values()]
@@ -374,7 +420,7 @@ class ValidationAgentService:
                 "",
                 "## Safety Boundaries",
                 "\n".join(f"- {note}" for note in runbook.safety_notes),
-                "- No command execution, VirtualBox automation, installer creation, external service calls, Git writes, or file deletion is performed by this agent.",
+                "- No command execution, VirtualBox automation, installer creation, networked service calls, Git writes, or file deletion is performed by this agent.",
                 "",
                 "## Next Actions",
                 self._next_actions(run.status, failed_or_blocked),
