@@ -172,7 +172,7 @@ create table if not exists validation_step_results (
 
 def init_db(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.executescript(SCHEMA)
     _ensure_column(conn, "codex_plans", "prompt_content", "text not null default ''")
     _ensure_column(conn, "codex_executions", "post_review", "text not null default '{}'")
