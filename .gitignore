@@ -7,6 +7,13 @@ node_modules/
 dist/
 coverage/
 
+# Local test artifacts
+.pytest_cache/
+.pytest-tmp-*/
+.pytest-tmp-dashboard/
+**/__pycache__/
+*.pyc
+
 # Public-safety local files and generated runtime output
 .env
 .env.*
