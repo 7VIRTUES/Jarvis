@@ -12,6 +12,7 @@ from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .file_data_agent import file_data_dashboard_summary
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
+from .local_planning_agent import local_planning_dashboard_summary
 from .local_research_agent import local_research_dashboard_summary
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
@@ -46,6 +47,7 @@ class DashboardService:
         docs_center = self.docs_center_summary()
         local_research = self.local_research_agent_summary()
         file_data = self.file_data_agent_summary()
+        local_planning = self.local_planning_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -68,6 +70,7 @@ class DashboardService:
                 "docsCenter": "local_docs_metadata_only",
                 "localResearchAgent": "implemented_local_only",
                 "fileDataAgent": "implemented_local_only",
+                "localPlanningAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -109,6 +112,7 @@ class DashboardService:
             "docsCenter": docs_center,
             "localResearchAgent": local_research,
             "fileDataAgent": file_data,
+            "localPlanningAgent": local_planning,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -204,6 +208,7 @@ class DashboardService:
             "docsCenter": self.docs_center_summary(),
             "localResearchAgent": self.local_research_agent_summary(),
             "fileDataAgent": self.file_data_agent_summary(),
+            "localPlanningAgent": self.local_planning_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -226,6 +231,7 @@ class DashboardService:
                 "Docs/Runbook Center reads README.md and direct docs Markdown files only; it does not mutate docs, transfer docs, or claim readiness.",
                 "Local Research Agent uses user-provided notes only; it does not browse, verify citations, call connectors, access accounts, or mutate files.",
                 "File/Data Agent summarizes registered-project metadata only; it skips protected/runtime paths and does not scan arbitrary paths, upload, execute commands, or mutate files.",
+                "Local Planning Agent uses user-provided planning inputs only; it does not create tasks, reminders, calendar/email items, files, database records, or external calls.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -263,6 +269,9 @@ class DashboardService:
 
     def file_data_agent_summary(self) -> dict[str, Any]:
         return file_data_dashboard_summary()
+
+    def local_planning_agent_summary(self) -> dict[str, Any]:
+        return local_planning_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -665,6 +674,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
         <div class="home-card"><a href="#local-research-agent">View Local Research Agent</a><span class="muted">User-provided notes only.</span></div>
         <div class="home-card"><a href="#file-data-agent">View File/Data Agent</a><span class="muted">Registered project metadata.</span></div>
+        <div class="home-card"><a href="#local-planning-agent">View Local Planning Agent</a><span class="muted">Response-only planning.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -862,6 +872,17 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/files/local-summary</code></p>
       <p><a href="/docs/file-data-agent.md">File/Data Agent docs</a></p>
     </section>
+    <section id="local-planning-agent" class="stack dashboard-section" data-section-title="Local Planning Agent" data-section-keywords="local planning agent response only project plan study checklist weekly">
+      <h2>Local Planning Agent</h2>
+      <pre id="local-planning-agent-status">Loading local planning agent status...</pre>
+      <div id="local-planning-agent-note" class="row">
+        <strong>Response-only planning.</strong>
+        <div class="muted">Read-only status for a local planning endpoint. It does not create tasks, reminders, calendar or email items, files, database records, connector actions, uploads, shell commands, or external service calls.</div>
+      </div>
+      <div id="local-planning-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/planning/local-plan</code></p>
+      <p><a href="/docs/local-planning-agent.md">Local Planning Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -973,6 +994,7 @@ def dashboard_html() -> str:
       document.getElementById('docs-center-status').textContent = JSON.stringify(summary.docsCenter, null, 2);
       document.getElementById('local-research-agent-status').textContent = JSON.stringify(summary.localResearchAgent, null, 2);
       document.getElementById('file-data-agent-status').textContent = JSON.stringify(summary.fileDataAgent, null, 2);
+      document.getElementById('local-planning-agent-status').textContent = JSON.stringify(summary.localPlanningAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -985,6 +1007,7 @@ def dashboard_html() -> str:
       bindDocsCenterControls();
       renderLocalResearchAgent(summary.localResearchAgent);
       renderFileDataAgent(summary.fileDataAgent);
+      renderLocalPlanningAgent(summary.localPlanningAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1442,6 +1465,19 @@ def dashboard_html() -> str:
         mutation: agent.fileMutation ? 'enabled' : 'disabled',
       };
       document.getElementById('file-data-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function renderLocalPlanningAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        responseOnly: agent.responseOnly ? 'true' : 'false',
+        tasks: agent.taskPersistence ? 'enabled' : 'disabled',
+        reminders: agent.reminders ? 'enabled' : 'disabled',
+      };
+      document.getElementById('local-planning-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
     }

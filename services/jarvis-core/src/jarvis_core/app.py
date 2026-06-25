@@ -24,6 +24,7 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
+from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .project_profiles import ProjectProfileService
@@ -75,6 +76,7 @@ backup_readiness = BackupReadinessService()
 vm_validation_prep = VmValidationPrepService()
 local_research_agent = LocalResearchAgentService()
 file_data_agent = FileDataAgentService(projects, WORKSPACE_ROOT)
+local_planning_agent = LocalPlanningAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -172,6 +174,18 @@ class FileDataSummaryInput(BaseModel):
     projectName: str
 
 
+class LocalPlanningInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal: str
+    contextNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    timeframe: str | None = None
+    desiredOutputType: str = "project_plan"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -224,6 +238,24 @@ def create_file_data_summary(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (PermissionError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/agents/planning/local-plan")
+def create_local_plan(
+    payload: LocalPlanningInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_planning_agent.create_plan(
+        LocalPlanningRequest(
+            goal=payload.goal,
+            context_notes=payload.contextNotes,
+            constraints=payload.constraints,
+            resources=payload.resources,
+            blockers=payload.blockers,
+            timeframe=payload.timeframe,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
 
 
 
