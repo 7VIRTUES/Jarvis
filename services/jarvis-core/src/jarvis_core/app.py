@@ -26,6 +26,7 @@ from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
 from .local_decision_agent import LocalDecisionAgentService, LocalDecisionRequest
 from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
+from .local_extraction_agent import LocalExtractionAgentService, LocalExtractionRequest
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -87,6 +88,7 @@ local_review_agent = LocalReviewAgentService()
 local_decision_agent = LocalDecisionAgentService()
 local_troubleshooting_agent = LocalTroubleshootingAgentService()
 local_summarization_agent = LocalSummarizationAgentService()
+local_extraction_agent = LocalExtractionAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -259,6 +261,18 @@ class LocalSummarizationInput(BaseModel):
     mustAvoid: list[str] = Field(default_factory=list)
 
 
+class LocalExtractionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    content: str
+    extractionType: str = "general"
+    focusAreas: list[str] = Field(default_factory=list)
+    mustCapture: list[str] = Field(default_factory=list)
+    mustIgnore: list[str] = Field(default_factory=list)
+    detailLevel: str = "medium"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -424,6 +438,24 @@ def create_local_summarization(
             focus_areas=payload.focusAreas,
             must_preserve=payload.mustPreserve,
             must_avoid=payload.mustAvoid,
+        )
+    )
+
+
+@app.post("/agents/extraction/local-extract")
+def create_local_extraction(
+    payload: LocalExtractionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_extraction_agent.extract_items(
+        LocalExtractionRequest(
+            title=payload.title,
+            content=payload.content,
+            extraction_type=payload.extractionType,
+            focus_areas=payload.focusAreas,
+            must_capture=payload.mustCapture,
+            must_ignore=payload.mustIgnore,
+            detail_level=payload.detailLevel,
         )
     )
 
