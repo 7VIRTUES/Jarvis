@@ -1,0 +1,1 @@
+{"id": "gmail", "provider": "Gmail", "implemented": false, "defaultEnabled": false, "readinessLevel": "placeholder_only", "costMode": "disabled", "authType": "not_implemented", "privacyClass": "external_account", "dataAccess": "none_in_v0.1C", "approvalRequired": true, "tokenStorage": "not_implemented", "dataRetention": "none", "notes": "Placeholder only."}
