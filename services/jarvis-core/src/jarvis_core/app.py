@@ -30,6 +30,7 @@ from .local_planning_agent import LocalPlanningAgentService, LocalPlanningReques
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
+from .local_troubleshooting_agent import LocalTroubleshootingAgentService, LocalTroubleshootingRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -83,6 +84,7 @@ local_planning_agent = LocalPlanningAgentService()
 local_drafting_agent = LocalDraftingAgentService()
 local_review_agent = LocalReviewAgentService()
 local_decision_agent = LocalDecisionAgentService()
+local_troubleshooting_agent = LocalTroubleshootingAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -229,6 +231,19 @@ class LocalDecisionInput(BaseModel):
     decisionStyle: str = "balanced"
 
 
+class LocalTroubleshootingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    problem: str
+    symptoms: list[str] = Field(default_factory=list)
+    errorMessages: list[str] = Field(default_factory=list)
+    environmentNotes: str = ""
+    attemptedFixes: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    urgency: str = "normal"
+    troubleshootingType: str = "general"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -356,6 +371,25 @@ def create_local_decision(
             priorities=payload.priorities,
             context_notes=payload.contextNotes,
             decision_style=payload.decisionStyle,
+        )
+    )
+
+
+@app.post("/agents/troubleshooting/local-triage")
+def create_local_troubleshooting_triage(
+    payload: LocalTroubleshootingInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_troubleshooting_agent.create_triage(
+        LocalTroubleshootingRequest(
+            problem=payload.problem,
+            symptoms=payload.symptoms,
+            error_messages=payload.errorMessages,
+            environment_notes=payload.environmentNotes,
+            attempted_fixes=payload.attemptedFixes,
+            constraints=payload.constraints,
+            urgency=payload.urgency,
+            troubleshooting_type=payload.troubleshootingType,
         )
     )
 

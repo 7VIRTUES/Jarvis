@@ -17,6 +17,7 @@ from .local_drafting_agent import local_drafting_dashboard_summary
 from .local_planning_agent import local_planning_dashboard_summary
 from .local_research_agent import local_research_dashboard_summary
 from .local_review_agent import local_review_dashboard_summary
+from .local_troubleshooting_agent import local_troubleshooting_dashboard_summary
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -54,6 +55,7 @@ class DashboardService:
         local_drafting = self.local_drafting_agent_summary()
         local_review = self.local_review_agent_summary()
         local_decision = self.local_decision_agent_summary()
+        local_troubleshooting = self.local_troubleshooting_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -80,6 +82,7 @@ class DashboardService:
                 "localDraftingAgent": "implemented_local_only",
                 "localReviewAgent": "implemented_local_only",
                 "localDecisionAgent": "implemented_local_only",
+                "localTroubleshootingAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -125,6 +128,7 @@ class DashboardService:
             "localDraftingAgent": local_drafting,
             "localReviewAgent": local_review,
             "localDecisionAgent": local_decision,
+            "localTroubleshootingAgent": local_troubleshooting,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -224,6 +228,7 @@ class DashboardService:
             "localDraftingAgent": self.local_drafting_agent_summary(),
             "localReviewAgent": self.local_review_agent_summary(),
             "localDecisionAgent": self.local_decision_agent_summary(),
+            "localTroubleshootingAgent": self.local_troubleshooting_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -250,6 +255,7 @@ class DashboardService:
                 "Local Drafting Agent uses user-provided drafting inputs only; it does not persist draft text, send email, post publicly, access accounts, read files, write files, or call connectors.",
                 "Local Review Agent uses user-provided review content only; it does not verify facts, inspect repos, execute tests, persist reviews, read files, write files, or call connectors.",
                 "Local Decision Agent uses user-provided decision inputs only; it does not verify facts, give professional advice, inspect repos, persist decisions, read files, write files, purchase, send, post, or call connectors.",
+                "Local Troubleshooting Agent uses user-provided troubleshooting inputs only; it does not execute commands, read files or logs, inspect repos, validate fixes, persist tickets, download, upload, mutate settings, or call connectors.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -299,6 +305,9 @@ class DashboardService:
 
     def local_decision_agent_summary(self) -> dict[str, Any]:
         return local_decision_dashboard_summary()
+
+    def local_troubleshooting_agent_summary(self) -> dict[str, Any]:
+        return local_troubleshooting_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -705,6 +714,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#local-drafting-agent">View Local Drafting Agent</a><span class="muted">Response-only drafting.</span></div>
         <div class="home-card"><a href="#local-review-agent">View Local Review Agent</a><span class="muted">Response-only review.</span></div>
         <div class="home-card"><a href="#local-decision-agent">View Local Decision Agent</a><span class="muted">Response-only decision support.</span></div>
+        <div class="home-card"><a href="#local-troubleshooting-agent">View Local Troubleshooting Agent</a><span class="muted">Response-only triage.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -946,6 +956,17 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/decision/local-decision</code></p>
       <p><a href="/docs/local-decision-agent.md">Local Decision Agent docs</a></p>
     </section>
+    <section id="local-troubleshooting-agent" class="stack dashboard-section" data-section-title="Local Troubleshooting Agent" data-section-keywords="local troubleshooting agent response only triage pc app build workflow network">
+      <h2>Local Troubleshooting Agent</h2>
+      <pre id="local-troubleshooting-agent-status">Loading local troubleshooting agent status...</pre>
+      <div id="local-troubleshooting-agent-note" class="row">
+        <strong>Response-only triage.</strong>
+        <div class="muted">Read-only status for a local troubleshooting endpoint. It does not execute commands, read files or logs, inspect repos, validate fixes, persist tickets, download, upload, mutate settings, access accounts, call connectors, send, post, purchase, or perform destructive repair.</div>
+      </div>
+      <div id="local-troubleshooting-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/troubleshooting/local-triage</code></p>
+      <p><a href="/docs/local-troubleshooting-agent.md">Local Troubleshooting Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -1061,6 +1082,7 @@ def dashboard_html() -> str:
       document.getElementById('local-drafting-agent-status').textContent = JSON.stringify(summary.localDraftingAgent, null, 2);
       document.getElementById('local-review-agent-status').textContent = JSON.stringify(summary.localReviewAgent, null, 2);
       document.getElementById('local-decision-agent-status').textContent = JSON.stringify(summary.localDecisionAgent, null, 2);
+      document.getElementById('local-troubleshooting-agent-status').textContent = JSON.stringify(summary.localTroubleshootingAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -1077,6 +1099,7 @@ def dashboard_html() -> str:
       renderLocalDraftingAgent(summary.localDraftingAgent);
       renderLocalReviewAgent(summary.localReviewAgent);
       renderLocalDecisionAgent(summary.localDecisionAgent);
+      renderLocalTroubleshootingAgent(summary.localTroubleshootingAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1586,6 +1609,19 @@ def dashboard_html() -> str:
         verification: agent.externalVerification ? 'enabled' : 'disabled',
       };
       document.getElementById('local-decision-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function renderLocalTroubleshootingAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        responseOnly: agent.responseOnly ? 'true' : 'false',
+        persistence: agent.ticketPersistence ? 'enabled' : 'disabled',
+        commandExecution: agent.shellExecution ? 'enabled' : 'disabled',
+      };
+      document.getElementById('local-troubleshooting-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
     }
