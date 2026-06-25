@@ -24,6 +24,7 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
+from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -77,6 +78,7 @@ vm_validation_prep = VmValidationPrepService()
 local_research_agent = LocalResearchAgentService()
 file_data_agent = FileDataAgentService(projects, WORKSPACE_ROOT)
 local_planning_agent = LocalPlanningAgentService()
+local_drafting_agent = LocalDraftingAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -186,6 +188,19 @@ class LocalPlanningInput(BaseModel):
     desiredOutputType: str = "project_plan"
 
 
+class LocalDraftingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    purpose: str
+    audience: str = ""
+    notes: str
+    tone: str = "clear"
+    format: str = "message"
+    constraints: list[str] = Field(default_factory=list)
+    mustInclude: list[str] = Field(default_factory=list)
+    mustAvoid: list[str] = Field(default_factory=list)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -254,6 +269,25 @@ def create_local_plan(
             blockers=payload.blockers,
             timeframe=payload.timeframe,
             desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/drafting/local-draft")
+def create_local_draft(
+    payload: LocalDraftingInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_drafting_agent.create_draft(
+        LocalDraftingRequest(
+            purpose=payload.purpose,
+            audience=payload.audience,
+            notes=payload.notes,
+            tone=payload.tone,
+            draft_format=payload.format,
+            constraints=payload.constraints,
+            must_include=payload.mustInclude,
+            must_avoid=payload.mustAvoid,
         )
     )
 
