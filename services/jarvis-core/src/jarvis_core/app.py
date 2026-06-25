@@ -30,6 +30,7 @@ from .local_planning_agent import LocalPlanningAgentService, LocalPlanningReques
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
+from .local_summarization_agent import LocalSummarizationAgentService, LocalSummarizationRequest
 from .local_troubleshooting_agent import LocalTroubleshootingAgentService, LocalTroubleshootingRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
@@ -85,6 +86,7 @@ local_drafting_agent = LocalDraftingAgentService()
 local_review_agent = LocalReviewAgentService()
 local_decision_agent = LocalDecisionAgentService()
 local_troubleshooting_agent = LocalTroubleshootingAgentService()
+local_summarization_agent = LocalSummarizationAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -244,6 +246,19 @@ class LocalTroubleshootingInput(BaseModel):
     troubleshootingType: str = "general"
 
 
+class LocalSummarizationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    content: str
+    summaryType: str = "general"
+    audience: str = ""
+    detailLevel: str = "medium"
+    focusAreas: list[str] = Field(default_factory=list)
+    mustPreserve: list[str] = Field(default_factory=list)
+    mustAvoid: list[str] = Field(default_factory=list)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -390,6 +405,25 @@ def create_local_troubleshooting_triage(
             constraints=payload.constraints,
             urgency=payload.urgency,
             troubleshooting_type=payload.troubleshootingType,
+        )
+    )
+
+
+@app.post("/agents/summarization/local-summary")
+def create_local_summarization(
+    payload: LocalSummarizationInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_summarization_agent.create_summary(
+        LocalSummarizationRequest(
+            title=payload.title,
+            content=payload.content,
+            summary_type=payload.summaryType,
+            audience=payload.audience,
+            detail_level=payload.detailLevel,
+            focus_areas=payload.focusAreas,
+            must_preserve=payload.mustPreserve,
+            must_avoid=payload.mustAvoid,
         )
     )
 
