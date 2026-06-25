@@ -15,6 +15,7 @@ from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_st
 from .local_drafting_agent import local_drafting_dashboard_summary
 from .local_planning_agent import local_planning_dashboard_summary
 from .local_research_agent import local_research_dashboard_summary
+from .local_review_agent import local_review_dashboard_summary
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -50,6 +51,7 @@ class DashboardService:
         file_data = self.file_data_agent_summary()
         local_planning = self.local_planning_agent_summary()
         local_drafting = self.local_drafting_agent_summary()
+        local_review = self.local_review_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -74,6 +76,7 @@ class DashboardService:
                 "fileDataAgent": "implemented_local_only",
                 "localPlanningAgent": "implemented_local_only",
                 "localDraftingAgent": "implemented_local_only",
+                "localReviewAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -117,6 +120,7 @@ class DashboardService:
             "fileDataAgent": file_data,
             "localPlanningAgent": local_planning,
             "localDraftingAgent": local_drafting,
+            "localReviewAgent": local_review,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -214,6 +218,7 @@ class DashboardService:
             "fileDataAgent": self.file_data_agent_summary(),
             "localPlanningAgent": self.local_planning_agent_summary(),
             "localDraftingAgent": self.local_drafting_agent_summary(),
+            "localReviewAgent": self.local_review_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -238,6 +243,7 @@ class DashboardService:
                 "File/Data Agent summarizes registered-project metadata only; it skips protected/runtime paths and does not scan arbitrary paths, upload, execute commands, or mutate files.",
                 "Local Planning Agent uses user-provided planning inputs only; it does not create tasks, reminders, calendar/email items, files, database records, or external calls.",
                 "Local Drafting Agent uses user-provided drafting inputs only; it does not persist draft text, send email, post publicly, access accounts, read files, write files, or call connectors.",
+                "Local Review Agent uses user-provided review content only; it does not verify facts, inspect repos, execute tests, persist reviews, read files, write files, or call connectors.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -281,6 +287,9 @@ class DashboardService:
 
     def local_drafting_agent_summary(self) -> dict[str, Any]:
         return local_drafting_dashboard_summary()
+
+    def local_review_agent_summary(self) -> dict[str, Any]:
+        return local_review_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -685,6 +694,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#file-data-agent">View File/Data Agent</a><span class="muted">Registered project metadata.</span></div>
         <div class="home-card"><a href="#local-planning-agent">View Local Planning Agent</a><span class="muted">Response-only planning.</span></div>
         <div class="home-card"><a href="#local-drafting-agent">View Local Drafting Agent</a><span class="muted">Response-only drafting.</span></div>
+        <div class="home-card"><a href="#local-review-agent">View Local Review Agent</a><span class="muted">Response-only review.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -904,6 +914,17 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/drafting/local-draft</code></p>
       <p><a href="/docs/local-drafting-agent.md">Local Drafting Agent docs</a></p>
     </section>
+    <section id="local-review-agent" class="stack dashboard-section" data-section-title="Local Review Agent" data-section-keywords="local review agent response only clarity risk completeness safety actionability">
+      <h2>Local Review Agent</h2>
+      <pre id="local-review-agent-status">Loading local review agent status...</pre>
+      <div id="local-review-agent-note" class="row">
+        <strong>Response-only review.</strong>
+        <div class="muted">Read-only status for a local review endpoint. It does not verify facts, inspect repos, execute tests, persist reviews, read files, write files, access accounts, call connectors, upload content, execute shell commands, or mutate state.</div>
+      </div>
+      <div id="local-review-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/review/local-review</code></p>
+      <p><a href="/docs/local-review-agent.md">Local Review Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -1017,6 +1038,7 @@ def dashboard_html() -> str:
       document.getElementById('file-data-agent-status').textContent = JSON.stringify(summary.fileDataAgent, null, 2);
       document.getElementById('local-planning-agent-status').textContent = JSON.stringify(summary.localPlanningAgent, null, 2);
       document.getElementById('local-drafting-agent-status').textContent = JSON.stringify(summary.localDraftingAgent, null, 2);
+      document.getElementById('local-review-agent-status').textContent = JSON.stringify(summary.localReviewAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -1031,6 +1053,7 @@ def dashboard_html() -> str:
       renderFileDataAgent(summary.fileDataAgent);
       renderLocalPlanningAgent(summary.localPlanningAgent);
       renderLocalDraftingAgent(summary.localDraftingAgent);
+      renderLocalReviewAgent(summary.localReviewAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1514,6 +1537,19 @@ def dashboard_html() -> str:
         persistence: agent.draftPersistence ? 'enabled' : 'disabled',
       };
       document.getElementById('local-drafting-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function renderLocalReviewAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        responseOnly: agent.responseOnly ? 'true' : 'false',
+        persistence: agent.reviewPersistence ? 'enabled' : 'disabled',
+        verification: agent.sourceValidation ? 'enabled' : 'disabled',
+      };
+      document.getElementById('local-review-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
     }

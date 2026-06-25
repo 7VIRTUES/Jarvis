@@ -28,6 +28,7 @@ from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingReques
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
+from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -79,6 +80,7 @@ local_research_agent = LocalResearchAgentService()
 file_data_agent = FileDataAgentService(projects, WORKSPACE_ROOT)
 local_planning_agent = LocalPlanningAgentService()
 local_drafting_agent = LocalDraftingAgentService()
+local_review_agent = LocalReviewAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -201,6 +203,18 @@ class LocalDraftingInput(BaseModel):
     mustAvoid: list[str] = Field(default_factory=list)
 
 
+class LocalReviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    content: str
+    reviewType: str = "general"
+    audience: str = ""
+    criteria: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    severity: str = "balanced"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -294,6 +308,24 @@ def create_local_draft(
 
 
 
+
+
+@app.post("/agents/review/local-review")
+def create_local_review(
+    payload: LocalReviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_review_agent.create_review(
+        LocalReviewRequest(
+            subject=payload.subject,
+            content=payload.content,
+            review_type=payload.reviewType,
+            audience=payload.audience,
+            criteria=payload.criteria,
+            constraints=payload.constraints,
+            severity=payload.severity,
+        )
+    )
 
 
 @app.get("/vm-validation/prep")
