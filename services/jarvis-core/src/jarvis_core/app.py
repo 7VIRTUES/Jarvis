@@ -24,6 +24,7 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .inspector import inspect_project, write_markdown_report
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
+from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -71,6 +72,7 @@ docs_center = DocsCenterService(WORKSPACE_ROOT)
 activity_timeline = ActivityTimelineService(conn)
 backup_readiness = BackupReadinessService()
 vm_validation_prep = VmValidationPrepService()
+local_research_agent = LocalResearchAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -154,6 +156,14 @@ class ValidationStepResultInput(BaseModel):
     evidence: str | None = None
 
 
+class LocalResearchBriefInput(BaseModel):
+    topic: str
+    userProvidedNotes: str
+    sourceTitles: list[str] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "brief"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -177,6 +187,22 @@ def first_run_setup_page(_: None = Depends(require_loopback_request)) -> HTMLRes
 @app.get("/api/dashboard/summary")
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
+
+
+@app.post("/agents/research/local-brief")
+def create_local_research_brief(
+    payload: LocalResearchBriefInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_research_agent.create_brief(
+        LocalResearchBriefRequest(
+            topic=payload.topic,
+            user_provided_notes=payload.userProvidedNotes,
+            source_titles=payload.sourceTitles,
+            questions=payload.questions,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
 
 
 

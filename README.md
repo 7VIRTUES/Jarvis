@@ -90,6 +90,7 @@ python -m pytest
 - [Agent Manifest Health Runbook](docs/agent-manifest-health-runbook.md)
 - [Docs/Runbook Center](docs/docs-runbook-center.md)
 - [Docs/Runbook Center Runbook](docs/docs-runbook-center-runbook.md)
+- [Local Research Agent](docs/local-research-agent.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Clean Windows VM Validation Runbook Pack](docs/vm-validation-runbook-pack.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)

@@ -11,6 +11,7 @@ from .config import load_json_config
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
+from .local_research_agent import local_research_dashboard_summary
 from .permissions import is_protected_path
 from .registries import validate_connector_manifest
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -42,6 +43,7 @@ class DashboardService:
         evidence_reports = self.evidence_report_center_summary()
         manifest_health = self.agent_manifest_health_summary()
         docs_center = self.docs_center_summary()
+        local_research = self.local_research_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -62,6 +64,7 @@ class DashboardService:
                 "evidenceReportCenter": "local_report_metadata_only",
                 "agentManifestHealth": "local_manifest_metadata_only",
                 "docsCenter": "local_docs_metadata_only",
+                "localResearchAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -101,6 +104,7 @@ class DashboardService:
             "evidenceReportCenter": evidence_reports,
             "agentManifestHealth": manifest_health,
             "docsCenter": docs_center,
+            "localResearchAgent": local_research,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -194,6 +198,7 @@ class DashboardService:
             "evidenceReportCenter": self.evidence_report_center_summary(),
             "agentManifestHealth": self.agent_manifest_health_summary(),
             "docsCenter": self.docs_center_summary(),
+            "localResearchAgent": self.local_research_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -214,6 +219,7 @@ class DashboardService:
                 "Evidence Report Center indexes bounded local report metadata only; it does not mutate reports, transfer reports off machine, or claim readiness.",
                 "Agent Manifest Health Center reads known local manifest directories only; it does not mutate manifests, change connector state, execute tools, or contact external services.",
                 "Docs/Runbook Center reads README.md and direct docs Markdown files only; it does not mutate docs, transfer docs, or claim readiness.",
+                "Local Research Agent uses user-provided notes only; it does not browse, verify citations, call connectors, access accounts, or mutate files.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -245,6 +251,9 @@ class DashboardService:
 
     def docs_center_summary(self) -> dict[str, Any]:
         return DocsCenterService(self.workspace_root).dashboard_summary()
+
+    def local_research_agent_summary(self) -> dict[str, Any]:
+        return local_research_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -645,6 +654,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#evidence-report-center">View Evidence Report Center</a><span class="muted">Local report metadata.</span></div>
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
+        <div class="home-card"><a href="#local-research-agent">View Local Research Agent</a><span class="muted">User-provided notes only.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -820,6 +830,17 @@ def dashboard_html() -> str:
       <div id="docs-center-list" class="list muted">Loading safe docs metadata...</div>
       <p><a href="/docs/index">View docs index API</a></p>
     </section>
+    <section id="local-research-agent" class="stack dashboard-section" data-section-title="Local Research Agent" data-section-keywords="local research agent notes brief outline comparison reading plan">
+      <h2>Local Research Agent</h2>
+      <pre id="local-research-agent-status">Loading local research agent status...</pre>
+      <div id="local-research-agent-note" class="row">
+        <strong>User-provided notes only.</strong>
+        <div class="muted">Read-only status for a local brief endpoint. No web browsing, source fetching, citation verification, account access, connector execution, paid API use, posting, sending, or file mutation is available.</div>
+      </div>
+      <div id="local-research-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/research/local-brief</code></p>
+      <p><a href="/docs/local-research-agent.md">Local Research Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -929,6 +950,7 @@ def dashboard_html() -> str:
       document.getElementById('evidence-report-center-status').textContent = JSON.stringify(summary.evidenceReportCenter, null, 2);
       document.getElementById('agent-manifest-health-status').textContent = JSON.stringify(summary.agentManifestHealth, null, 2);
       document.getElementById('docs-center-status').textContent = JSON.stringify(summary.docsCenter, null, 2);
+      document.getElementById('local-research-agent-status').textContent = JSON.stringify(summary.localResearchAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -939,6 +961,7 @@ def dashboard_html() -> str:
       bindAgentManifestHealthControls();
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
+      renderLocalResearchAgent(summary.localResearchAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1372,6 +1395,19 @@ def dashboard_html() -> str:
         await loadDashboard();
         refreshButton.disabled = false;
       };
+    }
+    function renderLocalResearchAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        webBrowsing: agent.webBrowsing ? 'enabled' : 'disabled',
+        connectors: agent.connectorExecution ? 'enabled' : 'disabled',
+        fileMutation: agent.fileMutation ? 'enabled' : 'disabled',
+      };
+      document.getElementById('local-research-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
     }
     async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();
