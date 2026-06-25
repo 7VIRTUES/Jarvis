@@ -24,6 +24,7 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
+from .local_decision_agent import LocalDecisionAgentService, LocalDecisionRequest
 from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
@@ -81,6 +82,7 @@ file_data_agent = FileDataAgentService(projects, WORKSPACE_ROOT)
 local_planning_agent = LocalPlanningAgentService()
 local_drafting_agent = LocalDraftingAgentService()
 local_review_agent = LocalReviewAgentService()
+local_decision_agent = LocalDecisionAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -215,6 +217,18 @@ class LocalReviewInput(BaseModel):
     severity: str = "balanced"
 
 
+class LocalDecisionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str
+    options: list[str]
+    criteria: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
+    contextNotes: str = ""
+    decisionStyle: str = "balanced"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -324,6 +338,24 @@ def create_local_review(
             criteria=payload.criteria,
             constraints=payload.constraints,
             severity=payload.severity,
+        )
+    )
+
+
+@app.post("/agents/decision/local-decision")
+def create_local_decision(
+    payload: LocalDecisionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_decision_agent.compare_options(
+        LocalDecisionRequest(
+            decision=payload.decision,
+            options=payload.options,
+            criteria=payload.criteria,
+            constraints=payload.constraints,
+            priorities=payload.priorities,
+            context_notes=payload.contextNotes,
+            decision_style=payload.decisionStyle,
         )
     )
 
