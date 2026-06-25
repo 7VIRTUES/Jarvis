@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import APP_NAME, VERSION
 from .activity_timeline import ActivityTimelineService
@@ -22,6 +22,7 @@ from .diagnostics import DiagnosticExporter
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
+from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -73,6 +74,7 @@ activity_timeline = ActivityTimelineService(conn)
 backup_readiness = BackupReadinessService()
 vm_validation_prep = VmValidationPrepService()
 local_research_agent = LocalResearchAgentService()
+file_data_agent = FileDataAgentService(projects, WORKSPACE_ROOT)
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -164,6 +166,12 @@ class LocalResearchBriefInput(BaseModel):
     desiredOutputType: str = "brief"
 
 
+class FileDataSummaryInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    projectName: str
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
@@ -203,6 +211,19 @@ def create_local_research_brief(
             desired_output_type=payload.desiredOutputType,
         )
     )
+
+
+@app.post("/agents/files/local-summary")
+def create_file_data_summary(
+    payload: FileDataSummaryInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return file_data_agent.local_summary(payload.projectName)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (PermissionError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 

@@ -10,6 +10,7 @@ from .agent_manifest_health import AgentManifestHealthService
 from .config import load_json_config
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
+from .file_data_agent import file_data_dashboard_summary
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
 from .local_research_agent import local_research_dashboard_summary
 from .permissions import is_protected_path
@@ -44,6 +45,7 @@ class DashboardService:
         manifest_health = self.agent_manifest_health_summary()
         docs_center = self.docs_center_summary()
         local_research = self.local_research_agent_summary()
+        file_data = self.file_data_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -65,6 +67,7 @@ class DashboardService:
                 "agentManifestHealth": "local_manifest_metadata_only",
                 "docsCenter": "local_docs_metadata_only",
                 "localResearchAgent": "implemented_local_only",
+                "fileDataAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -105,6 +108,7 @@ class DashboardService:
             "agentManifestHealth": manifest_health,
             "docsCenter": docs_center,
             "localResearchAgent": local_research,
+            "fileDataAgent": file_data,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -199,6 +203,7 @@ class DashboardService:
             "agentManifestHealth": self.agent_manifest_health_summary(),
             "docsCenter": self.docs_center_summary(),
             "localResearchAgent": self.local_research_agent_summary(),
+            "fileDataAgent": self.file_data_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -220,6 +225,7 @@ class DashboardService:
                 "Agent Manifest Health Center reads known local manifest directories only; it does not mutate manifests, change connector state, execute tools, or contact external services.",
                 "Docs/Runbook Center reads README.md and direct docs Markdown files only; it does not mutate docs, transfer docs, or claim readiness.",
                 "Local Research Agent uses user-provided notes only; it does not browse, verify citations, call connectors, access accounts, or mutate files.",
+                "File/Data Agent summarizes registered-project metadata only; it skips protected/runtime paths and does not scan arbitrary paths, upload, execute commands, or mutate files.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -254,6 +260,9 @@ class DashboardService:
 
     def local_research_agent_summary(self) -> dict[str, Any]:
         return local_research_dashboard_summary()
+
+    def file_data_agent_summary(self) -> dict[str, Any]:
+        return file_data_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -655,6 +664,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#agent-manifest-health-center">View Agent Manifest Health Center</a><span class="muted">Local manifest bounds.</span></div>
         <div class="home-card"><a href="#docs-runbook-center">View Docs/Runbook Center</a><span class="muted">Approved Markdown docs.</span></div>
         <div class="home-card"><a href="#local-research-agent">View Local Research Agent</a><span class="muted">User-provided notes only.</span></div>
+        <div class="home-card"><a href="#file-data-agent">View File/Data Agent</a><span class="muted">Registered project metadata.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -841,6 +851,17 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/research/local-brief</code></p>
       <p><a href="/docs/local-research-agent.md">Local Research Agent docs</a></p>
     </section>
+    <section id="file-data-agent" class="stack dashboard-section" data-section-title="File Data Agent" data-section-keywords="file data agent project metadata registered protected runtime docs">
+      <h2>File/Data Agent</h2>
+      <pre id="file-data-agent-status">Loading file/data agent status...</pre>
+      <div id="file-data-agent-note" class="row">
+        <strong>Registered-project metadata only.</strong>
+        <div class="muted">Read-only status for a local project metadata endpoint. Raw paths are not accepted. Protected files, runtime directories, dependency caches, external services, uploads, shell execution, and file mutation are unavailable.</div>
+      </div>
+      <div id="file-data-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/files/local-summary</code></p>
+      <p><a href="/docs/file-data-agent.md">File/Data Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -951,6 +972,7 @@ def dashboard_html() -> str:
       document.getElementById('agent-manifest-health-status').textContent = JSON.stringify(summary.agentManifestHealth, null, 2);
       document.getElementById('docs-center-status').textContent = JSON.stringify(summary.docsCenter, null, 2);
       document.getElementById('local-research-agent-status').textContent = JSON.stringify(summary.localResearchAgent, null, 2);
+      document.getElementById('file-data-agent-status').textContent = JSON.stringify(summary.fileDataAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -962,6 +984,7 @@ def dashboard_html() -> str:
       renderDocsCenter(summary.docsCenter);
       bindDocsCenterControls();
       renderLocalResearchAgent(summary.localResearchAgent);
+      renderFileDataAgent(summary.fileDataAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1406,6 +1429,19 @@ def dashboard_html() -> str:
         fileMutation: agent.fileMutation ? 'enabled' : 'disabled',
       };
       document.getElementById('local-research-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function renderFileDataAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        rawPaths: agent.rawPathInputAccepted ? 'accepted' : 'rejected',
+        protected: agent.protectedPatternsActive ? 'active' : 'inactive',
+        mutation: agent.fileMutation ? 'enabled' : 'disabled',
+      };
+      document.getElementById('file-data-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
     }
