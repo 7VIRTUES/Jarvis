@@ -105,6 +105,7 @@ python -m pytest
 - [Local Response Agents Index](docs/local-response-agents-index.md)
 - [Local Response Agents Manual Smoke Runbook](docs/local-response-agents-smoke-runbook.md)
 - [Local Response Agents Smoke Evidence Template](docs/local-response-agents-smoke-evidence-template.md)
+- [Local Response Agents Closeout Status](docs/local-response-agents-closeout-status.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Clean Windows VM Validation Runbook Pack](docs/vm-validation-runbook-pack.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)

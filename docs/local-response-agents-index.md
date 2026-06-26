@@ -8,6 +8,8 @@ For safe manual request-body examples, see the [Local Response Agents Manual Smo
 
 For manual evidence notes, see the [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md).
 
+For a compact docs-only closeout summary, see the [Local Response Agents Closeout Status](local-response-agents-closeout-status.md).
+
 ## Global Boundaries
 
 - No paid APIs.
