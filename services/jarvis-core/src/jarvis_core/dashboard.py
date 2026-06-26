@@ -1066,10 +1066,13 @@ def dashboard_html() -> str:
       <pre id="local-response-agents-index-status">Loading local response agents index...</pre>
       <div class="row">
         <strong>Read-only inventory.</strong>
-        <div class="muted">Lists implemented local response-only and metadata-only agents, endpoints, docs, and safety boundaries. It does not add agents, add endpoints, execute workflows, call connectors, persist tasks, mutate files, or claim clean VM, CI, private-alpha, production, or security certification.</div>
+        <div class="muted">Lists implemented local response-only and metadata-only agents, endpoints, docs, and safety boundaries. It does not add agents, add endpoints, perform workflows, call connectors, persist tasks, mutate files, or claim clean VM, CI, private-alpha, production, or security certification.</div>
       </div>
       <div id="local-response-agents-index-summary" class="grid"></div>
       <div id="local-response-agents-index-list" class="stack"></div>
+      <div id="local-response-agents-examples-heading"><strong>Read-only example request bodies</strong></div>
+      <div class="local-response-agent-example muted">Examples render from the local dashboard summary after load.</div>
+      <div id="local-response-agents-example-note" class="muted">Example request bodies are read-only JSON display only. This dashboard does not call agent endpoints or create artifacts from these examples.</div>
       <div id="local-response-agents-index-boundaries" class="row"></div>
       <p><a href="/docs/local-response-agents-index.md">Local Response Agents Index docs</a></p>
     </section>
@@ -1814,6 +1817,8 @@ def dashboard_html() -> str:
             <div>Mode: <code>${escapeHtml(agent.mode)}</code></div>
             <div><a href="${escapeHtml(agent.docsLink)}">Docs</a></div>
             <div class="muted">${escapeHtml((agent.safetyNotes || []).join(' '))}</div>
+            <div><strong>Read-only example request body</strong></div>
+            <pre class="local-response-agent-example">${escapeHtml(JSON.stringify(agent.exampleRequestBody || {}, null, 2))}</pre>
           </div>`).join('')
         : 'No local response agents indexed.';
       const boundaries = Array.isArray(index.globalBoundaries) ? index.globalBoundaries : [];
