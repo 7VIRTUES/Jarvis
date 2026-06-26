@@ -18,6 +18,7 @@ from .local_drafting_agent import local_drafting_dashboard_summary
 from .local_extraction_agent import local_extraction_dashboard_summary
 from .local_planning_agent import local_planning_dashboard_summary
 from .local_research_agent import local_research_dashboard_summary
+from .local_response_agents_catalog import local_response_agents_summary
 from .local_review_agent import local_review_dashboard_summary
 from .local_summarization_agent import local_summarization_dashboard_summary
 from .local_transformation_agent import local_transformation_dashboard_summary
@@ -29,154 +30,6 @@ from .redacted_diagnostics_agent import RedactedDiagnosticsBundleService
 from .task_control import ACTIVE_TASK_STATUSES
 from .tasks import TERMINAL_STATUSES
 from .validation_agent import ValidationAgentService
-
-
-LOCAL_RESPONSE_AGENTS_INDEX = [
-    {
-        "name": "Local Research Agent",
-        "endpoint": "POST /agents/research/local-brief",
-        "status": "implemented_local_only",
-        "mode": "local_only_user_provided_notes",
-        "docsLink": "/docs/local-research-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided notes only.",
-            "No browsing, paid APIs, connectors, account access, or file mutation.",
-        ],
-    },
-    {
-        "name": "File/Data Agent",
-        "endpoint": "POST /agents/files/local-summary",
-        "status": "implemented_local_only",
-        "mode": "local_registered_project_metadata_only",
-        "docsLink": "/docs/file-data-agent.md",
-        "responseMode": "metadata_only",
-        "safetyNotes": [
-            "Summarizes registered-project metadata only.",
-            "No arbitrary path scanning, protected-content reads, uploads, command execution, or mutation.",
-        ],
-    },
-    {
-        "name": "Local Planning Agent",
-        "endpoint": "POST /agents/planning/local-plan",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_planning",
-        "docsLink": "/docs/local-planning-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided planning inputs only.",
-            "No persistent tasks, reminders, calendar/email items, files, database records, or external calls.",
-        ],
-    },
-    {
-        "name": "Local Drafting Agent",
-        "endpoint": "POST /agents/drafting/local-draft",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_drafting",
-        "docsLink": "/docs/local-drafting-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided drafting inputs only.",
-            "No draft persistence, email sending, posting, account access, file writes, or connectors.",
-        ],
-    },
-    {
-        "name": "Local Review Agent",
-        "endpoint": "POST /agents/review/local-review",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_review",
-        "docsLink": "/docs/local-review-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided review content only.",
-            "No fact verification, repo inspection, tests, persistence, file access, or connectors.",
-        ],
-    },
-    {
-        "name": "Local Decision Agent",
-        "endpoint": "POST /agents/decision/local-decision",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_decision_support",
-        "docsLink": "/docs/local-decision-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided decision inputs only.",
-            "No professional validation, purchases, sending, posting, persistence, file access, or external calls.",
-        ],
-    },
-    {
-        "name": "Local Troubleshooting Agent",
-        "endpoint": "POST /agents/troubleshooting/local-triage",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_troubleshooting",
-        "docsLink": "/docs/local-troubleshooting-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided troubleshooting inputs only.",
-            "No command execution, file/log reads, repo inspection, repair actions, downloads, uploads, or mutation.",
-        ],
-    },
-    {
-        "name": "Local Summarization Agent",
-        "endpoint": "POST /agents/summarization/local-summary",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_summarization",
-        "docsLink": "/docs/local-summarization-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided text only.",
-            "No file reads, document retrieval, source/citation verification, persistence, repo inspection, or tests.",
-        ],
-    },
-    {
-        "name": "Local Extraction Agent",
-        "endpoint": "POST /agents/extraction/local-extract",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_extraction",
-        "docsLink": "/docs/local-extraction-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided text only.",
-            "No file reads, document retrieval, source/citation verification, task creation, persistence, repo inspection, or tests.",
-        ],
-    },
-    {
-        "name": "Local Classification Agent",
-        "endpoint": "POST /agents/classification/local-classify",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_classification",
-        "docsLink": "/docs/local-classification-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided text and items only.",
-            "No file reads, document retrieval, source/citation verification, task creation, agent calls, persistence, or certification.",
-        ],
-    },
-    {
-        "name": "Local Transformation Agent",
-        "endpoint": "POST /agents/transformation/local-transform",
-        "status": "implemented_local_only",
-        "mode": "response_only_user_provided_transformation",
-        "docsLink": "/docs/local-transformation-agent.md",
-        "responseMode": "response_only",
-        "safetyNotes": [
-            "Uses user-provided text and items only.",
-            "No file reads/writes, document/spreadsheet/deck/export creation, persistence, repo inspection, tests, or connectors.",
-        ],
-    },
-]
-
-LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES = [
-    "No paid APIs.",
-    "No connectors.",
-    "No OAuth or account access.",
-    "No browser automation.",
-    "No cloud sync.",
-    "No file mutation except existing Coding Agent workflows.",
-    "No email sending, posting, or purchases.",
-    "No task persistence for response-only agents.",
-    "No claims of clean Windows VM validation, CI validation, private-alpha certification, production readiness, or security certification.",
-]
 
 
 class DashboardService:
@@ -499,25 +352,7 @@ class DashboardService:
         return local_transformation_dashboard_summary()
 
     def local_response_agents_index_summary(self) -> dict[str, Any]:
-        return {
-            "status": "read_only_index",
-            "agentCount": len(LOCAL_RESPONSE_AGENTS_INDEX),
-            "agents": LOCAL_RESPONSE_AGENTS_INDEX,
-            "globalBoundaries": LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES,
-            "docsLink": "/docs/local-response-agents-index.md",
-            "addsAgents": False,
-            "addsEndpoint": False,
-            "mutation": False,
-            "connectorExecution": False,
-            "paidApis": False,
-            "oauth": False,
-            "accountAccess": False,
-            "browserAutomation": False,
-            "cloudSync": False,
-            "emailSendingPostingPurchases": False,
-            "taskPersistenceForResponseOnlyAgents": False,
-            "certificationClaims": False,
-        }
+        return local_response_agents_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {

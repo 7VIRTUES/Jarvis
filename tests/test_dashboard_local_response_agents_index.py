@@ -58,6 +58,8 @@ def test_dashboard_index_includes_exactly_the_implemented_local_agents(tmp_path,
     assert all(agent["docsLink"].startswith("/docs/") for agent in agents)
     assert all(agent["docsLink"].endswith(".md") for agent in agents)
     assert {agent["responseMode"] for agent in agents} == {"response_only", "metadata_only"}
+    assert all(isinstance(agent["exampleRequestBody"], dict) for agent in agents)
+    assert all(agent["exampleRequestBody"] for agent in agents)
 
 
 def test_dashboard_index_global_boundaries_cover_required_safety_limits(tmp_path, monkeypatch):
@@ -85,6 +87,21 @@ def test_dashboard_index_global_boundaries_cover_required_safety_limits(tmp_path
     assert index["cloudSync"] is False
     assert index["emailSendingPostingPurchases"] is False
     assert index["taskPersistenceForResponseOnlyAgents"] is False
+
+
+def test_dashboard_index_agent_entries_include_safe_example_request_bodies(tmp_path, monkeypatch):
+    app_services(tmp_path, monkeypatch)
+
+    agents = app_module.dashboard_summary()["localResponseAgentsIndex"]["agents"]
+    file_data_agent = next(agent for agent in agents if agent["name"] == "File/Data Agent")
+    examples_text = str([agent["exampleRequestBody"] for agent in agents]).lower()
+
+    assert file_data_agent["exampleRequestBody"] == {"projectName": "Jarvis"}
+    assert ".env" not in examples_text
+    assert "token=" not in examples_text
+    assert "credential" not in examples_text
+    assert "c:\\" not in examples_text
+    assert "@" not in examples_text
 
 
 def test_dashboard_html_includes_local_response_agents_index_section_and_link(tmp_path, monkeypatch):
