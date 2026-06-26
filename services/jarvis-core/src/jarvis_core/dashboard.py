@@ -12,6 +12,7 @@ from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .file_data_agent import file_data_dashboard_summary
 from .lan_security import LAN_TOKEN_ENV_VAR, lan_protection_status, lan_setup_status
+from .local_classification_agent import local_classification_dashboard_summary
 from .local_decision_agent import local_decision_dashboard_summary
 from .local_drafting_agent import local_drafting_dashboard_summary
 from .local_extraction_agent import local_extraction_dashboard_summary
@@ -60,6 +61,7 @@ class DashboardService:
         local_troubleshooting = self.local_troubleshooting_agent_summary()
         local_summarization = self.local_summarization_agent_summary()
         local_extraction = self.local_extraction_agent_summary()
+        local_classification = self.local_classification_agent_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -89,6 +91,7 @@ class DashboardService:
                 "localTroubleshootingAgent": "implemented_local_only",
                 "localSummarizationAgent": "implemented_local_only",
                 "localExtractionAgent": "implemented_local_only",
+                "localClassificationAgent": "implemented_local_only",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -137,6 +140,7 @@ class DashboardService:
             "localTroubleshootingAgent": local_troubleshooting,
             "localSummarizationAgent": local_summarization,
             "localExtractionAgent": local_extraction,
+            "localClassificationAgent": local_classification,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -239,6 +243,7 @@ class DashboardService:
             "localTroubleshootingAgent": self.local_troubleshooting_agent_summary(),
             "localSummarizationAgent": self.local_summarization_agent_summary(),
             "localExtractionAgent": self.local_extraction_agent_summary(),
+            "localClassificationAgent": self.local_classification_agent_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -268,6 +273,7 @@ class DashboardService:
                 "Local Troubleshooting Agent uses user-provided troubleshooting inputs only; it does not execute commands, read files or logs, inspect repos, validate fixes, persist tickets, download, upload, mutate settings, or call connectors.",
                 "Local Summarization Agent uses user-provided text only; it does not read files, retrieve documents, verify sources or citations, persist summaries, inspect repos, execute tests, or call connectors.",
                 "Local Extraction Agent uses user-provided text only; it does not read files, retrieve documents, verify sources or citations, create tasks, persist extracted items, inspect repos, execute tests, or call connectors.",
+                "Local Classification Agent uses user-provided text and items only; it does not read files, retrieve documents, verify sources or citations, create tasks, persist classifications, inspect repos, execute tests, call agents, or call connectors.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -326,6 +332,9 @@ class DashboardService:
 
     def local_extraction_agent_summary(self) -> dict[str, Any]:
         return local_extraction_dashboard_summary()
+
+    def local_classification_agent_summary(self) -> dict[str, Any]:
+        return local_classification_dashboard_summary()
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -735,6 +744,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#local-troubleshooting-agent">View Local Troubleshooting Agent</a><span class="muted">Response-only triage.</span></div>
         <div class="home-card"><a href="#local-summarization-agent">View Local Summarization Agent</a><span class="muted">Response-only summaries.</span></div>
         <div class="home-card"><a href="#local-extraction-agent">View Local Extraction Agent</a><span class="muted">Response-only extraction.</span></div>
+        <div class="home-card"><a href="#local-classification-agent">View Local Classification Agent</a><span class="muted">Response-only classification.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -1009,6 +1019,17 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/extraction/local-extract</code></p>
       <p><a href="/docs/local-extraction-agent.md">Local Extraction Agent docs</a></p>
     </section>
+    <section id="local-classification-agent" class="stack dashboard-section" data-section-title="Local Classification Agent" data-section-keywords="local classification agent response only priority risk effort topic routing safety">
+      <h2>Local Classification Agent</h2>
+      <pre id="local-classification-agent-status">Loading local classification agent status...</pre>
+      <div id="local-classification-agent-note" class="row">
+        <strong>Response-only classification.</strong>
+        <div class="muted">Read-only status for a local classification endpoint. It does not read files, retrieve documents, verify sources or citations, create tasks, persist classifications, inspect repos, run tests, call agents, download, upload, access accounts, call connectors, send, post, purchase, certify compliance, or mutate state.</div>
+      </div>
+      <div id="local-classification-agent-summary" class="grid"></div>
+      <p>Endpoint: <code>POST /agents/classification/local-classify</code></p>
+      <p><a href="/docs/local-classification-agent.md">Local Classification Agent docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -1127,6 +1148,7 @@ def dashboard_html() -> str:
       document.getElementById('local-troubleshooting-agent-status').textContent = JSON.stringify(summary.localTroubleshootingAgent, null, 2);
       document.getElementById('local-summarization-agent-status').textContent = JSON.stringify(summary.localSummarizationAgent, null, 2);
       document.getElementById('local-extraction-agent-status').textContent = JSON.stringify(summary.localExtractionAgent, null, 2);
+      document.getElementById('local-classification-agent-status').textContent = JSON.stringify(summary.localClassificationAgent, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -1146,6 +1168,7 @@ def dashboard_html() -> str:
       renderLocalTroubleshootingAgent(summary.localTroubleshootingAgent);
       renderLocalSummarizationAgent(summary.localSummarizationAgent);
       renderLocalExtractionAgent(summary.localExtractionAgent);
+      renderLocalClassificationAgent(summary.localClassificationAgent);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1694,6 +1717,19 @@ def dashboard_html() -> str:
         taskCreation: agent.taskCreation ? 'enabled' : 'disabled',
       };
       document.getElementById('local-extraction-agent-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+    }
+    function renderLocalClassificationAgent(agent) {
+      const values = {
+        status: agent.status,
+        mode: agent.mode,
+        endpoint: agent.endpoint,
+        responseOnly: agent.responseOnly ? 'true' : 'false',
+        persistence: agent.classificationPersistence ? 'enabled' : 'disabled',
+        taskCreation: agent.taskCreation ? 'enabled' : 'disabled',
+      };
+      document.getElementById('local-classification-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
     }

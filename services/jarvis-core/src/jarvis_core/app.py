@@ -24,6 +24,7 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
+from .local_classification_agent import LocalClassificationAgentService, LocalClassificationRequest
 from .local_decision_agent import LocalDecisionAgentService, LocalDecisionRequest
 from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
 from .local_extraction_agent import LocalExtractionAgentService, LocalExtractionRequest
@@ -89,6 +90,7 @@ local_decision_agent = LocalDecisionAgentService()
 local_troubleshooting_agent = LocalTroubleshootingAgentService()
 local_summarization_agent = LocalSummarizationAgentService()
 local_extraction_agent = LocalExtractionAgentService()
+local_classification_agent = LocalClassificationAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -270,6 +272,19 @@ class LocalExtractionInput(BaseModel):
     focusAreas: list[str] = Field(default_factory=list)
     mustCapture: list[str] = Field(default_factory=list)
     mustIgnore: list[str] = Field(default_factory=list)
+    detailLevel: str = "medium"
+
+
+class LocalClassificationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    content: str = ""
+    items: list[str] = Field(default_factory=list)
+    classificationType: str = "general"
+    labels: list[str] = Field(default_factory=list)
+    criteria: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
     detailLevel: str = "medium"
 
 
@@ -455,6 +470,25 @@ def create_local_extraction(
             focus_areas=payload.focusAreas,
             must_capture=payload.mustCapture,
             must_ignore=payload.mustIgnore,
+            detail_level=payload.detailLevel,
+        )
+    )
+
+
+@app.post("/agents/classification/local-classify")
+def create_local_classification(
+    payload: LocalClassificationInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_classification_agent.classify(
+        LocalClassificationRequest(
+            title=payload.title,
+            content=payload.content,
+            items=payload.items,
+            classification_type=payload.classificationType,
+            labels=payload.labels,
+            criteria=payload.criteria,
+            constraints=payload.constraints,
             detail_level=payload.detailLevel,
         )
     )

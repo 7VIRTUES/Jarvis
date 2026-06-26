@@ -29,7 +29,7 @@ v0.1C is a private-alpha readiness foundation. This repository is not yet a prod
 - LAN dashboard token protection
 - Loopback-only setup guidance
 - Stop-task boundary for Jarvis-owned task records
-- Local-only response agents for research notes, project metadata summaries, planning, drafting, review, decision support, troubleshooting triage, text summarization, and structured extraction
+- Local-only response agents for research notes, project metadata summaries, planning, drafting, review, decision support, troubleshooting triage, text summarization, structured extraction, and local classification
 - Disabled placeholder future connectors
 
 ## What Is Not Included Yet
@@ -100,6 +100,7 @@ python -m pytest
 - [Local Troubleshooting Agent](docs/local-troubleshooting-agent.md)
 - [Local Summarization Agent](docs/local-summarization-agent.md)
 - [Local Extraction Agent](docs/local-extraction-agent.md)
+- [Local Classification Agent](docs/local-classification-agent.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Clean Windows VM Validation Runbook Pack](docs/vm-validation-runbook-pack.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
