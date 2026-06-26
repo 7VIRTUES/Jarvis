@@ -4,6 +4,8 @@ This page is a read-only inventory of the implemented local response agents afte
 
 It does not define a new agent, endpoint, connector, workflow, or validation claim.
 
+For safe manual request-body examples, see the [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md).
+
 ## Global Boundaries
 
 - No paid APIs.
