@@ -50,3 +50,11 @@ The response includes decision focus, comparison matrix, tradeoffs, suggested di
 This agent only compares user-provided options in the response. It does not verify facts, inspect source code, validate citations, run tests, read local files, persist decision records, purchase anything, send or post anything, or use external services.
 
 For legal, medical, financial, academic, safety, or other high-stakes decisions, treat the output as local decision support only and obtain appropriate human or qualified professional verification before acting.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

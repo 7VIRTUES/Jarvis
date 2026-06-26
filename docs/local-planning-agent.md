@@ -43,3 +43,11 @@ The response includes planning focus, assumptions, phases, checklist, next actio
 ## Limitations
 
 This agent only drafts a plan in the response. It is not a scheduler, task system, calendar assistant, email agent, project-management integration, or persistent workflow engine.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

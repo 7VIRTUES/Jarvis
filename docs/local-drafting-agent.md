@@ -48,3 +48,11 @@ The response includes draft title, draft text, included points, avoided items, r
 ## Limitations
 
 This agent only drafts text in the response. Email-style output is draft text only; it does not use Gmail, save a draft, send email, access accounts, or call connectors.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

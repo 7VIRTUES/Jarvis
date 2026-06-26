@@ -49,3 +49,11 @@ The response includes classification focus, classified items, labels used, prior
 ## Limitations
 
 This agent only classifies user-provided text and items in the response. It does not read files, retrieve documents, verify sources, verify citations, inspect repositories, run tests, create tasks, call agents, persist classifications, certify compliance, provide professional validation, download data, upload data, or use external services.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

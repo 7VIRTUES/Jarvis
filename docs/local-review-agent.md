@@ -47,3 +47,11 @@ The response includes review focus, strengths, issues, missing information, risk
 ## Limitations
 
 This agent only reviews user-provided content in the response. It does not verify facts, inspect source code, validate citations, run tests, read local files, persist review records, or use external services.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

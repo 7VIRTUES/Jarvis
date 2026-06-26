@@ -33,3 +33,11 @@ Supported output types:
 The output is based only on user-provided notes. Source titles are treated as unverified labels, not as verified citations or evidence.
 
 This is not a full external Research Agent yet. It does not connect to external services, paid AI APIs, OAuth accounts, source databases, browser automation, email, posting, or future connectors.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.

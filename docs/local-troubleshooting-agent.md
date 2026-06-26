@@ -48,3 +48,11 @@ The response includes triage focus, observed signals, likely causes, manual safe
 ## Limitations
 
 This agent only triages user-provided troubleshooting details in the response. It does not execute commands, inspect files, read logs, inspect repositories, validate fixes, run tests, mutate settings, persist tickets, download scripts, upload data, or use external services.
+
+## Related Docs
+
+- [Local Response Agents Index](local-response-agents-index.md)
+- [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md)
+- [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md)
+
+These read-only docs and manual evidence aids do not prove validation or certification.
