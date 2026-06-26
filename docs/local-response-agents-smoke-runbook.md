@@ -4,6 +4,8 @@ This runbook gives safe manual request-body examples for the 11 implemented loca
 
 These examples are manual local checks only. They are not automated certification, CI validation, full-suite validation, clean Windows VM validation, LAN token validation, private-alpha certification, production readiness, or security certification.
 
+To record manual observations, use the [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md).
+
 ## Prerequisites
 
 - Jarvis Core is running locally.

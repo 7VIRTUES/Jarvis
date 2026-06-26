@@ -6,6 +6,8 @@ It does not define a new agent, endpoint, connector, workflow, or validation cla
 
 For safe manual request-body examples, see the [Local Response Agents Manual Smoke Runbook](local-response-agents-smoke-runbook.md).
 
+For manual evidence notes, see the [Local Response Agents Smoke Evidence Template](local-response-agents-smoke-evidence-template.md).
+
 ## Global Boundaries
 
 - No paid APIs.
