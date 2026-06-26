@@ -31,6 +31,154 @@ from .tasks import TERMINAL_STATUSES
 from .validation_agent import ValidationAgentService
 
 
+LOCAL_RESPONSE_AGENTS_INDEX = [
+    {
+        "name": "Local Research Agent",
+        "endpoint": "POST /agents/research/local-brief",
+        "status": "implemented_local_only",
+        "mode": "local_only_user_provided_notes",
+        "docsLink": "/docs/local-research-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided notes only.",
+            "No browsing, paid APIs, connectors, account access, or file mutation.",
+        ],
+    },
+    {
+        "name": "File/Data Agent",
+        "endpoint": "POST /agents/files/local-summary",
+        "status": "implemented_local_only",
+        "mode": "local_registered_project_metadata_only",
+        "docsLink": "/docs/file-data-agent.md",
+        "responseMode": "metadata_only",
+        "safetyNotes": [
+            "Summarizes registered-project metadata only.",
+            "No arbitrary path scanning, protected-content reads, uploads, command execution, or mutation.",
+        ],
+    },
+    {
+        "name": "Local Planning Agent",
+        "endpoint": "POST /agents/planning/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_planning",
+        "docsLink": "/docs/local-planning-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided planning inputs only.",
+            "No persistent tasks, reminders, calendar/email items, files, database records, or external calls.",
+        ],
+    },
+    {
+        "name": "Local Drafting Agent",
+        "endpoint": "POST /agents/drafting/local-draft",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_drafting",
+        "docsLink": "/docs/local-drafting-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided drafting inputs only.",
+            "No draft persistence, email sending, posting, account access, file writes, or connectors.",
+        ],
+    },
+    {
+        "name": "Local Review Agent",
+        "endpoint": "POST /agents/review/local-review",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_review",
+        "docsLink": "/docs/local-review-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided review content only.",
+            "No fact verification, repo inspection, tests, persistence, file access, or connectors.",
+        ],
+    },
+    {
+        "name": "Local Decision Agent",
+        "endpoint": "POST /agents/decision/local-decision",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_decision_support",
+        "docsLink": "/docs/local-decision-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided decision inputs only.",
+            "No professional validation, purchases, sending, posting, persistence, file access, or external calls.",
+        ],
+    },
+    {
+        "name": "Local Troubleshooting Agent",
+        "endpoint": "POST /agents/troubleshooting/local-triage",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_troubleshooting",
+        "docsLink": "/docs/local-troubleshooting-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided troubleshooting inputs only.",
+            "No command execution, file/log reads, repo inspection, repair actions, downloads, uploads, or mutation.",
+        ],
+    },
+    {
+        "name": "Local Summarization Agent",
+        "endpoint": "POST /agents/summarization/local-summary",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_summarization",
+        "docsLink": "/docs/local-summarization-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided text only.",
+            "No file reads, document retrieval, source/citation verification, persistence, repo inspection, or tests.",
+        ],
+    },
+    {
+        "name": "Local Extraction Agent",
+        "endpoint": "POST /agents/extraction/local-extract",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_extraction",
+        "docsLink": "/docs/local-extraction-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided text only.",
+            "No file reads, document retrieval, source/citation verification, task creation, persistence, repo inspection, or tests.",
+        ],
+    },
+    {
+        "name": "Local Classification Agent",
+        "endpoint": "POST /agents/classification/local-classify",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_classification",
+        "docsLink": "/docs/local-classification-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided text and items only.",
+            "No file reads, document retrieval, source/citation verification, task creation, agent calls, persistence, or certification.",
+        ],
+    },
+    {
+        "name": "Local Transformation Agent",
+        "endpoint": "POST /agents/transformation/local-transform",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_transformation",
+        "docsLink": "/docs/local-transformation-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided text and items only.",
+            "No file reads/writes, document/spreadsheet/deck/export creation, persistence, repo inspection, tests, or connectors.",
+        ],
+    },
+]
+
+LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES = [
+    "No paid APIs.",
+    "No connectors.",
+    "No OAuth or account access.",
+    "No browser automation.",
+    "No cloud sync.",
+    "No file mutation except existing Coding Agent workflows.",
+    "No email sending, posting, or purchases.",
+    "No task persistence for response-only agents.",
+    "No claims of clean Windows VM validation, CI validation, private-alpha certification, production readiness, or security certification.",
+]
+
+
 class DashboardService:
     def __init__(self, conn: sqlite3.Connection, workspace_root: Path, data_root: Path, connector_root: Path):
         self.conn = conn
@@ -64,6 +212,7 @@ class DashboardService:
         local_extraction = self.local_extraction_agent_summary()
         local_classification = self.local_classification_agent_summary()
         local_transformation = self.local_transformation_agent_summary()
+        local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
             "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
@@ -95,6 +244,7 @@ class DashboardService:
                 "localExtractionAgent": "implemented_local_only",
                 "localClassificationAgent": "implemented_local_only",
                 "localTransformationAgent": "implemented_local_only",
+                "localResponseAgentsIndex": "read_only_index",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -145,6 +295,7 @@ class DashboardService:
             "localExtractionAgent": local_extraction,
             "localClassificationAgent": local_classification,
             "localTransformationAgent": local_transformation,
+            "localResponseAgentsIndex": local_response_agents_index,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -249,6 +400,7 @@ class DashboardService:
             "localExtractionAgent": self.local_extraction_agent_summary(),
             "localClassificationAgent": self.local_classification_agent_summary(),
             "localTransformationAgent": self.local_transformation_agent_summary(),
+            "localResponseAgentsIndex": self.local_response_agents_index_summary(),
             "unsupportedControlsExposed": False,
             "lanProtection": lan_protection_status(),
             "reportPathValidation": "contained_md_json_reports_only",
@@ -280,6 +432,7 @@ class DashboardService:
                 "Local Extraction Agent uses user-provided text only; it does not read files, retrieve documents, verify sources or citations, create tasks, persist extracted items, inspect repos, execute tests, or call connectors.",
                 "Local Classification Agent uses user-provided text and items only; it does not read files, retrieve documents, verify sources or citations, create tasks, persist classifications, inspect repos, execute tests, call agents, or call connectors.",
                 "Local Transformation Agent uses user-provided text and items only; it does not read files, create documents, export files, persist transformations, inspect repos, execute tests, or call connectors.",
+                "Local Response Agents Index is read-only inventory metadata; it does not add agents, execute workflows, call connectors, mutate files, persist tasks, or claim validation/certification.",
                 "Future v0.1C controls remain absent or unavailable unless implemented by their own slice.",
             ],
         }
@@ -344,6 +497,27 @@ class DashboardService:
 
     def local_transformation_agent_summary(self) -> dict[str, Any]:
         return local_transformation_dashboard_summary()
+
+    def local_response_agents_index_summary(self) -> dict[str, Any]:
+        return {
+            "status": "read_only_index",
+            "agentCount": len(LOCAL_RESPONSE_AGENTS_INDEX),
+            "agents": LOCAL_RESPONSE_AGENTS_INDEX,
+            "globalBoundaries": LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES,
+            "docsLink": "/docs/local-response-agents-index.md",
+            "addsAgents": False,
+            "addsEndpoint": False,
+            "mutation": False,
+            "connectorExecution": False,
+            "paidApis": False,
+            "oauth": False,
+            "accountAccess": False,
+            "browserAutomation": False,
+            "cloudSync": False,
+            "emailSendingPostingPurchases": False,
+            "taskPersistenceForResponseOnlyAgents": False,
+            "certificationClaims": False,
+        }
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -755,6 +929,7 @@ def dashboard_html() -> str:
         <div class="home-card"><a href="#local-extraction-agent">View Local Extraction Agent</a><span class="muted">Response-only extraction.</span></div>
         <div class="home-card"><a href="#local-classification-agent">View Local Classification Agent</a><span class="muted">Response-only classification.</span></div>
         <div class="home-card"><a href="#local-transformation-agent">View Local Transformation Agent</a><span class="muted">Response-only transformation.</span></div>
+        <div class="home-card"><a href="#local-response-agents-index">View Local Response Agents Index</a><span class="muted">Read-only local agent inventory.</span></div>
         <div class="home-card"><a href="#vm-validation-prep-center">View Clean Windows VM Validation Prep</a><span class="muted">Manual VM validation prep.</span></div>
         <div class="home-card"><a href="#backup-readiness-center">View Backup Readiness Checklist</a><span class="muted">Manual readiness checklist.</span></div>
         <div class="home-card"><a href="#activity-timeline-center">View Recent Activity / Audit Trail</a><span class="muted">Safe local activity metadata.</span></div>
@@ -1051,6 +1226,18 @@ def dashboard_html() -> str:
       <p>Endpoint: <code>POST /agents/transformation/local-transform</code></p>
       <p><a href="/docs/local-transformation-agent.md">Local Transformation Agent docs</a></p>
     </section>
+    <section id="local-response-agents-index" class="stack dashboard-section" data-section-title="Local Response Agents Index" data-section-keywords="local response agents index inventory safety boundaries docs endpoints">
+      <h2>Local Response Agents Index</h2>
+      <pre id="local-response-agents-index-status">Loading local response agents index...</pre>
+      <div class="row">
+        <strong>Read-only inventory.</strong>
+        <div class="muted">Lists implemented local response-only and metadata-only agents, endpoints, docs, and safety boundaries. It does not add agents, add endpoints, execute workflows, call connectors, persist tasks, mutate files, or claim clean VM, CI, private-alpha, production, or security certification.</div>
+      </div>
+      <div id="local-response-agents-index-summary" class="grid"></div>
+      <div id="local-response-agents-index-list" class="stack"></div>
+      <div id="local-response-agents-index-boundaries" class="row"></div>
+      <p><a href="/docs/local-response-agents-index.md">Local Response Agents Index docs</a></p>
+    </section>
     <section id="vm-validation-prep-center" class="stack dashboard-section" data-section-title="Clean Windows VM Validation Prep" data-section-keywords="clean windows vm validation prep manual checklist loopback lan connectors backup restore">
       <h2>Clean Windows VM Validation Prep</h2>
       <pre id="vm-validation-prep-status">Loading VM validation prep checklist...</pre>
@@ -1171,6 +1358,7 @@ def dashboard_html() -> str:
       document.getElementById('local-extraction-agent-status').textContent = JSON.stringify(summary.localExtractionAgent, null, 2);
       document.getElementById('local-classification-agent-status').textContent = JSON.stringify(summary.localClassificationAgent, null, 2);
       document.getElementById('local-transformation-agent-status').textContent = JSON.stringify(summary.localTransformationAgent, null, 2);
+      document.getElementById('local-response-agents-index-status').textContent = JSON.stringify(summary.localResponseAgentsIndex, null, 2);
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -1192,6 +1380,7 @@ def dashboard_html() -> str:
       renderLocalExtractionAgent(summary.localExtractionAgent);
       renderLocalClassificationAgent(summary.localClassificationAgent);
       renderLocalTransformationAgent(summary.localTransformationAgent);
+      renderLocalResponseAgentsIndex(summary.localResponseAgentsIndex);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1768,6 +1957,34 @@ def dashboard_html() -> str:
       document.getElementById('local-transformation-agent-summary').innerHTML = Object.entries(values)
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
+    }
+    function renderLocalResponseAgentsIndex(index) {
+      const values = {
+        status: index.status,
+        agentCount: index.agentCount,
+        addsAgents: index.addsAgents ? 'true' : 'false',
+        addsEndpoint: index.addsEndpoint ? 'true' : 'false',
+        mutation: index.mutation ? 'enabled' : 'disabled',
+        certificationClaims: index.certificationClaims ? 'present' : 'absent',
+      };
+      document.getElementById('local-response-agents-index-summary').innerHTML = Object.entries(values)
+        .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join('');
+      const agents = Array.isArray(index.agents) ? index.agents : [];
+      document.getElementById('local-response-agents-index-list').innerHTML = agents.length
+        ? agents.map((agent) => `<div class="row">
+            <strong>${escapeHtml(agent.name)}</strong>
+            <div><code>${escapeHtml(agent.status)}</code> · <code>${escapeHtml(agent.responseMode)}</code></div>
+            <div>Endpoint: <code>${escapeHtml(agent.endpoint)}</code></div>
+            <div>Mode: <code>${escapeHtml(agent.mode)}</code></div>
+            <div><a href="${escapeHtml(agent.docsLink)}">Docs</a></div>
+            <div class="muted">${escapeHtml((agent.safetyNotes || []).join(' '))}</div>
+          </div>`).join('')
+        : 'No local response agents indexed.';
+      const boundaries = Array.isArray(index.globalBoundaries) ? index.globalBoundaries : [];
+      document.getElementById('local-response-agents-index-boundaries').innerHTML = boundaries.length
+        ? `<strong>Global boundaries</strong><ul>${boundaries.map((boundary) => `<li>${escapeHtml(boundary)}</li>`).join('')}</ul>`
+        : '<strong>Global boundaries</strong><div class="muted">No global boundaries listed.</div>';
     }
     async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();

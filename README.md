@@ -102,6 +102,7 @@ python -m pytest
 - [Local Extraction Agent](docs/local-extraction-agent.md)
 - [Local Classification Agent](docs/local-classification-agent.md)
 - [Local Transformation Agent](docs/local-transformation-agent.md)
+- [Local Response Agents Index](docs/local-response-agents-index.md)
 - [Clean Windows VM Validation Runbook](docs/vm-validation-runbook.md)
 - [Clean Windows VM Validation Runbook Pack](docs/vm-validation-runbook-pack.md)
 - [Project Profiles and Workspace Boundaries](docs/project-profiles.md)
