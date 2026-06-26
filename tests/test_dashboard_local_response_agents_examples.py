@@ -85,7 +85,8 @@ def test_dashboard_examples_section_has_no_execution_or_mutation_controls(tmp_pa
         "copy to clipboard",
     ]
 
-    assert "<button" not in section
+    assert section.count("<button") == 1
+    assert "run selected local response agent" in section
     assert "fetch(agent.endpoint" not in section
     assert all(text not in section for text in forbidden_control_text)
     assert ">post<" not in section

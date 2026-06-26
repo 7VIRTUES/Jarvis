@@ -1073,6 +1073,24 @@ def dashboard_html() -> str:
       <div id="local-response-agents-examples-heading"><strong>Read-only example request bodies</strong></div>
       <div class="local-response-agent-example muted">Examples render from the local dashboard summary after load.</div>
       <div id="local-response-agents-example-note" class="muted">Example request bodies are read-only JSON display only. This dashboard does not call agent endpoints or create artifacts from these examples.</div>
+      <div id="local-response-agents-workbench" class="row stack">
+        <h3>Local Response Agents Workbench</h3>
+        <div class="muted">Local-only workbench allowlisted to the 11 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
+        <label>
+          Select local response agent
+          <select id="local-response-agents-workbench-select"></select>
+        </label>
+        <div>Selected endpoint: <code id="local-response-agents-workbench-endpoint">No agent selected.</code></div>
+        <div><a id="local-response-agents-workbench-docs" href="/docs/local-response-agents-index.md">Docs</a></div>
+        <div id="local-response-agents-workbench-file-data-note" class="muted">File/Data Agent requires a registered project and remains allowlisted only through its cataloged endpoint.</div>
+        <label>
+          Request JSON body
+          <textarea id="local-response-agents-workbench-body" spellcheck="false"></textarea>
+        </label>
+        <button id="local-response-agents-workbench-run-button" type="button">Run selected local response agent</button>
+        <div id="local-response-agents-workbench-status" class="muted">Workbench is ready after the dashboard summary loads.</div>
+        <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
+      </div>
       <div id="local-response-agents-index-boundaries" class="row"></div>
       <p><a href="/docs/local-response-agents-index.md">Local Response Agents Index docs</a></p>
     </section>
@@ -1219,6 +1237,7 @@ def dashboard_html() -> str:
       renderLocalClassificationAgent(summary.localClassificationAgent);
       renderLocalTransformationAgent(summary.localTransformationAgent);
       renderLocalResponseAgentsIndex(summary.localResponseAgentsIndex);
+      initializeLocalResponseAgentsWorkbench(summary.localResponseAgentsIndex);
       await loadVmValidationPrep();
       await loadBackupReadiness();
       await loadActivityTimeline();
@@ -1825,6 +1844,103 @@ def dashboard_html() -> str:
       document.getElementById('local-response-agents-index-boundaries').innerHTML = boundaries.length
         ? `<strong>Global boundaries</strong><ul>${boundaries.map((boundary) => `<li>${escapeHtml(boundary)}</li>`).join('')}</ul>`
         : '<strong>Global boundaries</strong><div class="muted">No global boundaries listed.</div>';
+    }
+    function localResponseAgentEndpointParts(endpoint) {
+      const parts = String(endpoint || '').trim().split(/\\s+/);
+      return { method: parts[0] || '', path: parts[1] || '' };
+    }
+    function localResponseAgentAllowlist(agents) {
+      return new Set((Array.isArray(agents) ? agents : [])
+        .map((agent) => localResponseAgentEndpointParts(agent.endpoint))
+        .filter((endpoint) => endpoint.method === 'POST' && endpoint.path.startsWith('/agents/'))
+        .map((endpoint) => endpoint.path));
+    }
+    function initializeLocalResponseAgentsWorkbench(index) {
+      const agents = Array.isArray(index && index.agents) ? index.agents : [];
+      const allowlistedEndpointPaths = localResponseAgentAllowlist(agents);
+      const select = document.getElementById('local-response-agents-workbench-select');
+      const endpointDisplay = document.getElementById('local-response-agents-workbench-endpoint');
+      const docsLink = document.getElementById('local-response-agents-workbench-docs');
+      const bodyInput = document.getElementById('local-response-agents-workbench-body');
+      const runButton = document.getElementById('local-response-agents-workbench-run-button');
+      const status = document.getElementById('local-response-agents-workbench-status');
+      const responseOutput = document.getElementById('local-response-agents-workbench-response');
+      select.innerHTML = agents.map((agent, index) => `<option value="${escapeHtml(index)}">${escapeHtml(agent.name)}</option>`).join('');
+
+      function selectedAgent() {
+        const index = Number(select.value || 0);
+        return agents[index] || null;
+      }
+      function selectedEndpointPath(agent) {
+        const endpoint = localResponseAgentEndpointParts(agent && agent.endpoint);
+        if (endpoint.method !== 'POST' || !endpoint.path.startsWith('/agents/')) {
+          return '';
+        }
+        return endpoint.path;
+      }
+      function loadSelectedExample() {
+        const agent = selectedAgent();
+        if (!agent) {
+          endpointDisplay.textContent = 'No agent selected.';
+          bodyInput.value = '{}';
+          status.textContent = 'No local response agent is selected.';
+          return;
+        }
+        const endpointPath = selectedEndpointPath(agent);
+        endpointDisplay.textContent = endpointPath || 'Unsupported endpoint.';
+        docsLink.href = agent.docsLink || '/docs/local-response-agents-index.md';
+        bodyInput.value = JSON.stringify(agent.exampleRequestBody || {}, null, 2);
+        responseOutput.textContent = 'No local response-agent result yet.';
+        status.textContent = allowlistedEndpointPaths.has(endpointPath)
+          ? 'Ready. This local-only workbench can call only the selected allowlisted endpoint.'
+          : 'Unsupported endpoint: selected catalog entry is not allowlisted.';
+      }
+      select.onchange = loadSelectedExample;
+      runButton.onclick = async () => {
+        const agent = selectedAgent();
+        const endpointPath = selectedEndpointPath(agent);
+        if (!agent || !allowlistedEndpointPaths.has(endpointPath)) {
+          status.textContent = 'Unsupported endpoint: selected catalog entry is not allowlisted.';
+          responseOutput.textContent = '';
+          return;
+        }
+        let parsedBody;
+        try {
+          parsedBody = JSON.parse(bodyInput.value || '{}');
+        } catch (error) {
+          status.textContent = `Invalid JSON: ${error.message}`;
+          responseOutput.textContent = '';
+          return;
+        }
+        if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+          status.textContent = 'Invalid JSON: request body must be a JSON object.';
+          responseOutput.textContent = '';
+          return;
+        }
+        status.textContent = 'Calling selected allowlisted local response-agent endpoint...';
+        try {
+          const response = await fetch(endpointPath, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsedBody),
+          });
+          const responseText = await response.text();
+          let responseBody;
+          try {
+            responseBody = responseText ? JSON.parse(responseText) : {};
+          } catch {
+            responseBody = { rawResponse: responseText };
+          }
+          responseOutput.textContent = JSON.stringify(responseBody, null, 2);
+          status.textContent = response.ok
+            ? 'Local response-agent result received. Request and response are not persisted by this dashboard workbench.'
+            : `Local request failed with HTTP ${response.status}. Request and response are not persisted by this dashboard workbench.`;
+        } catch (error) {
+          status.textContent = `Local request failure: ${error.message}`;
+          responseOutput.textContent = '';
+        }
+      };
+      loadSelectedExample();
     }
     async function loadValidationWorkflowSummary(refreshLists) {
       bindValidationWorkflowControls();
