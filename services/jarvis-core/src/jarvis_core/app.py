@@ -33,6 +33,7 @@ from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_la
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
 from .local_summarization_agent import LocalSummarizationAgentService, LocalSummarizationRequest
+from .local_transformation_agent import LocalTransformationAgentService, LocalTransformationRequest
 from .local_troubleshooting_agent import LocalTroubleshootingAgentService, LocalTroubleshootingRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
@@ -91,6 +92,7 @@ local_troubleshooting_agent = LocalTroubleshootingAgentService()
 local_summarization_agent = LocalSummarizationAgentService()
 local_extraction_agent = LocalExtractionAgentService()
 local_classification_agent = LocalClassificationAgentService()
+local_transformation_agent = LocalTransformationAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -285,6 +287,20 @@ class LocalClassificationInput(BaseModel):
     labels: list[str] = Field(default_factory=list)
     criteria: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    detailLevel: str = "medium"
+
+
+class LocalTransformationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = ""
+    content: str = ""
+    items: list[str] = Field(default_factory=list)
+    targetFormat: str = "outline"
+    audience: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    mustPreserve: list[str] = Field(default_factory=list)
+    mustAvoid: list[str] = Field(default_factory=list)
     detailLevel: str = "medium"
 
 
@@ -489,6 +505,26 @@ def create_local_classification(
             labels=payload.labels,
             criteria=payload.criteria,
             constraints=payload.constraints,
+            detail_level=payload.detailLevel,
+        )
+    )
+
+
+@app.post("/agents/transformation/local-transform")
+def create_local_transformation(
+    payload: LocalTransformationInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_transformation_agent.transform(
+        LocalTransformationRequest(
+            title=payload.title,
+            content=payload.content,
+            items=payload.items,
+            target_format=payload.targetFormat,
+            audience=payload.audience,
+            constraints=payload.constraints,
+            must_preserve=payload.mustPreserve,
+            must_avoid=payload.mustAvoid,
             detail_level=payload.detailLevel,
         )
     )
