@@ -17,6 +17,14 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/transformation/local-transform",
     "POST /agents/business/local-brief",
     "POST /agents/health-fitness/local-plan",
+    "POST /agents/food-cooking-grocery/local-plan",
+    "POST /agents/home-room-living-space/local-plan",
+    "POST /agents/legal-immigration-official/local-plan",
+    "POST /agents/emergency-preparedness/local-plan",
+    "POST /agents/culture-taste-high-class-lifestyle/local-plan",
+    "POST /agents/hobbies-adventure/local-plan",
+    "POST /agents/personal-knowledge-memory-organizer/local-plan",
+    "POST /agents/life-dashboard-coordinator/local-plan",
     "POST /agents/everyday-life/local-plan",
     "POST /agents/online-presence/local-plan",
     "POST /agents/security-safety/local-review",
@@ -83,7 +91,7 @@ def test_dashboard_summary_still_exposes_examples_for_all_index_agents(tmp_path,
     index = app_module.dashboard_summary()["localResponseAgentsIndex"]
     endpoints = [agent["endpoint"] for agent in index["agents"]]
 
-    assert index["agentCount"] == 29
+    assert index["agentCount"] == 37
     assert endpoints == EXPECTED_ENDPOINTS
     assert all(agent["exampleRequestBody"] for agent in index["agents"])
     assert all(isinstance(agent["exampleRequestBody"], dict) for agent in index["agents"])

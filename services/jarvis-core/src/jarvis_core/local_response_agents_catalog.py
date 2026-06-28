@@ -3,6 +3,18 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .local_response_agent_metadata import (
+    LOCAL_RESPONSE_AGENT_COUNT,
+    build_local_agent_request_template,
+    discovery_metadata_for_agent,
+    enrich_local_response_agent,
+    get_local_agent_metadata,
+    list_local_agent_categories,
+    preview_local_agent_route,
+    validate_catalog_consistency,
+)
+from .web_research import WEB_RESEARCH_AGENT_MODE, WEB_RESEARCH_LIMITATIONS
+
 
 LOCAL_RESPONSE_AGENTS_INDEX: list[dict[str, Any]] = [
     {
@@ -288,6 +300,246 @@ LOCAL_RESPONSE_AGENTS_INDEX: list[dict[str, Any]] = [
             "habitsToBuild": ["Walk after lunch", "Prepare simple breakfast options"],
             "habitsToReduce": ["Skipping movement on busy days"],
             "desiredOutputType": "fitness_brief",
+        },
+    },
+    {
+        "name": "Local Food / Cooking / Grocery Agent",
+        "endpoint": "POST /agents/food-cooking-grocery/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_food_cooking_grocery_planning",
+        "docsLink": "/docs/local-food-cooking-grocery-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided meal, pantry, cooking, grocery, preference, budget, time, equipment, and leftover-planning inputs only.",
+            "No grocery app, delivery app, restaurant app, health app, account, location, map, GPS, payment, file, connector, browser, or external-service behavior.",
+            "No orders, purchases, reservations, persistent records, medical nutrition advice, allergy safety certainty, clinical diet prescription, weight-loss guarantee, food-safety certification, nutritionist validation, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Make a cheap grocery list for 5 dinners using rice, eggs, chicken, frozen vegetables, and beans.",
+            "outputType": "budget_grocery_plan",
+            "mealGoal": "Plan 5 simple low-cost dinners.",
+            "availableIngredients": ["Rice", "Eggs", "Chicken", "Frozen vegetables", "Beans"],
+            "pantryItems": ["Soy sauce", "Garlic powder", "Pasta"],
+            "groceryItemsNeeded": ["Tortillas", "Canned tomatoes", "Yogurt"],
+            "dietaryPreferences": ["Simple high-protein meals"],
+            "allergiesOrAvoidances": ["No known allergies provided"],
+            "budgetLevel": "low",
+            "budgetNotes": "Use pantry items first and avoid specialty ingredients.",
+            "servings": "5 dinners for 1 adult",
+            "timeAvailableMinutes": 30,
+            "cookingSkillLevel": "beginner",
+            "kitchenEquipment": ["Stove", "Skillet", "Rice cooker"],
+            "mealType": "dinner",
+            "cuisinePreferences": ["Flexible"],
+            "leftoversOrBatchPrepGoal": "Reuse cooked rice and chicken across meals.",
+            "constraintsOrNotes": "Manual planning only; no shopping app or delivery order.",
+        },
+    },
+    {
+        "name": "Local Home / Room / Living Space Agent",
+        "endpoint": "POST /agents/home-room-living-space/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_home_room_living_space_planning",
+        "docsLink": "/docs/local-home-room-living-space-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided room, living-space, cleaning, storage, furniture, budget, comfort, safety, and timeline notes only.",
+            "No smart-home, landlord portal, utility account, store, payment, map, location, file, camera, sensor, account, connector, or external-service behavior.",
+            "No purchases, mover bookings, landlord contact, maintenance requests, device control, persistence, building-code compliance, professional inspection, electrical/plumbing safety certification, pest-control certification, legal habitability determination, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Make a small apartment room setup plan for study, sleep, storage, and exercise.",
+            "outputType": "room_setup_plan",
+            "roomType": "small apartment bedroom",
+            "livingSituation": "Shared apartment",
+            "spaceGoal": "Create zones for study, sleep, storage, and a small exercise corner.",
+            "currentItems": ["Bed", "Desk", "Chair", "Laundry basket"],
+            "itemsToBuyOrConsider": ["Desk lamp", "Under-bed bins", "Small shelf"],
+            "budgetLevel": "low",
+            "budgetNotes": "Use current items first.",
+            "roomDimensionsOrConstraints": "Small room with one window and limited closet space.",
+            "storageConstraints": "Clothes and school supplies pile up near the desk.",
+            "cleaningOrMaintenanceNeeds": ["Weekly floor reset", "Laundry routine"],
+            "aestheticPreferences": ["Calm", "Simple"],
+            "productivityOrSleepGoals": ["Better study focus", "Less clutter near bed"],
+            "safetyOrAccessibilityNotes": "Keep walkway clear.",
+            "timeline": "Set up essentials this weekend.",
+            "constraintsOrNotes": "Manual planning only; no purchases or smart-home actions.",
+        },
+    },
+    {
+        "name": "Local Legal / Immigration / Official Matters Agent",
+        "endpoint": "POST /agents/legal-immigration-official/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_legal_immigration_official_planning",
+        "docsLink": "/docs/local-legal-immigration-official-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided official-matter, document, deadline, agency, question, status, and urgency notes only.",
+            "No government portal, immigration account, school portal, court system, legal database, email, calendar, file, payment, map, location, connector, or external-service behavior.",
+            "No submissions, filings, signatures, fee payments, appointment bookings, emails, agency contact, persistence, legal advice, immigration advice, attorney review, eligibility certainty, deadline certainty, visa approval prediction, official compliance, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Make a document checklist for an immigration appointment based only on this summary.",
+            "outputType": "document_checklist",
+            "matterType": "immigration appointment preparation",
+            "jurisdictionOrCountryIfUserProvided": "User-provided country context only",
+            "currentStatus": "User has an upcoming appointment and wants to organize documents.",
+            "documentList": ["Passport", "Appointment notice", "School records", "Address history notes"],
+            "deadlinesOrDates": ["Appointment date from user notes"],
+            "officeOrAgencyNameIfUserProvided": "User-provided office name",
+            "userQuestions": ["Which documents should I ask a qualified professional to review?"],
+            "desiredOutcome": "Arrive prepared with organized questions.",
+            "riskLevelOrUrgency": "Needs careful review but no emergency stated.",
+            "constraintsOrNotes": "General organization only; no legal advice or filing.",
+        },
+    },
+    {
+        "name": "Local Emergency / Preparedness Agent",
+        "endpoint": "POST /agents/emergency-preparedness/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_emergency_preparedness_planning",
+        "docsLink": "/docs/local-emergency-preparedness-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided preparedness, household, supply, pet, vehicle, medical/accessibility, budget, communication, and constraint notes only.",
+            "No emergency services, police/fire/EMS, weather service, map, GPS/location, smart device, alarm, camera, contacts, file, account, payment, connector, or external-service behavior.",
+            "No emergency calls, alerts, family contact, hotel booking, supply purchases, door unlocks, device control, claim submissions, persistence, live hazard detection, official emergency guidance, evacuation-order awareness, medical triage certainty, survival guarantee, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Make a basic car emergency kit checklist for winter driving.",
+            "outputType": "car_emergency_kit",
+            "scenarioType": "winter driving preparedness",
+            "householdSize": "1 driver",
+            "pets": [],
+            "locationContextIfUserProvided": "Cold-weather driving context from user notes.",
+            "currentSupplies": ["Blanket", "Phone charger", "Flashlight"],
+            "vehicleOrTravelContext": "Commutes by car during winter.",
+            "medicalOrAccessibilityNeeds": [],
+            "budgetLevel": "low",
+            "budgetNotes": "Use current supplies first.",
+            "timeHorizon": "Prepare before the next cold-weather trip.",
+            "communicationContactsSummary": "User will keep contact list manually.",
+            "constraintsOrNotes": "Preparedness planning only; no emergency calls or purchases.",
+        },
+    },
+    {
+        "name": "Local Culture / Taste / High-Class Lifestyle Agent",
+        "endpoint": "POST /agents/culture-taste-high-class-lifestyle/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_culture_taste_high_class_lifestyle_planning",
+        "docsLink": "/docs/local-culture-taste-high-class-lifestyle-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided culture, taste, style, event, etiquette, budget, wardrobe, dining, conversation, and learning-interest notes only.",
+            "No stores, fashion apps, reservations, restaurants, maps, location, payments, accounts, social accounts, calendar, contacts, files, camera, photos, connectors, or external-service behavior.",
+            "No purchases, reservations, contacts, posts, sends, persistence, mutation, social acceptance guarantees, status guarantees, manipulation, deception, discrimination, private elite-network access, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Prepare a respectful dinner-event polish plan based only on these notes.",
+            "outputType": "event_prep_plan",
+            "situationOrEvent": "Small professional dinner with unfamiliar guests",
+            "cultureGoal": "Feel prepared without pretending expertise.",
+            "currentStyleOrBaseline": "Usually casual, wants a cleaner and calmer presentation.",
+            "desiredImpression": "Attentive, relaxed, and respectful.",
+            "budgetLevel": "low",
+            "budgetNotes": "Use existing wardrobe first.",
+            "wardrobeOrItemsAvailable": ["Navy blazer", "Plain shirt", "Dark shoes"],
+            "diningOrEventContext": "Dinner context supplied by the user; no reservation or restaurant lookup.",
+            "conversationContext": "Guests may discuss books, travel, food, and local culture.",
+            "readingArtMusicFilmInterests": ["Film history", "Jazz", "Architecture"],
+            "etiquetteFocus": ["Introductions", "Dining pace", "Conversation balance"],
+            "timeline": "One week",
+            "constraintsOrNotes": "Planning only; no stores, reservations, messages, posts, or purchases.",
+        },
+    },
+    {
+        "name": "Local Hobbies / Adventure Agent",
+        "endpoint": "POST /agents/hobbies-adventure/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_hobbies_adventure_planning",
+        "docsLink": "/docs/local-hobbies-adventure-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided hobby, adventure, gear, budget, location-context, timing, group, transport, risk, safety, and accessibility notes only.",
+            "No maps, GPS/location, weather, park systems, drone apps, fishing/license systems, booking apps, stores, payments, accounts, files, camera, sensors, connectors, or external-service behavior.",
+            "No booking, buying, permit or license application, drone airspace verification, legal access verification, contacting, persistence, mutation, live safety or legal verification, unsafe stunts, trespass, poaching, vandalism, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Create a conservative beginner weekend plan for a day hike.",
+            "outputType": "weekend_plan",
+            "hobbyOrActivity": "Beginner day hiking",
+            "experienceLevel": "Beginner",
+            "adventureGoal": "Try an easy outdoor activity without overcommitting.",
+            "availableGear": ["Comfortable shoes", "Small backpack", "Water bottle"],
+            "budgetLevel": "low",
+            "budgetNotes": "Use available gear where safe.",
+            "locationContextIfUserProvided": "User has already chosen a local beginner trail manually.",
+            "timeAvailable": "Saturday morning",
+            "groupSize": "2 people",
+            "transportationContext": "User will arrange transport manually.",
+            "riskTolerance": "Low",
+            "safetyOrAccessibilityNotes": "Avoid steep or remote routes.",
+            "constraintsOrNotes": "No maps, weather, park, booking, permit, purchase, or legal access verification.",
+        },
+    },
+    {
+        "name": "Local Personal Knowledge / Memory Organizer Agent",
+        "endpoint": "POST /agents/personal-knowledge-memory-organizer/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_personal_knowledge_memory_organization",
+        "docsLink": "/docs/local-personal-knowledge-memory-organizer-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided knowledge-area, source-note, category, project, review, priority, retention, decision, and memory-context text only.",
+            "No files, notes apps, cloud drives, browser history, email, calendar, contacts, memory stores, databases, accounts, payments, connectors, or external-service behavior.",
+            "No create, edit, delete, move, persist, sync, export, mutation, file search, external-memory search, secret storage, sensitive fact inference beyond provided text, or certification claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Organize these personal learning notes into a manual memory index.",
+            "outputType": "memory_index",
+            "knowledgeArea": "Home lab networking notes",
+            "sourceNotesOrSummary": "Router reset steps worked after checking cable labels. VLAN notes still need review. Keep troubleshooting lessons separate from purchase ideas.",
+            "organizationGoal": "Find useful context quickly before the next setup session.",
+            "categoriesOrTags": ["networking", "troubleshooting", "home lab"],
+            "projectsOrLifeAreas": ["Home lab"],
+            "reviewFrequency": "Weekly while active",
+            "priorityLevel": "Medium",
+            "retentionGoal": "Remember setup decisions and unresolved questions.",
+            "decisionOrMemoryContext": "Future setup sessions should start with cable labels and known-good reset steps.",
+            "constraintsOrNotes": "No file, notes app, database, sync, export, or persistent memory action.",
+        },
+    },
+    {
+        "name": "Local Life Dashboard / Cross-Agent Coordinator",
+        "endpoint": "POST /agents/life-dashboard-coordinator/local-plan",
+        "status": "implemented_local_only",
+        "mode": "response_only_user_provided_life_dashboard_cross_agent_coordination",
+        "docsLink": "/docs/local-life-dashboard-coordinator-agent.md",
+        "responseMode": "response_only",
+        "safetyNotes": [
+            "Uses user-provided life-area, goal, project, urgent-item, time, energy, priority, decision-context, weekly-focus, and risk/stress text only.",
+            "Recommends relevant local response agents by name or id as suggestions only; no automatic sub-agent execution, handoffs, connector calls, account access, external services, persistence, tasks, reminders, file mutation, email, calendar, social posting, purchase, booking, submission, payment, official filing, emergency, medical, legal, or financial action.",
+            "High-stakes topics are framed as planning notes only and point users toward qualified professionals or official sources without certainty claims.",
+        ],
+        "exampleRequestBody": {
+            "request": "Turn my school, robotics, fitness, money, and social goals into a weekly life dashboard.",
+            "outputType": "life_dashboard",
+            "lifeAreas": ["School", "Robotics", "Fitness", "Money", "Social"],
+            "currentGoals": ["Keep classes on track", "Prepare the robotics build", "Restart workouts", "Stay inside the weekly budget"],
+            "currentProjects": ["Robotics competition", "Semester assignments", "Meal prep reset"],
+            "urgentItems": ["Math quiz Friday", "Robot drivetrain test", "Budget check before weekend"],
+            "timeHorizon": "Next 7 days",
+            "availableTime": "Two evenings and Saturday morning",
+            "energyLevel": "Medium with lower energy after school",
+            "constraintsOrNotes": "No calendar, task, reminder, file, connector, or account access.",
+            "priorityPreference": "Balance urgent school work with robotics progress.",
+            "domainsToCoordinate": ["school", "robotics", "fitness", "money", "relationships"],
+            "existingAgentOutputsOrNotes": ["Study plan needs a short review block", "Budget notes are user-provided only"],
+            "decisionContext": "Choose where to spend limited evening focus.",
+            "weeklyFocus": "Protect school deadlines while making visible robotics progress.",
+            "riskOrStressFlags": ["Overcommitting", "Skipping rest"],
+            "desiredDashboardStyle": "Compact weekly dashboard",
         },
     },
     {
@@ -731,12 +983,13 @@ LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES = [
     "No file mutation except existing Coding Agent workflows.",
     "No email sending, posting, or purchases.",
     "No task persistence for response-only agents.",
+    "Optional read-only public URL source context is available only when the user explicitly enables it; no background browsing.",
     "No claims of clean Windows VM validation, CI validation, private-alpha certification, production readiness, or security certification.",
 ]
 
 
 def local_response_agents_index() -> list[dict[str, Any]]:
-    return deepcopy(LOCAL_RESPONSE_AGENTS_INDEX)
+    return [enrich_local_response_agent(agent) for agent in deepcopy(LOCAL_RESPONSE_AGENTS_INDEX)]
 
 
 def local_response_agents_global_boundaries() -> list[str]:
@@ -748,6 +1001,7 @@ def local_response_agents_summary() -> dict[str, Any]:
     return {
         "status": "read_only_index",
         "agentCount": len(agents),
+        "expectedAgentCount": LOCAL_RESPONSE_AGENT_COUNT,
         "agents": agents,
         "globalBoundaries": local_response_agents_global_boundaries(),
         "docsLink": "/docs/local-response-agents-index.md",
@@ -762,5 +1016,70 @@ def local_response_agents_summary() -> dict[str, Any]:
         "cloudSync": False,
         "emailSendingPostingPurchases": False,
         "taskPersistenceForResponseOnlyAgents": False,
+        "webResearchAvailable": True,
+        "web_research_available": True,
+        "webResearchMode": WEB_RESEARCH_AGENT_MODE,
+        "web_research_mode": WEB_RESEARCH_AGENT_MODE,
+        "webResearchRequiresUserEnabled": True,
+        "web_research_requires_user_enabled": True,
+        "webResearchIsOptional": True,
+        "web_research_is_optional": True,
+        "webResearchLimitations": list(WEB_RESEARCH_LIMITATIONS),
+        "web_research_limitations": list(WEB_RESEARCH_LIMITATIONS),
         "certificationClaims": False,
     }
+
+
+def local_response_agents_discovery_catalog() -> dict[str, Any]:
+    agents = local_response_agents_index()
+    return {
+        "status": "local_response_agents_discovery_catalog",
+        "agent_count": len(agents),
+        "agentCount": len(agents),
+        "expected_agent_count": LOCAL_RESPONSE_AGENT_COUNT,
+        "expectedAgentCount": LOCAL_RESPONSE_AGENT_COUNT,
+        "agents": [discovery_metadata_for_agent(agent) for agent in agents],
+        "consistency": validate_catalog_consistency(agents),
+        "local_only": True,
+        "manual_input_only": True,
+        "response_only": True,
+        "non_persistent": True,
+        "connector_behavior": False,
+        "web_research_available": True,
+        "webResearchAvailable": True,
+        "web_research_mode": WEB_RESEARCH_AGENT_MODE,
+        "webResearchMode": WEB_RESEARCH_AGENT_MODE,
+        "web_research_requires_user_enabled": True,
+        "webResearchRequiresUserEnabled": True,
+        "web_research_is_optional": True,
+        "webResearchIsOptional": True,
+    }
+
+
+def local_response_agent_categories() -> dict[str, Any]:
+    return list_local_agent_categories(local_response_agents_index())
+
+
+def local_response_agent_metadata(agent_id: str) -> dict[str, Any]:
+    return get_local_agent_metadata(agent_id, local_response_agents_index())
+
+
+def local_response_agent_request_template(agent_id: str) -> dict[str, Any]:
+    return build_local_agent_request_template(agent_id, local_response_agents_index())
+
+
+def local_response_agent_route_preview(
+    text: str,
+    domains_to_consider: list[str] | None = None,
+    preferred_output_type: str = "",
+    urgency_level: str = "",
+    constraints_or_notes: str = "",
+) -> dict[str, Any]:
+    return preview_local_agent_route(
+        text,
+        domains_to_consider or [],
+        preferred_output_type,
+        urgency_level,
+        constraints_or_notes,
+        local_response_agents_index(),
+    )

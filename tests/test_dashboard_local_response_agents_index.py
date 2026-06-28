@@ -19,6 +19,14 @@ EXPECTED_AGENTS = [
     "Local Transformation Agent",
     "Local Business Agent",
     "Local Health/Fitness Agent",
+    "Local Food / Cooking / Grocery Agent",
+    "Local Home / Room / Living Space Agent",
+    "Local Legal / Immigration / Official Matters Agent",
+    "Local Emergency / Preparedness Agent",
+    "Local Culture / Taste / High-Class Lifestyle Agent",
+    "Local Hobbies / Adventure Agent",
+    "Local Personal Knowledge / Memory Organizer Agent",
+    "Local Life Dashboard / Cross-Agent Coordinator",
     "Local Everyday Life Agent",
     "Local Online Presence Agent",
     "Local Security/Safety Agent",
@@ -57,7 +65,8 @@ def test_dashboard_summary_exposes_local_response_agents_index(tmp_path, monkeyp
     assert summary["capabilities"]["localResponseAgentsIndex"] == "read_only_index"
     assert summary["safety"]["localResponseAgentsIndex"]["connectorExecution"] is False
     assert index["status"] == "read_only_index"
-    assert index["agentCount"] == 29
+    assert index["agentCount"] == 37
+    assert index["expectedAgentCount"] == 37
     assert index["docsLink"] == "/docs/local-response-agents-index.md"
     assert index["addsAgents"] is False
     assert index["addsEndpoint"] is False
@@ -76,6 +85,12 @@ def test_dashboard_index_includes_exactly_the_implemented_local_agents(tmp_path,
     assert all(agent["docsLink"].startswith("/docs/") for agent in agents)
     assert all(agent["docsLink"].endswith(".md") for agent in agents)
     assert {agent["responseMode"] for agent in agents} == {"response_only", "metadata_only"}
+    assert all(agent["agentId"] for agent in agents)
+    assert all(agent["displayName"] == agent["name"] for agent in agents)
+    assert all(agent["category"] for agent in agents)
+    assert all(agent["badges"] for agent in agents)
+    assert all(agent["outputTypes"] for agent in agents)
+    assert all(agent["useWhen"] for agent in agents)
     assert all(isinstance(agent["exampleRequestBody"], dict) for agent in agents)
     assert all(agent["exampleRequestBody"] for agent in agents)
 
@@ -133,6 +148,37 @@ def test_dashboard_html_includes_local_response_agents_index_section_and_link(tm
     assert "/docs/local-response-agents-index.md" in page_text
     assert "renderLocalResponseAgentsIndex(summary.localResponseAgentsIndex)" in page_text
     assert "local-response-agents-index-status" in page_text
+    assert "Discovery and template metadata." in page_text
+    assert "Local Response Agents Overview" in page_text
+    assert "Category browser" in page_text
+    assert "Agent Details" in page_text
+    assert "Request Template" in page_text
+    assert "Sample Payload" in page_text
+    assert "Route Preview" in page_text
+    assert "Suggested only — not executed" in page_text
+    assert "GET /agents/local-response-agents/catalog" in page_text
+    assert "GET /agents/local-response-agents/categories" in page_text
+    assert "GET /agents/local-response-agents/{agent_id}" in page_text
+    assert "GET /agents/local-response-agents/{agent_id}/request-template" in page_text
+    assert "POST /agents/local-response-agents/route-preview" in page_text
+    assert "suggested route only / not executed" in page_text
+
+
+def test_dashboard_html_renders_local_response_agent_categories_badges_output_types_and_use_when(tmp_path, monkeypatch):
+    app_services(tmp_path, monkeypatch)
+
+    page_text = app_module.local_dashboard().body.decode("utf-8")
+
+    assert "agent.category || 'Uncategorized'" in page_text
+    assert "agent.displayName || agent.name" in page_text
+    assert "agent.agentId || ''" in page_text
+    assert "agent.badges || []" in page_text
+    assert "agent.outputTypes || []" in page_text
+    assert "Use when:" in page_text
+    assert "agent.useWhen || agent.recommendedFor" in page_text
+    assert "Request template:" in page_text
+    assert "`/agents/local-response-agents/${agent.agentId || ''}/request-template`" in page_text
+    assert "Knowledge/Coordinator" in str(app_module.dashboard_summary()["localResponseAgentsIndex"]["agents"])
 
 
 def test_docs_page_includes_agents_and_global_boundaries():
@@ -142,7 +188,7 @@ def test_docs_page_includes_agents_and_global_boundaries():
     for agent_name in EXPECTED_AGENTS:
         assert agent_name in doc_text
 
-    assert doc_text.count("implemented_local_only") == 29
+    assert doc_text.count("implemented_local_only") == 37
     assert "No paid APIs." in doc_text
     assert "No connectors." in doc_text
     assert "No OAuth or account access." in doc_text

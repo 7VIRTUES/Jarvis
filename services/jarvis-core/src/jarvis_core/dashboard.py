@@ -1069,13 +1069,86 @@ def dashboard_html() -> str:
         <div class="muted">Lists implemented local response-only and metadata-only agents, endpoints, docs, and safety boundaries. It does not add agents, add endpoints, perform workflows, call connectors, persist tasks, mutate files, or claim clean VM, CI, private-alpha, production, or security certification.</div>
       </div>
       <div id="local-response-agents-index-summary" class="grid"></div>
+      <div class="row stack">
+        <strong>Discovery and template metadata.</strong>
+        <div class="muted">Catalog, categories, single-agent metadata, request templates, and route preview are local-only discovery surfaces. Route preview is suggested route only / not executed.</div>
+        <div><code>GET /agents/local-response-agents/catalog</code></div>
+        <div><code>GET /agents/local-response-agents/categories</code></div>
+        <div><code>GET /agents/local-response-agents/{agent_id}</code></div>
+        <div><code>GET /agents/local-response-agents/{agent_id}/request-template</code></div>
+        <div><code>POST /agents/local-response-agents/route-preview</code></div>
+        <div><code>GET /web-research/policy</code></div>
+        <div><code>POST /web-research/validate-url</code></div>
+        <div><code>POST /web-research/fetch-public-url</code></div>
+        <div><code>POST /web-research/agent-context-preview</code></div>
+      </div>
+      <div id="local-response-agents-overview" class="row stack">
+        <h3>Local Response Agents Overview</h3>
+        <div class="muted">Browse the 37 local response agents by category, inspect metadata, view request templates, and preview suggested routes from manual text only.</div>
+        <div id="local-response-agents-discovery-status" class="muted">Discovery catalog metadata pending.</div>
+        <div id="local-response-agents-boundary-badges">
+          <span class="pill">Manual input only</span>
+          <span class="pill">Local only</span>
+          <span class="pill">Response only</span>
+          <span class="pill">No connector</span>
+          <span class="pill">Non-persistent</span>
+        </div>
+      </div>
+      <div id="local-response-agents-browser" class="grid">
+        <div class="row stack">
+          <h3>Categories</h3>
+          <div id="local-response-agents-category-counts" class="stack muted">Category metadata pending.</div>
+          <label>
+            Category browser
+            <select id="local-response-agents-category-select"></select>
+          </label>
+        </div>
+        <div class="row stack">
+          <h3>Agent Details</h3>
+          <div id="local-response-agents-detail-panel" class="stack muted">Choose a local response agent to inspect display metadata.</div>
+          <div id="local-response-agents-boundary-flags" class="stack muted">Boundary flags pending.</div>
+        </div>
+      </div>
+      <div id="local-response-agents-template-viewer" class="grid">
+        <div class="row stack">
+          <h3>Request Template</h3>
+          <div id="local-response-agents-template-status" class="muted">Template metadata pending.</div>
+          <pre id="local-response-agents-request-template">No request template selected.</pre>
+        </div>
+        <div class="row stack">
+          <h3>Sample Payload</h3>
+          <div class="muted">Manual example only. Viewing this payload does not invoke an agent.</div>
+          <div class="actions">
+            <button id="local-response-agents-use-sample-button" type="button">Use sample payload</button>
+          </div>
+          <pre id="local-response-agents-sample-payload">No sample payload selected.</pre>
+        </div>
+      </div>
+      <div id="local-response-agents-route-preview-panel" class="row stack">
+        <h3>Route Preview</h3>
+        <div><span class="pill">Suggested only — not executed</span> <span class="pill">Route preview does not invoke agents</span></div>
+        <div class="muted">Paste a manual request to receive suggested local response agents from catalog metadata only. Select manually before running a local response. This is not a handoff, not automation, and not execution.</div>
+        <label>
+          Manual request for route preview
+          <textarea id="local-response-agents-route-preview-input" spellcheck="false" placeholder="Describe the local request. Do not paste secrets, account data, or protected content."></textarea>
+        </label>
+        <div class="actions">
+          <button id="local-response-agents-route-preview-button" type="button">Preview suggested agents</button>
+        </div>
+        <div id="local-response-agents-route-preview-status" class="muted">Route preview does not invoke agents. Suggested only — not executed.</div>
+        <label>
+          Suggested agent selector
+          <select id="local-response-agents-route-preview-suggestions"></select>
+        </label>
+        <pre id="local-response-agents-route-preview-result">No route preview yet.</pre>
+      </div>
       <div id="local-response-agents-index-list" class="stack"></div>
       <div id="local-response-agents-examples-heading"><strong>Read-only example request bodies</strong></div>
       <div class="local-response-agent-example muted">Examples render from the local dashboard summary after load.</div>
       <div id="local-response-agents-example-note" class="muted">Example request bodies are read-only JSON display only. This dashboard does not call agent endpoints or create artifacts from these examples.</div>
       <div id="local-response-agents-workbench" class="row stack">
         <h3>Local Response Agents Workbench</h3>
-        <div class="muted">Local-only workbench allowlisted to the 29 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
+        <div class="muted">Local-only workbench allowlisted to the 37 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
         <label>
           Select local response agent
           <select id="local-response-agents-workbench-select"></select>
@@ -1083,12 +1156,63 @@ def dashboard_html() -> str:
         <div>Selected endpoint: <code id="local-response-agents-workbench-endpoint">No agent selected.</code></div>
         <div><a id="local-response-agents-workbench-docs" href="/docs/local-response-agents-index.md">Docs</a></div>
         <div id="local-response-agents-workbench-file-data-note" class="muted">File/Data Agent requires a registered project and remains allowlisted only through its cataloged endpoint.</div>
+        <div id="local-response-agents-composer" class="row stack">
+          <h3>Request Composer</h3>
+          <div id="local-response-agents-composer-boundaries">
+            <span class="pill">Manual input only</span>
+            <span class="pill">Local only</span>
+            <span class="pill">Response only</span>
+            <span class="pill">No connector</span>
+            <span class="pill">Non-persistent</span>
+          </div>
+          <label>
+            Output type from request-template metadata
+            <select id="local-response-agents-output-type-select"></select>
+          </label>
+          <div id="local-response-agents-payload-preview-status" class="muted">Editable JSON payload preview is filled from the selected template sample.</div>
+        </div>
+        <div id="local-response-agents-web-research" class="row stack">
+          <h3>Optional Public Web Research</h3>
+          <div class="muted">Read-only public web only. Manual click required. Source context is inserted for review, not executed automatically.</div>
+          <div id="local-response-agents-web-research-boundaries">
+            <span class="pill">Read-only public web only</span>
+            <span class="pill">No logins or accounts</span>
+            <span class="pill">No forms, posts, purchases, or bookings</span>
+            <span class="pill">No private networks or localhost</span>
+            <span class="pill">No downloads or scripts</span>
+            <span class="pill">Manual click required</span>
+          </div>
+          <label>
+            <input id="local-response-agents-web-research-enabled" type="checkbox">
+            Optional public web source context enabled for this manual payload
+          </label>
+          <label>
+            Public source URLs, one per line
+            <textarea id="local-response-agents-web-research-urls" spellcheck="false" placeholder="https://example.com/public-source"></textarea>
+          </label>
+          <div class="actions">
+            <button id="local-response-agents-web-research-validate-button" type="button">Validate public URLs</button>
+            <button id="local-response-agents-web-research-fetch-button" type="button">Preview source excerpts</button>
+            <button id="local-response-agents-web-research-context-button" type="button">Preview agent context</button>
+            <button id="local-response-agents-web-research-add-button" type="button">Add source context to manual payload</button>
+          </div>
+          <div id="local-response-agents-web-research-status" class="muted">Public web research is optional, public-only, read-only, and never background browsing.</div>
+          <pre id="local-response-agents-web-research-result">No public web source preview yet.</pre>
+        </div>
         <label>
-          Request JSON body
+          Editable JSON payload preview - manual input only
           <textarea id="local-response-agents-workbench-body" spellcheck="false"></textarea>
         </label>
         <button id="local-response-agents-workbench-run-button" type="button">Run selected local response agent</button>
         <div id="local-response-agents-workbench-status" class="muted">Workbench is ready after the dashboard summary loads.</div>
+        <div id="local-response-agents-response-boundaries">
+          <span class="pill">Manual input only</span>
+          <span class="pill">Local only</span>
+          <span class="pill">Response only</span>
+          <span class="pill">No connector</span>
+          <span class="pill">Non-persistent</span>
+        </div>
+        <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
         <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
       </div>
       <div id="local-response-agents-index-boundaries" class="row"></div>
@@ -1819,6 +1943,7 @@ def dashboard_html() -> str:
       const values = {
         status: index.status,
         agentCount: index.agentCount,
+        expectedAgentCount: index.expectedAgentCount,
         addsAgents: index.addsAgents ? 'true' : 'false',
         addsEndpoint: index.addsEndpoint ? 'true' : 'false',
         mutation: index.mutation ? 'enabled' : 'disabled',
@@ -1828,16 +1953,33 @@ def dashboard_html() -> str:
         .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join('');
       const agents = Array.isArray(index.agents) ? index.agents : [];
+      const groupedAgents = agents.reduce((groups, agent) => {
+        const category = agent.category || 'Uncategorized';
+        groups[category] = groups[category] || [];
+        groups[category].push(agent);
+        return groups;
+      }, {});
       document.getElementById('local-response-agents-index-list').innerHTML = agents.length
-        ? agents.map((agent) => `<div class="row">
-            <strong>${escapeHtml(agent.name)}</strong>
-            <div><code>${escapeHtml(agent.status)}</code> · <code>${escapeHtml(agent.responseMode)}</code></div>
-            <div>Endpoint: <code>${escapeHtml(agent.endpoint)}</code></div>
-            <div>Mode: <code>${escapeHtml(agent.mode)}</code></div>
-            <div><a href="${escapeHtml(agent.docsLink)}">Docs</a></div>
-            <div class="muted">${escapeHtml((agent.safetyNotes || []).join(' '))}</div>
-            <div><strong>Read-only example request body</strong></div>
-            <pre class="local-response-agent-example">${escapeHtml(JSON.stringify(agent.exampleRequestBody || {}, null, 2))}</pre>
+        ? Object.entries(groupedAgents).map(([category, categoryAgents]) => `<div class="row stack">
+            <h3>${escapeHtml(category)}</h3>
+            ${categoryAgents.map((agent) => `<div class="row">
+              <strong>${escapeHtml(agent.displayName || agent.name)}</strong>
+              <div>
+                <code>${escapeHtml(agent.agentId || '')}</code> ·
+                <code>${escapeHtml(agent.status)}</code> ·
+                <code>${escapeHtml(agent.responseMode)}</code>
+              </div>
+              <div>${(agent.badges || []).map((badge) => `<span class="pill">${escapeHtml(badge)}</span>`).join(' ')}</div>
+              <div>Endpoint: <code>${escapeHtml(agent.endpoint)}</code></div>
+              <div>Request template: <code>${escapeHtml(`/agents/local-response-agents/${agent.agentId || ''}/request-template`)}</code></div>
+              <div>Mode: <code>${escapeHtml(agent.mode)}</code></div>
+              <div>Output types: <code>${escapeHtml((agent.outputTypes || []).join(', '))}</code></div>
+              <div class="muted">Use when: ${escapeHtml(agent.useWhen || agent.recommendedFor || '')}</div>
+              <div><a href="${escapeHtml(agent.docsLink)}">Docs</a></div>
+              <div class="muted">${escapeHtml((agent.safetyNotes || []).join(' '))}</div>
+              <div><strong>Read-only example request body</strong></div>
+              <pre class="local-response-agent-example">${escapeHtml(JSON.stringify(agent.exampleRequestBody || {}, null, 2))}</pre>
+            </div>`).join('')}
           </div>`).join('')
         : 'No local response agents indexed.';
       const boundaries = Array.isArray(index.globalBoundaries) ? index.globalBoundaries : [];
@@ -1855,21 +1997,241 @@ def dashboard_html() -> str:
         .filter((endpoint) => endpoint.method === 'POST' && endpoint.path.startsWith('/agents/'))
         .map((endpoint) => endpoint.path));
     }
+    function localResponseAgentId(agent) {
+      return agent && (agent.agentId || agent.agent_id || '');
+    }
+    function localResponseAgentName(agent) {
+      return agent && (agent.displayName || agent.display_name || agent.name || 'Local response agent');
+    }
+    function localResponseAgentCategory(agent) {
+      return agent && (agent.category || 'Uncategorized');
+    }
+    function localResponseAgentBadges(agent) {
+      const badges = agent && (agent.badges || []);
+      return Array.isArray(badges) && badges.length
+        ? badges
+        : ['Manual input only', 'Local only', 'Response only', 'No connector', 'Non-persistent'];
+    }
+    function localResponseAgentBoundaryFlags(agent) {
+      return (agent && (agent.boundaryFlags || agent.boundary_flags)) || {};
+    }
+    function localResponseAgentExample(agent) {
+      if (!agent) {
+        return {};
+      }
+      if (agent.exampleRequestBody) {
+        return agent.exampleRequestBody;
+      }
+      if (Array.isArray(agent.examples) && agent.examples.length) {
+        return agent.examples[0] || {};
+      }
+      return {};
+    }
+    function localResponseAgentTemplatePath(agent) {
+      const agentId = localResponseAgentId(agent);
+      return agentId ? `/agents/local-response-agents/${encodeURIComponent(agentId)}/request-template` : '';
+    }
+    function renderLocalResponseAgentJson(target, value, fallbackText) {
+      target.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
+    }
+    function localResponseAgentTemplateOutputTypes(template, agent) {
+      const templateTypes = template && (template.supported_output_types || template.supportedOutputTypes || template.output_types || template.outputTypes);
+      const agentTypes = agent && (agent.outputTypes || agent.output_types);
+      const defaultType = template && (template.default_output_type || template.defaultOutputType || template.output_type || template.outputType);
+      const types = []
+        .concat(Array.isArray(templateTypes) ? templateTypes : [])
+        .concat(defaultType ? [defaultType] : [])
+        .concat(Array.isArray(agentTypes) ? agentTypes : []);
+      return Array.from(new Set(types.map((type) => String(type || '').trim()).filter(Boolean)));
+    }
+    function selectedOutputTypeField(payload) {
+      const knownFields = [
+        'output_type',
+        'outputType',
+        'desired_output_type',
+        'desiredOutputType',
+        'summary_type',
+        'summaryType',
+        'review_type',
+        'reviewType',
+        'classification_type',
+        'classificationType',
+        'extraction_type',
+        'extractionType',
+        'target_format',
+        'targetFormat',
+      ];
+      return knownFields.find((field) => payload && Object.prototype.hasOwnProperty.call(payload, field)) || 'output_type';
+    }
+    function localResponseAgentPayloadWithSelectedOutputType(payload, outputType) {
+      const nextPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...payload } : {};
+      if (outputType) {
+        nextPayload[selectedOutputTypeField(nextPayload)] = outputType;
+      }
+      return nextPayload;
+    }
+    function localResponseAgentFieldLabel(key) {
+      return String(key || '')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    }
+    function renderLocalResponseValue(value) {
+      if (value === null || value === undefined || value === '') {
+        return '<div class="muted">No value returned.</div>';
+      }
+      if (Array.isArray(value)) {
+        return value.length
+          ? `<ul>${value.map((item) => `<li>${renderLocalResponseValue(item)}</li>`).join('')}</ul>`
+          : '<div class="muted">No items returned.</div>';
+      }
+      if (typeof value === 'object') {
+        return `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+      }
+      return `<div>${escapeHtml(String(value))}</div>`;
+    }
+    function localResponseKnownValue(responseBody, key) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      return responseBody && Object.prototype.hasOwnProperty.call(responseBody, key)
+        ? responseBody[key]
+        : responseBody && Object.prototype.hasOwnProperty.call(responseBody, camelKey)
+          ? responseBody[camelKey]
+          : undefined;
+    }
+    function renderStructuredLocalResponse(target, responseBody) {
+      const fields = [
+        'title',
+        'summary',
+        'assumptions',
+        'recommended_plan',
+        'step_by_step',
+        'checklist',
+        'next_actions',
+        'priority_order',
+        'recommended_agents',
+        'risk_flags',
+        'safety_notes',
+        'limitations',
+        'local_only_boundaries',
+        'follow_up_questions',
+        'output_type',
+        'agent_id',
+      ];
+      const usedKeys = new Set(fields.flatMap((field) => [field, field.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())]));
+      const rows = fields
+        .map((field) => [field, localResponseKnownValue(responseBody, field)])
+        .filter(([, value]) => value !== undefined)
+        .map(([field, value]) => `<div class="row stack"><strong>${escapeHtml(localResponseAgentFieldLabel(field))}</strong>${renderLocalResponseValue(value)}</div>`);
+      const additional = responseBody && typeof responseBody === 'object' && !Array.isArray(responseBody)
+        ? Object.fromEntries(Object.entries(responseBody).filter(([key]) => !usedKeys.has(key)))
+        : {};
+      const additionalRows = Object.keys(additional).length
+        ? `<details><summary>Raw JSON for unknown fields</summary><pre>${escapeHtml(JSON.stringify(additional, null, 2))}</pre></details>`
+        : '';
+      target.className = 'row stack';
+      target.innerHTML = rows.length
+        ? rows.join('') + additionalRows
+        : '<div class="muted">Local response returned no common display fields. Raw JSON remains visible below.</div>' + additionalRows;
+    }
+    function renderWorkbenchError(target, title, message, details) {
+      target.className = 'row stack';
+      target.innerHTML = `
+        <div><strong>${escapeHtml(title)}</strong></div>
+        <div class="muted">${escapeHtml(message)}</div>
+        ${details ? `<pre>${escapeHtml(JSON.stringify(details, null, 2))}</pre>` : ''}
+      `;
+    }
     function initializeLocalResponseAgentsWorkbench(index) {
       const agents = Array.isArray(index && index.agents) ? index.agents : [];
       const allowlistedEndpointPaths = localResponseAgentAllowlist(agents);
       const select = document.getElementById('local-response-agents-workbench-select');
+      const categorySelect = document.getElementById('local-response-agents-category-select');
+      const categoryCounts = document.getElementById('local-response-agents-category-counts');
+      const discoveryStatus = document.getElementById('local-response-agents-discovery-status');
+      const detailPanel = document.getElementById('local-response-agents-detail-panel');
+      const boundaryFlagsPanel = document.getElementById('local-response-agents-boundary-flags');
+      const templateStatus = document.getElementById('local-response-agents-template-status');
+      const templateOutput = document.getElementById('local-response-agents-request-template');
+      const samplePayloadOutput = document.getElementById('local-response-agents-sample-payload');
+      const useSampleButton = document.getElementById('local-response-agents-use-sample-button');
+      const routePreviewInput = document.getElementById('local-response-agents-route-preview-input');
+      const routePreviewButton = document.getElementById('local-response-agents-route-preview-button');
+      const routePreviewStatus = document.getElementById('local-response-agents-route-preview-status');
+      const routePreviewSuggestions = document.getElementById('local-response-agents-route-preview-suggestions');
+      const routePreviewResult = document.getElementById('local-response-agents-route-preview-result');
       const endpointDisplay = document.getElementById('local-response-agents-workbench-endpoint');
       const docsLink = document.getElementById('local-response-agents-workbench-docs');
+      const outputTypeSelect = document.getElementById('local-response-agents-output-type-select');
+      const payloadPreviewStatus = document.getElementById('local-response-agents-payload-preview-status');
       const bodyInput = document.getElementById('local-response-agents-workbench-body');
       const runButton = document.getElementById('local-response-agents-workbench-run-button');
       const status = document.getElementById('local-response-agents-workbench-status');
+      const structuredResponse = document.getElementById('local-response-agents-structured-response');
       const responseOutput = document.getElementById('local-response-agents-workbench-response');
-      select.innerHTML = agents.map((agent, index) => `<option value="${escapeHtml(index)}">${escapeHtml(agent.name)}</option>`).join('');
+      const webResearchEnabled = document.getElementById('local-response-agents-web-research-enabled');
+      const webResearchUrls = document.getElementById('local-response-agents-web-research-urls');
+      const webResearchValidateButton = document.getElementById('local-response-agents-web-research-validate-button');
+      const webResearchFetchButton = document.getElementById('local-response-agents-web-research-fetch-button');
+      const webResearchContextButton = document.getElementById('local-response-agents-web-research-context-button');
+      const webResearchAddButton = document.getElementById('local-response-agents-web-research-add-button');
+      const webResearchStatus = document.getElementById('local-response-agents-web-research-status');
+      const webResearchResult = document.getElementById('local-response-agents-web-research-result');
+      const groupedAgents = agents.reduce((groups, agent) => {
+        const category = localResponseAgentCategory(agent);
+        groups[category] = groups[category] || [];
+        groups[category].push(agent);
+        return groups;
+      }, {});
+      const categories = Object.keys(groupedAgents);
+      let activeAgents = agents.slice();
+      let selectedTemplate = null;
+      let latestWebResearchSources = [];
+
+      categoryCounts.innerHTML = categories.length
+        ? categories.map((category) => `<div><strong>${escapeHtml(category)}</strong>: ${escapeHtml(groupedAgents[category].length)} local response agents</div>`).join('')
+        : '<div>No category metadata available.</div>';
+      categorySelect.innerHTML = ['<option value="__all__">All categories (37)</option>']
+        .concat(categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)} (${escapeHtml(groupedAgents[category].length)})</option>`))
+        .join('');
+
+      function renderAgentOptions() {
+        activeAgents = categorySelect.value === '__all__'
+          ? agents.slice()
+          : (groupedAgents[categorySelect.value] || []);
+        select.innerHTML = activeAgents.length
+          ? activeAgents.map((agent, index) => `<option value="${escapeHtml(index)}">${escapeHtml(localResponseAgentCategory(agent))} - ${escapeHtml(localResponseAgentName(agent))}</option>`).join('')
+          : '<option value="0">No local response agents in this category</option>';
+      }
+      async function loadDiscoveryCatalogMetadata() {
+        discoveryStatus.textContent = `Dashboard summary includes ${agents.length} of 37 expected local response agents.`;
+        try {
+          const catalog = await fetch('/agents/local-response-agents/catalog').then((response) => response.json());
+          const count = catalog.agentCount || catalog.agent_count || 0;
+          const expected = catalog.expectedAgentCount || catalog.expected_agent_count || 37;
+          discoveryStatus.textContent = `Discovery catalog includes ${count} of ${expected} expected local response agents.`;
+        } catch {
+          discoveryStatus.textContent = `Discovery catalog endpoint unavailable; dashboard summary includes ${agents.length} of 37 expected local response agents.`;
+        }
+      }
+      async function loadCategoryMetadata() {
+        try {
+          const categoryMetadata = await fetch('/agents/local-response-agents/categories').then((response) => response.json());
+          const categoryRows = Array.isArray(categoryMetadata.categories) ? categoryMetadata.categories : [];
+          categoryCounts.innerHTML = categoryRows.length
+            ? categoryRows.map((category) => `<div><strong>${escapeHtml(category.name)}</strong>: ${escapeHtml(category.count)} local response agents</div>`).join('')
+            : categoryCounts.innerHTML;
+          if (categoryMetadata.totalCount || categoryMetadata.total_count) {
+            const total = categoryMetadata.totalCount || categoryMetadata.total_count;
+            categoryCounts.innerHTML += `<div class="muted">Category count total: ${escapeHtml(total)} of 37 expected local response agents.</div>`;
+          }
+        } catch {
+          categoryCounts.innerHTML += '<div class="muted">Category endpoint unavailable; using dashboard summary metadata.</div>';
+        }
+      }
 
       function selectedAgent() {
         const index = Number(select.value || 0);
-        return agents[index] || null;
+        return activeAgents[index] || null;
       }
       function selectedEndpointPath(agent) {
         const endpoint = localResponseAgentEndpointParts(agent && agent.endpoint);
@@ -1878,46 +2240,371 @@ def dashboard_html() -> str:
         }
         return endpoint.path;
       }
-      function loadSelectedExample() {
+      function populateOutputTypeSelect(template, agent) {
+        const outputTypes = localResponseAgentTemplateOutputTypes(template, agent);
+        outputTypeSelect.innerHTML = outputTypes.length
+          ? outputTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join('')
+          : '<option value="summary">summary</option>';
+      }
+      function applySamplePayloadToComposer(template, agent) {
+        const samplePayload = (template && (template.sample_payload || template.samplePayload)) || localResponseAgentExample(agent);
+        const payload = localResponseAgentPayloadWithSelectedOutputType(samplePayload, outputTypeSelect.value || '');
+        bodyInput.value = JSON.stringify(payload, null, 2);
+        payloadPreviewStatus.textContent = 'Editable JSON payload preview filled from the selected local request template sample.';
+        structuredResponse.className = 'row stack muted';
+        structuredResponse.textContent = 'No structured local response-agent result yet.';
+        responseOutput.textContent = 'No local response-agent result yet.';
+      }
+      function refreshPayloadOutputType() {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            payloadPreviewStatus.textContent = 'Output type not applied: payload preview must be a JSON object.';
+            return;
+          }
+          const payload = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
+          bodyInput.value = JSON.stringify(payload, null, 2);
+          payloadPreviewStatus.textContent = 'Output type applied to the editable JSON payload preview.';
+        } catch (error) {
+          payloadPreviewStatus.textContent = `Output type not applied: invalid JSON (${error.message}).`;
+        }
+      }
+      async function localResponseAgentSelectSuggestedAgent(agentId) {
+        const agentIndex = agents.findIndex((agent) => localResponseAgentId(agent) === agentId);
+        if (agentIndex < 0) {
+          routePreviewStatus.textContent = 'Suggested agent was not found in the local dashboard summary.';
+          return;
+        }
+        categorySelect.value = '__all__';
+        renderAgentOptions();
+        select.value = String(agentIndex);
+        routePreviewStatus.textContent = 'Suggested agent selected for manual review. Route preview does not invoke agents. Select manually before running a local response.';
+        await loadSelectedExample();
+      }
+      function renderRoutePreviewSuggestions(result) {
+        const suggestions = []
+          .concat(Array.isArray(result && result.suggested_agents) ? result.suggested_agents : [])
+          .concat(Array.isArray(result && result.suggestedAgents) ? result.suggestedAgents : [])
+          .concat(Array.isArray(result && result.recommended_agents) ? result.recommended_agents : [])
+          .concat(Array.isArray(result && result.recommendedAgents) ? result.recommendedAgents : []);
+        const uniqueSuggestions = Array.from(new Set(suggestions
+          .map((item) => typeof item === 'string' ? item : (item.agent_id || item.agentId || item.id || ''))
+          .filter(Boolean)));
+        routePreviewSuggestions.innerHTML = uniqueSuggestions.length
+          ? '<option value="">Select manually before running a local response</option>' + uniqueSuggestions.map((agentId) => `<option value="${escapeHtml(agentId)}">${escapeHtml(agentId)}</option>`).join('')
+          : '<option value="">No suggested agents available</option>';
+      }
+      function localResponseWebResearchUrls() {
+        return Array.from(new Set((webResearchUrls.value || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)))
+          .slice(0, 5);
+      }
+      function renderWebResearchResult(value, fallbackText) {
+        webResearchResult.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
+      }
+      function localResponseWebContextText(sources) {
+        return sources
+          .filter((source) => source && source.fetched && source.excerpt)
+          .map((source, index) => [
+            `Public source ${index + 1}: ${source.title || source.final_url || source.url}`,
+            `URL: ${source.final_url || source.url}`,
+            `Excerpt: ${source.excerpt}`,
+          ].join('\n'))
+          .join('\n\n');
+      }
+      function localResponsePayloadTextField(payload) {
+        const candidates = [
+          'notes',
+          'userProvidedNotes',
+          'contextNotes',
+          'content',
+          'situation',
+          'businessIdea',
+          'primaryGoal',
+          'profileGoal',
+          'learningGoal',
+          'careerGoal',
+          'housingGoal',
+          'projectGoal',
+          'adminGoal',
+          'lifeQuestion',
+          'relationshipGoal',
+          'reflectionGoal',
+          'problem',
+          'subject',
+          'goal',
+        ];
+        return candidates.find((field) => Object.prototype.hasOwnProperty.call(payload, field) && typeof payload[field] === 'string');
+      }
+      async function postWebResearchJson(path, body) {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return response.json();
+      }
+      function renderAgentDetail(agent) {
+        if (!agent) {
+          detailPanel.textContent = 'No local response agent selected. Choose a category or agent to inspect local metadata.';
+          boundaryFlagsPanel.textContent = 'No boundary flags available for the current selection.';
+          return;
+        }
+        const badges = localResponseAgentBadges(agent).map((badge) => `<span class="pill">${escapeHtml(badge)}</span>`).join(' ');
+        const webResearchLine = agent.web_research_available || agent.webResearchAvailable
+          ? 'Optional public web research: read-only public URL context, user enabled only.'
+          : 'Optional public web research: unavailable for this catalog entry.';
+        detailPanel.innerHTML = `
+          <div><strong>${escapeHtml(localResponseAgentName(agent))}</strong></div>
+          <div>Agent ID: <code>${escapeHtml(localResponseAgentId(agent))}</code></div>
+          <div>Endpoint: <code>${escapeHtml(agent.endpoint || '')}</code></div>
+          <div>Category: <code>${escapeHtml(localResponseAgentCategory(agent))}</code></div>
+          <div>Output types: <code>${escapeHtml(((agent.outputTypes || agent.output_types || [])).join(', ') || 'summary')}</code></div>
+          <div>Web research mode: <code>${escapeHtml(agent.web_research_mode || agent.webResearchMode || 'read_only_public_url_context')}</code></div>
+          <div>${badges}</div>
+          <div class="muted">Use when: ${escapeHtml(agent.useWhen || agent.use_when || agent.recommendedFor || '')}</div>
+          <div class="muted">${escapeHtml(webResearchLine)}</div>
+          <div class="muted">Limitations: ${escapeHtml(((agent.safetyNotes || agent.safety_notes || [])).join(' ') || 'Manual local review required before using high-stakes guidance.')}</div>
+          <div><a href="${escapeHtml(agent.docsLink || agent.docs_link || '/docs/local-response-agents-index.md')}">Docs</a></div>
+        `;
+        const flags = localResponseAgentBoundaryFlags(agent);
+        boundaryFlagsPanel.innerHTML = Object.keys(flags).length
+          ? Object.entries(flags).map(([key, value]) => `<div><code>${escapeHtml(key)}</code>: ${escapeHtml(String(value))}</div>`).join('')
+          : '<div>No boundary flags available. Treat as manual input only, local only, response only, no connector, and non-persistent.</div>';
+      }
+      async function loadSelectedTemplate(agent) {
+        const templatePath = localResponseAgentTemplatePath(agent);
+        if (!agent || !templatePath) {
+          selectedTemplate = null;
+          templateStatus.textContent = 'No request template available for the current selection.';
+          templateOutput.textContent = 'No request template selected.';
+          samplePayloadOutput.textContent = 'No sample payload selected.';
+          populateOutputTypeSelect(null, agent);
+          payloadPreviewStatus.textContent = 'No request template available for the current selection.';
+          return;
+        }
+        templateStatus.textContent = 'Loading local request-template metadata...';
+        try {
+          const template = await fetch(templatePath).then((response) => response.json());
+          if (!template || template.found === false) {
+            selectedTemplate = null;
+            templateStatus.textContent = 'Request template unavailable. No local response agent was invoked.';
+            templateOutput.textContent = 'Template metadata was not found for this agent id.';
+            samplePayloadOutput.textContent = 'Sample payload unavailable.';
+            populateOutputTypeSelect(null, agent);
+            payloadPreviewStatus.textContent = 'Unknown template: editable JSON payload preview uses catalog example metadata only.';
+            return;
+          }
+          selectedTemplate = template;
+          templateStatus.textContent = 'Request template loaded as local metadata only.';
+          renderLocalResponseAgentJson(templateOutput, template, 'Template metadata unavailable.');
+          renderLocalResponseAgentJson(samplePayloadOutput, template.sample_payload || template.samplePayload || {}, 'Sample payload unavailable.');
+          populateOutputTypeSelect(template, agent);
+          applySamplePayloadToComposer(template, agent);
+        } catch (error) {
+          selectedTemplate = null;
+          templateStatus.textContent = `Request template unavailable: ${error.message}. No local response agent was invoked.`;
+          templateOutput.textContent = 'Template metadata unavailable.';
+          samplePayloadOutput.textContent = 'Sample payload unavailable.';
+          populateOutputTypeSelect(null, agent);
+          payloadPreviewStatus.textContent = 'Backend error while loading template metadata. No local response agent was invoked.';
+        }
+      }
+      async function loadSelectedExample() {
         const agent = selectedAgent();
         if (!agent) {
           endpointDisplay.textContent = 'No agent selected.';
           bodyInput.value = '{}';
           status.textContent = 'No local response agent is selected.';
+          renderAgentDetail(null);
+          renderWorkbenchError(structuredResponse, 'Missing agent', 'No local response agent is selected.', null);
+          await loadSelectedTemplate(null);
           return;
         }
         const endpointPath = selectedEndpointPath(agent);
-        endpointDisplay.textContent = endpointPath || 'Unsupported endpoint.';
+        endpointDisplay.textContent = endpointPath || 'Endpoint rejection.';
         docsLink.href = agent.docsLink || '/docs/local-response-agents-index.md';
         bodyInput.value = JSON.stringify(agent.exampleRequestBody || {}, null, 2);
         responseOutput.textContent = 'No local response-agent result yet.';
         status.textContent = allowlistedEndpointPaths.has(endpointPath)
           ? 'Ready. This local-only workbench can call only the selected allowlisted endpoint.'
-          : 'Unsupported endpoint: selected catalog entry is not allowlisted.';
+          : 'Endpoint rejection: selected catalog entry is not allowlisted.';
+        renderAgentDetail(agent);
+        await loadSelectedTemplate(agent);
       }
+      categorySelect.onchange = async () => {
+        renderAgentOptions();
+        await loadSelectedExample();
+      };
       select.onchange = loadSelectedExample;
+      outputTypeSelect.onchange = refreshPayloadOutputType;
+      useSampleButton.onclick = () => {
+        applySamplePayloadToComposer(selectedTemplate, selectedAgent());
+      };
+      routePreviewSuggestions.onchange = async () => {
+        if (routePreviewSuggestions.value) {
+          await localResponseAgentSelectSuggestedAgent(routePreviewSuggestions.value);
+        }
+      };
+      webResearchValidateButton.onclick = async () => {
+        const urls = localResponseWebResearchUrls();
+        webResearchStatus.textContent = 'Validating public URLs by manual click. No source content is fetched.';
+        latestWebResearchSources = [];
+        if (!urls.length) {
+          webResearchStatus.textContent = 'No public source URLs provided for validation.';
+          renderWebResearchResult(null, 'No public source URLs provided.');
+          return;
+        }
+        try {
+          const results = [];
+          for (const url of urls) {
+            results.push(await postWebResearchJson('/web-research/validate-url', {
+              url,
+              purpose: 'Optional public web source context for local response-agent payload review.',
+              max_excerpt_chars: 1600,
+              allow_redirects: true,
+              constraintsOrNotes: 'Manual URL validation only. No fetch, no account access, no background browsing.',
+            }));
+          }
+          webResearchStatus.textContent = 'URL validation complete. Source content was not fetched.';
+          renderWebResearchResult({ urls: results }, 'No validation results available.');
+        } catch (error) {
+          webResearchStatus.textContent = `URL validation unavailable: ${error.message}.`;
+          renderWebResearchResult(null, 'No validation results available.');
+        }
+      };
+      webResearchFetchButton.onclick = async () => {
+        const urls = localResponseWebResearchUrls();
+        webResearchStatus.textContent = 'Previewing public source excerpts by manual click. No agent is invoked.';
+        latestWebResearchSources = [];
+        if (!urls.length) {
+          webResearchStatus.textContent = 'No public source URLs provided for source preview.';
+          renderWebResearchResult(null, 'No public source URLs provided.');
+          return;
+        }
+        if (!webResearchEnabled.checked) {
+          webResearchStatus.textContent = 'Enable optional public web source context before previewing excerpts.';
+          renderWebResearchResult(null, 'Optional public web source context is not enabled.');
+          return;
+        }
+        try {
+          const results = [];
+          for (const url of urls) {
+            results.push(await postWebResearchJson('/web-research/fetch-public-url', {
+              url,
+              purpose: 'Optional public web source context for local response-agent payload review.',
+              max_excerpt_chars: 1600,
+              allow_redirects: true,
+              constraintsOrNotes: 'Manual source preview only. No logins, accounts, forms, posts, purchases, bookings, downloads, scripts, private networks, localhost, or background browsing.',
+            }));
+          }
+          latestWebResearchSources = results.filter((result) => result && result.fetched);
+          webResearchStatus.textContent = 'Source preview complete. Source context is inserted for review, not executed automatically.';
+          renderWebResearchResult({ sources: results }, 'No source preview results available.');
+        } catch (error) {
+          webResearchStatus.textContent = `Source preview unavailable: ${error.message}.`;
+          renderWebResearchResult(null, 'No source preview results available.');
+        }
+      };
+      webResearchContextButton.onclick = async () => {
+        const agent = selectedAgent();
+        const urls = localResponseWebResearchUrls();
+        webResearchStatus.textContent = 'Previewing selected-agent source context. No local response agent is invoked.';
+        try {
+          const result = await postWebResearchJson('/web-research/agent-context-preview', {
+            agentId: localResponseAgentId(agent),
+            userRequest: bodyInput.value || '',
+            urls,
+            outputType: outputTypeSelect.value || 'summary',
+            webResearchEnabled: webResearchEnabled.checked,
+            constraintsOrNotes: 'Agent-context preview only. No auto-fetch, no auto-submit, no handoff, no persistence.',
+          });
+          webResearchStatus.textContent = 'Agent-context preview complete. No agent was invoked and no workbench payload was submitted.';
+          renderWebResearchResult(result, 'No agent-context preview available.');
+        } catch (error) {
+          webResearchStatus.textContent = `Agent-context preview unavailable: ${error.message}.`;
+          renderWebResearchResult(null, 'No agent-context preview available.');
+        }
+      };
+      webResearchAddButton.onclick = () => {
+        const contextText = localResponseWebContextText(latestWebResearchSources);
+        if (!contextText) {
+          webResearchStatus.textContent = 'No fetched public source excerpts are available to add to the manual payload.';
+          return;
+        }
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            webResearchStatus.textContent = 'Source context was not inserted because the editable payload is not a JSON object.';
+            return;
+          }
+          const targetField = localResponsePayloadTextField(parsedBody);
+          if (!targetField) {
+            webResearchStatus.textContent = 'Source context was not inserted because this selected payload has no compatible text field.';
+            return;
+          }
+          parsedBody[targetField] = `${parsedBody[targetField] || ''}\n\nPublic web source context for manual review only:\n${contextText}`.trim();
+          bodyInput.value = JSON.stringify(parsedBody, null, 2);
+          webResearchStatus.textContent = `Source context inserted into ${targetField} for review. The selected agent was not invoked.`;
+        } catch (error) {
+          webResearchStatus.textContent = `Source context was not inserted: ${error.message}.`;
+        }
+      };
+      routePreviewButton.onclick = async () => {
+        const requestText = routePreviewInput.value.trim();
+        routePreviewStatus.textContent = 'Route preview does not invoke agents. Suggested only — not executed. Select manually before running a local response.';
+        routePreviewResult.textContent = 'Suggested only — not executed.';
+        routePreviewSuggestions.innerHTML = '<option value="">No suggested agents available</option>';
+        try {
+          const response = await fetch('/agents/local-response-agents/route-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              request: requestText,
+              preferredOutputType: outputTypeSelect.value || 'summary',
+              urgencyLevel: 'manual_review',
+              constraintsOrNotes: 'Manual input only. Suggested only — not executed. Route preview does not invoke agents.',
+            }),
+          });
+          const result = await response.json();
+          routePreviewStatus.textContent = 'Suggested only — not executed. Route preview does not invoke agents. Select manually before running a local response. No handoff, no automation, no persistence, no connector, and no agent invocation.';
+          renderRoutePreviewSuggestions(result);
+          renderLocalResponseAgentJson(routePreviewResult, result, 'No route preview suggestions available.');
+        } catch (error) {
+          routePreviewStatus.textContent = `Route preview unavailable: ${error.message}. Suggested only — not executed. Route preview does not invoke agents.`;
+          routePreviewResult.textContent = 'No route preview suggestions available.';
+          routePreviewSuggestions.innerHTML = '<option value="">No suggested agents available</option>';
+        }
+      };
       runButton.onclick = async () => {
         const agent = selectedAgent();
         const endpointPath = selectedEndpointPath(agent);
         if (!agent || !allowlistedEndpointPaths.has(endpointPath)) {
-          status.textContent = 'Unsupported endpoint: selected catalog entry is not allowlisted.';
+          status.textContent = 'Endpoint rejection: missing agent or selected catalog entry is not allowlisted.';
           responseOutput.textContent = '';
+          renderWorkbenchError(structuredResponse, 'Endpoint rejection', 'No selected-agent local response was requested. Choose an allowlisted local response agent first.', null);
           return;
         }
         let parsedBody;
         try {
           parsedBody = JSON.parse(bodyInput.value || '{}');
         } catch (error) {
-          status.textContent = `Invalid JSON: ${error.message}`;
+          status.textContent = `Invalid JSON: ${error.message}. Manual input was not sent to a local response agent.`;
           responseOutput.textContent = '';
+          renderWorkbenchError(structuredResponse, 'Invalid JSON', 'Manual input was not sent to a local response agent.', error.message);
           return;
         }
         if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
-          status.textContent = 'Invalid JSON: request body must be a JSON object.';
+          status.textContent = 'Invalid JSON: request body must be a JSON object. Manual input was not sent to a local response agent.';
           responseOutput.textContent = '';
+          renderWorkbenchError(structuredResponse, 'Validation error', 'Request body must be a JSON object.', parsedBody);
           return;
         }
-        status.textContent = 'Calling selected allowlisted local response-agent endpoint...';
+        parsedBody = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
+        bodyInput.value = JSON.stringify(parsedBody, null, 2);
+        status.textContent = 'Calling only the manually selected allowlisted local response-agent endpoint.';
         try {
           const response = await fetch(endpointPath, {
             method: 'POST',
@@ -1932,14 +2619,23 @@ def dashboard_html() -> str:
             responseBody = { rawResponse: responseText };
           }
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
+          if (response.ok) {
+            renderStructuredLocalResponse(structuredResponse, responseBody);
+          } else {
+            renderWorkbenchError(structuredResponse, 'Backend error or validation error', `Local request returned HTTP ${response.status}.`, responseBody);
+          }
           status.textContent = response.ok
             ? 'Local response-agent result received. Request and response are not persisted by this dashboard workbench.'
-            : `Local request failed with HTTP ${response.status}. Request and response are not persisted by this dashboard workbench.`;
+            : `Backend error or validation error: local request failed with HTTP ${response.status}. Request and response are not persisted by this dashboard workbench.`;
         } catch (error) {
-          status.textContent = `Local request failure: ${error.message}`;
+          status.textContent = `Backend error: ${error.message}`;
           responseOutput.textContent = '';
+          renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);
         }
       };
+      renderAgentOptions();
+      loadDiscoveryCatalogMetadata();
+      loadCategoryMetadata();
       loadSelectedExample();
     }
     async function loadValidationWorkflowSummary(refreshLists) {

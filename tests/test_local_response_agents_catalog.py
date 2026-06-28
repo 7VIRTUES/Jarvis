@@ -1,10 +1,12 @@
 import re
+from pathlib import Path
 
 from jarvis_core.local_response_agents_catalog import (
     local_response_agents_global_boundaries,
     local_response_agents_index,
     local_response_agents_summary,
 )
+from jarvis_core.local_response_agent_metadata import LOCAL_RESPONSE_AGENT_COUNT
 
 
 EXPECTED_ENDPOINTS = [
@@ -21,6 +23,14 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/transformation/local-transform",
     "POST /agents/business/local-brief",
     "POST /agents/health-fitness/local-plan",
+    "POST /agents/food-cooking-grocery/local-plan",
+    "POST /agents/home-room-living-space/local-plan",
+    "POST /agents/legal-immigration-official/local-plan",
+    "POST /agents/emergency-preparedness/local-plan",
+    "POST /agents/culture-taste-high-class-lifestyle/local-plan",
+    "POST /agents/hobbies-adventure/local-plan",
+    "POST /agents/personal-knowledge-memory-organizer/local-plan",
+    "POST /agents/life-dashboard-coordinator/local-plan",
     "POST /agents/everyday-life/local-plan",
     "POST /agents/online-presence/local-plan",
     "POST /agents/security-safety/local-review",
@@ -40,33 +50,94 @@ EXPECTED_ENDPOINTS = [
 ]
 
 REQUIRED_FIELDS = {
+    "agentId",
     "name",
+    "displayName",
     "endpoint",
     "status",
     "mode",
     "docsLink",
     "responseMode",
+    "category",
+    "badges",
+    "boundaryFlags",
+    "outputTypes",
+    "useWhen",
+    "recommendedFor",
     "safetyNotes",
     "exampleRequestBody",
+    "web_research_available",
+    "webResearchAvailable",
+    "web_research_mode",
+    "webResearchMode",
+    "web_research_requires_user_enabled",
+    "webResearchRequiresUserEnabled",
+    "web_research_is_optional",
+    "webResearchIsOptional",
+    "web_research_limitations",
+    "webResearchLimitations",
+}
+
+EXPECTED_CATEGORIES = {
+    "Coding/Core",
+    "School/Career",
+    "Life/Admin",
+    "Health/Food/Home",
+    "Social/Family",
+    "Finance/Housing/Travel",
+    "Safety/Emergency",
+    "Creativity/Hobbies",
+    "Knowledge/Coordinator",
 }
 
 
-def test_catalog_exposes_exactly_29_agents_with_required_fields():
+def test_catalog_exposes_exactly_37_agents_with_required_fields():
     agents = local_response_agents_index()
 
-    assert len(agents) == 29
+    assert len(agents) == LOCAL_RESPONSE_AGENT_COUNT == 37
     for agent in agents:
         assert REQUIRED_FIELDS <= set(agent)
+        assert agent["agentId"]
         assert agent["name"]
+        assert agent["displayName"] == agent["name"]
         assert agent["endpoint"].startswith("POST /agents/")
         assert agent["status"] == "implemented_local_only"
         assert agent["mode"]
         assert agent["docsLink"].startswith("/docs/")
         assert agent["docsLink"].endswith(".md")
         assert agent["responseMode"] in {"response_only", "metadata_only"}
+        assert agent["category"] in EXPECTED_CATEGORIES
+        assert {"manual-input", "local-only", "response-only", "non-persistent", "no-connectors"} <= set(agent["badges"])
+        assert agent["boundaryFlags"]["manualInputOnly"] is True
+        assert agent["boundaryFlags"]["localOnly"] is True
+        assert agent["boundaryFlags"]["responseOnly"] is True
+        assert agent["boundaryFlags"]["nonPersistent"] is True
+        assert agent["boundaryFlags"]["connectorBehavior"] is False
+        assert agent["boundaryFlags"]["accountAccess"] is False
+        assert agent["boundaryFlags"]["externalServices"] is False
+        assert agent["boundaryFlags"]["automationActions"] is False
+        assert agent["boundaryFlags"]["persistence"] is False
+        assert agent["boundaryFlags"]["fileMutation"] is False
+        assert agent["boundaryFlags"]["emailCalendarSocialPosting"] is False
+        assert agent["boundaryFlags"]["purchasesBookingsPaymentsSubmissions"] is False
+        assert agent["boundaryFlags"]["officialFilingsEmergencyLegalMedicalFinancialActions"] is False
+        assert agent["outputTypes"]
+        assert all(isinstance(output_type, str) and output_type for output_type in agent["outputTypes"])
+        assert agent["useWhen"]
+        assert agent["recommendedFor"]
         assert agent["safetyNotes"]
         assert isinstance(agent["exampleRequestBody"], dict)
         assert agent["exampleRequestBody"]
+        assert agent["web_research_available"] is True
+        assert agent["webResearchAvailable"] is True
+        assert agent["web_research_mode"] == "read_only_public_url_context"
+        assert agent["webResearchMode"] == "read_only_public_url_context"
+        assert agent["web_research_requires_user_enabled"] is True
+        assert agent["webResearchRequiresUserEnabled"] is True
+        assert agent["web_research_is_optional"] is True
+        assert agent["webResearchIsOptional"] is True
+        assert "accounts" in " ".join(agent["web_research_limitations"])
+        assert "No private networks" in " ".join(agent["webResearchLimitations"])
 
 
 def test_catalog_includes_all_expected_endpoints_once():
@@ -74,6 +145,82 @@ def test_catalog_includes_all_expected_endpoints_once():
 
     assert endpoints == EXPECTED_ENDPOINTS
     assert len(set(endpoints)) == len(EXPECTED_ENDPOINTS)
+
+
+def test_catalog_agent_ids_categories_and_route_paths_are_unique_and_stable():
+    agents = local_response_agents_index()
+    agent_ids = [agent["agentId"] for agent in agents]
+    endpoints = [agent["endpoint"] for agent in agents]
+    categories = {agent["category"] for agent in agents}
+
+    assert len(set(agent_ids)) == len(agent_ids) == 37
+    assert len(set(endpoints)) == len(endpoints) == 37
+    assert categories == EXPECTED_CATEGORIES
+    assert "local_life_dashboard_cross_agent_coordinator" in agent_ids
+
+
+def test_catalog_boundary_flags_do_not_enable_prohibited_capabilities():
+    false_flags = [
+        "connectorBehavior",
+        "accountAccess",
+        "externalServices",
+        "automationActions",
+        "persistence",
+        "fileMutation",
+        "emailCalendarSocialPosting",
+        "purchasesBookingsPaymentsSubmissions",
+        "officialFilingsEmergencyLegalMedicalFinancialActions",
+    ]
+
+    for agent in local_response_agents_index():
+        assert all(agent["boundaryFlags"][flag] is False for flag in false_flags)
+
+
+def test_catalog_high_stakes_agents_retain_required_limitations():
+    agents = {agent["endpoint"]: " ".join(agent["safetyNotes"]).lower() for agent in local_response_agents_index()}
+
+    assert "diagnosis" in agents["POST /agents/health-fitness/local-plan"]
+    assert "clinical validation" in agents["POST /agents/health-fitness/local-plan"]
+    assert "medical nutrition advice" in agents["POST /agents/food-cooking-grocery/local-plan"]
+    assert "food-safety certification" in agents["POST /agents/food-cooking-grocery/local-plan"]
+    assert "legal advice" in agents["POST /agents/legal-immigration-official/local-plan"]
+    assert "deadline certainty" in agents["POST /agents/legal-immigration-official/local-plan"]
+    assert "emergency calls" in agents["POST /agents/emergency-preparedness/local-plan"]
+    assert "live hazard detection" in agents["POST /agents/emergency-preparedness/local-plan"]
+    assert "financial" in agents["POST /agents/finance-budget/local-plan"]
+    assert "trades" in agents["POST /agents/finance-budget/local-plan"]
+    assert "therapy claims" in agents["POST /agents/relationships/local-plan"]
+    assert "relationship outcome certainty" in agents["POST /agents/relationships/local-plan"]
+    assert "diagnosis" in agents["POST /agents/emotional-reflection/local-reflect"]
+    assert "crisis intervention" in agents["POST /agents/emotional-reflection/local-reflect"]
+    assert "grade guarantee" in agents["POST /agents/learning-study/local-plan"]
+    assert "hiring" in agents["POST /agents/career/local-plan"]
+
+
+def test_checked_count_surfaces_do_not_keep_stale_30_33_or_36_agent_count_phrases():
+    checked_paths = [
+        Path("services/jarvis-core/src/jarvis_core/dashboard.py"),
+        Path("docs/local-response-agents-index.md"),
+        Path("docs/local-response-agents-smoke-runbook.md"),
+        Path("docs/local-response-agents-smoke-evidence-template.md"),
+        Path("tests/test_dashboard_local_response_agents_index.py"),
+        Path("tests/test_dashboard_local_response_agents_workbench.py"),
+        Path("tests/test_dashboard_local_response_agents_examples.py"),
+    ]
+    stale_patterns = [
+        "30 local response-agent",
+        "33 local response-agent",
+        "36 local response-agent",
+        "30 implemented local response",
+        "33 implemented local response",
+        "36 implemented local response",
+        "agentCount\"] == 30",
+        "agentCount\"] == 33",
+        "agentCount\"] == 36",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in checked_paths)
+
+    assert all(pattern not in combined for pattern in stale_patterns)
 
 
 def test_catalog_global_boundaries_cover_required_safety_limits():
@@ -86,6 +233,8 @@ def test_catalog_global_boundaries_cover_required_safety_limits():
     assert "no cloud sync" in boundaries_text
     assert "no email sending, posting, or purchases" in boundaries_text
     assert "no task persistence for response-only agents" in boundaries_text
+    assert "optional read-only public url source context" in boundaries_text
+    assert "no background browsing" in boundaries_text
     assert "certification" in boundaries_text
 
 
@@ -130,7 +279,8 @@ def test_catalog_summary_preserves_dashboard_index_shape():
     summary = local_response_agents_summary()
 
     assert summary["status"] == "read_only_index"
-    assert summary["agentCount"] == 29
+    assert summary["agentCount"] == 37
+    assert summary["expectedAgentCount"] == LOCAL_RESPONSE_AGENT_COUNT == 37
     assert summary["agents"] == local_response_agents_index()
     assert summary["globalBoundaries"] == local_response_agents_global_boundaries()
     assert summary["docsLink"] == "/docs/local-response-agents-index.md"
@@ -139,6 +289,15 @@ def test_catalog_summary_preserves_dashboard_index_shape():
     assert summary["mutation"] is False
     assert summary["connectorExecution"] is False
     assert summary["paidApis"] is False
+    assert summary["webResearchAvailable"] is True
+    assert summary["web_research_available"] is True
+    assert summary["webResearchMode"] == "read_only_public_url_context"
+    assert summary["web_research_mode"] == "read_only_public_url_context"
+    assert summary["webResearchRequiresUserEnabled"] is True
+    assert summary["web_research_requires_user_enabled"] is True
+    assert summary["webResearchIsOptional"] is True
+    assert summary["web_research_is_optional"] is True
+    assert "No downloads or scripts" in " ".join(summary["webResearchLimitations"])
     assert summary["certificationClaims"] is False
 
 
@@ -394,6 +553,95 @@ def test_catalog_includes_local_health_fitness_agent_once_with_safe_example():
     assert any("health connector" in note.lower() and "account" in note.lower() for note in health_agent["safetyNotes"])
     assert health_agent["exampleRequestBody"]["desiredOutputType"] == "fitness_brief"
     assert "primaryGoal" in health_agent["exampleRequestBody"]
+
+
+def test_catalog_includes_local_food_cooking_grocery_agent_once_with_safe_example():
+    agents = local_response_agents_index()
+    food_agents = [agent for agent in agents if agent["name"] == "Local Food / Cooking / Grocery Agent"]
+
+    assert len(food_agents) == 1
+    food_agent = food_agents[0]
+    assert food_agent["endpoint"] == "POST /agents/food-cooking-grocery/local-plan"
+    assert food_agent["mode"] == "response_only_user_provided_food_cooking_grocery_planning"
+    assert food_agent["docsLink"] == "/docs/local-food-cooking-grocery-agent.md"
+    assert food_agent["responseMode"] == "response_only"
+    assert any("user-provided meal" in note.lower() for note in food_agent["safetyNotes"])
+    assert any("grocery app" in note.lower() and "payment" in note.lower() for note in food_agent["safetyNotes"])
+    assert any("no orders" in note.lower() and "food-safety certification" in note.lower() for note in food_agent["safetyNotes"])
+    assert food_agent["exampleRequestBody"]["outputType"] == "budget_grocery_plan"
+    assert "availableIngredients" in food_agent["exampleRequestBody"]
+
+
+def test_catalog_includes_new_home_legal_and_emergency_agents_with_safe_examples():
+    agents = local_response_agents_index()
+    home_agent = next(agent for agent in agents if agent["name"] == "Local Home / Room / Living Space Agent")
+    legal_agent = next(agent for agent in agents if agent["name"] == "Local Legal / Immigration / Official Matters Agent")
+    emergency_agent = next(agent for agent in agents if agent["name"] == "Local Emergency / Preparedness Agent")
+
+    assert home_agent["endpoint"] == "POST /agents/home-room-living-space/local-plan"
+    assert home_agent["mode"] == "response_only_user_provided_home_room_living_space_planning"
+    assert home_agent["docsLink"] == "/docs/local-home-room-living-space-agent.md"
+    assert any("smart-home" in note.lower() and "landlord portal" in note.lower() for note in home_agent["safetyNotes"])
+    assert home_agent["exampleRequestBody"]["outputType"] == "room_setup_plan"
+
+    assert legal_agent["endpoint"] == "POST /agents/legal-immigration-official/local-plan"
+    assert legal_agent["mode"] == "response_only_user_provided_legal_immigration_official_planning"
+    assert legal_agent["docsLink"] == "/docs/local-legal-immigration-official-agent.md"
+    assert any("no government portal" in note.lower() and "legal database" in note.lower() for note in legal_agent["safetyNotes"])
+    assert any("legal advice" in note.lower() and "deadline certainty" in note.lower() for note in legal_agent["safetyNotes"])
+    assert legal_agent["exampleRequestBody"]["outputType"] == "document_checklist"
+
+    assert emergency_agent["endpoint"] == "POST /agents/emergency-preparedness/local-plan"
+    assert emergency_agent["mode"] == "response_only_user_provided_emergency_preparedness_planning"
+    assert emergency_agent["docsLink"] == "/docs/local-emergency-preparedness-agent.md"
+    assert any("no emergency services" in note.lower() and "weather service" in note.lower() for note in emergency_agent["safetyNotes"])
+    assert any("no emergency calls" in note.lower() and "survival guarantee" in note.lower() for note in emergency_agent["safetyNotes"])
+    assert emergency_agent["exampleRequestBody"]["outputType"] == "car_emergency_kit"
+
+
+def test_catalog_includes_new_culture_hobbies_and_knowledge_agents_with_safe_examples():
+    agents = local_response_agents_index()
+    culture_agent = next(agent for agent in agents if agent["name"] == "Local Culture / Taste / High-Class Lifestyle Agent")
+    hobbies_agent = next(agent for agent in agents if agent["name"] == "Local Hobbies / Adventure Agent")
+    knowledge_agent = next(agent for agent in agents if agent["name"] == "Local Personal Knowledge / Memory Organizer Agent")
+
+    assert culture_agent["endpoint"] == "POST /agents/culture-taste-high-class-lifestyle/local-plan"
+    assert culture_agent["mode"] == "response_only_user_provided_culture_taste_high_class_lifestyle_planning"
+    assert culture_agent["docsLink"] == "/docs/local-culture-taste-high-class-lifestyle-agent.md"
+    assert any("no stores" in note.lower() and "reservations" in note.lower() for note in culture_agent["safetyNotes"])
+    assert any("social acceptance guarantees" in note.lower() and "private elite-network" in note.lower() for note in culture_agent["safetyNotes"])
+    assert culture_agent["exampleRequestBody"]["outputType"] == "event_prep_plan"
+
+    assert hobbies_agent["endpoint"] == "POST /agents/hobbies-adventure/local-plan"
+    assert hobbies_agent["mode"] == "response_only_user_provided_hobbies_adventure_planning"
+    assert hobbies_agent["docsLink"] == "/docs/local-hobbies-adventure-agent.md"
+    assert any("no maps" in note.lower() and "drone apps" in note.lower() for note in hobbies_agent["safetyNotes"])
+    assert any("airspace verification" in note.lower() and "live safety" in note.lower() for note in hobbies_agent["safetyNotes"])
+    assert hobbies_agent["exampleRequestBody"]["outputType"] == "weekend_plan"
+
+    assert knowledge_agent["endpoint"] == "POST /agents/personal-knowledge-memory-organizer/local-plan"
+    assert knowledge_agent["mode"] == "response_only_user_provided_personal_knowledge_memory_organization"
+    assert knowledge_agent["docsLink"] == "/docs/local-personal-knowledge-memory-organizer-agent.md"
+    assert any("no files" in note.lower() and "memory stores" in note.lower() for note in knowledge_agent["safetyNotes"])
+    assert any("no create" in note.lower() and "sensitive fact inference" in note.lower() for note in knowledge_agent["safetyNotes"])
+    assert knowledge_agent["exampleRequestBody"]["outputType"] == "memory_index"
+
+
+def test_catalog_includes_local_life_dashboard_coordinator_once_with_safe_example():
+    agents = local_response_agents_index()
+    coordinator_agents = [agent for agent in agents if agent["name"] == "Local Life Dashboard / Cross-Agent Coordinator"]
+
+    assert len(coordinator_agents) == 1
+    coordinator_agent = coordinator_agents[0]
+    assert coordinator_agent["endpoint"] == "POST /agents/life-dashboard-coordinator/local-plan"
+    assert coordinator_agent["mode"] == "response_only_user_provided_life_dashboard_cross_agent_coordination"
+    assert coordinator_agent["docsLink"] == "/docs/local-life-dashboard-coordinator-agent.md"
+    assert coordinator_agent["responseMode"] == "response_only"
+    assert any("user-provided life-area" in note.lower() for note in coordinator_agent["safetyNotes"])
+    assert any("automatic sub-agent execution" in note.lower() and "handoffs" in note.lower() for note in coordinator_agent["safetyNotes"])
+    assert any("qualified professionals or official sources" in note.lower() for note in coordinator_agent["safetyNotes"])
+    assert coordinator_agent["exampleRequestBody"]["outputType"] == "life_dashboard"
+    assert "domainsToCoordinate" in coordinator_agent["exampleRequestBody"]
 
 
 def test_catalog_includes_local_everyday_life_agent_once_with_safe_example():

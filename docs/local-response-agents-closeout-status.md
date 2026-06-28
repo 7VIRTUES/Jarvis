@@ -30,6 +30,14 @@ This is a documentation/status note only. It tracks the expanding local response
 - Local Relationship / Family Agent
 - Local Emotional Reflection / Resilience Agent
 - Local Health/Fitness Agent
+- Local Food / Cooking / Grocery Agent
+- Local Home / Room / Living Space Agent
+- Local Legal / Immigration / Official Matters Agent
+- Local Emergency / Preparedness Agent
+- Local Culture / Taste / High-Class Lifestyle Agent
+- Local Hobbies / Adventure Agent
+- Local Personal Knowledge / Memory Organizer Agent
+- Local Life Dashboard / Cross-Agent Coordinator
 - Local Everyday Life Agent
 - Local Online Presence Agent
 - Local Security/Safety Agent

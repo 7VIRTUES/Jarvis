@@ -2,7 +2,7 @@
 
 Manual evidence only. Not certification.
 
-Use this template to record observations from manually exercising the 20 local response agents. This template does not certify CI, full-suite validation, clean Windows VM validation, LAN token behavior, private-alpha readiness, production readiness, or security.
+Use this template to record observations from manually exercising the 37 local response agents. This template does not certify CI, full-suite validation, clean Windows VM validation, LAN token behavior, private-alpha readiness, production readiness, or security.
 
 ## Metadata
 
@@ -374,6 +374,110 @@ Endpoint: `POST /agents/security-safety/local-review`
 - Local-only status/mode present: yes/no
 - Safety fields checked: yes/no
 - No external/connector behavior observed: yes/no
+- Notes:
+
+### 30. Local Food / Cooking / Grocery Agent
+
+Endpoint: `POST /agents/food-cooking-grocery/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Allergy/medical/food-safety limitations reviewed: yes/no
+- No external/connector/order/purchase behavior observed: yes/no
+- Notes:
+
+### 31. Local Home / Room / Living Space Agent
+
+Endpoint: `POST /agents/home-room-living-space/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- No smart-home/landlord/store/payment/device behavior observed: yes/no
+- Notes:
+
+### 32. Local Legal / Immigration / Official Matters Agent
+
+Endpoint: `POST /agents/legal-immigration-official/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Non-legal-advice and professional-help limitations reviewed: yes/no
+- No portal/filing/submission/payment/email behavior observed: yes/no
+- Notes:
+
+### 33. Local Emergency / Preparedness Agent
+
+Endpoint: `POST /agents/emergency-preparedness/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Immediate-danger/emergency-services limitation reviewed: yes/no
+- No emergency-call/alert/contact/weather/map/device behavior observed: yes/no
+- Notes:
+
+### 34. Local Culture / Taste / High-Class Lifestyle Agent
+
+Endpoint: `POST /agents/culture-taste-high-class-lifestyle/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- No store/reservation/payment/social/contact/post behavior observed: yes/no
+- No social-acceptance/status/certification claim observed: yes/no
+- Notes:
+
+### 35. Local Hobbies / Adventure Agent
+
+Endpoint: `POST /agents/hobbies-adventure/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Current rules/conditions/manual verification reminders reviewed: yes/no
+- No map/weather/park/booking/purchase/permit/license/live-safety behavior observed: yes/no
+- Notes:
+
+### 36. Local Personal Knowledge / Memory Organizer Agent
+
+Endpoint: `POST /agents/personal-knowledge-memory-organizer/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Sensitive-info redaction/storage limitation reviewed: yes/no
+- No file/notes-app/database/memory-store/sync/export/mutation behavior observed: yes/no
+- Notes:
+
+### 37. Local Life Dashboard / Cross-Agent Coordinator
+
+Endpoint: `POST /agents/life-dashboard-coordinator/local-plan`
+
+- Request sent: yes/no
+- Response received: yes/no
+- agentId matched: yes/no
+- Local-only status/mode present: yes/no
+- Safety fields checked: yes/no
+- Recommended agents confirmed as suggestions only: yes/no
+- No external/connector behavior observed: yes/no
+- No automatic sub-agent execution, handoff, persistence, task, reminder, connector, file, email, calendar, purchase, booking, submission, payment, official filing, emergency, medical, legal, or financial behavior observed: yes/no
 - Notes:
 
 ## Known Limitations Of This Evidence

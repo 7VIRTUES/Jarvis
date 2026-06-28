@@ -1,6 +1,6 @@
 # Local Response Agents Manual Smoke Runbook
 
-This runbook gives safe manual request-body examples for the 29 implemented local response agents.
+This runbook gives safe manual request-body examples for the 37 implemented local response agents.
 
 These examples are manual local checks only. They are not automated certification, CI validation, full-suite validation, clean Windows VM validation, LAN token validation, private-alpha certification, production readiness, or security certification.
 
@@ -756,7 +756,43 @@ Expected response checks:
 - Safety fields show manual-input-only behavior with no connectors, paid APIs, account access, health connector access, wearable access, medical record access, insurance/pharmacy access, calendar access, persistence, file access, command execution, purchases, email sending, posting, diagnosis, treatment, medication advice, supplement prescription, emergency triage, clinical validation, or mutation.
 - Limitations do not claim medical diagnosis, treatment, medical safety validation, nutritionist review, trainer certification, wearable validation, outcome guarantees, private-alpha certification, production readiness, or security certification.
 
-## 27. Local Everyday Life Agent
+## 27. Local Food / Cooking / Grocery Agent
+
+Endpoint: `POST /agents/food-cooking-grocery/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Make a cheap grocery list for 5 dinners using rice, eggs, chicken, frozen vegetables, and beans.",
+  "outputType": "budget_grocery_plan",
+  "mealGoal": "Plan 5 simple low-cost dinners.",
+  "availableIngredients": ["Rice", "Eggs", "Chicken", "Frozen vegetables", "Beans"],
+  "pantryItems": ["Soy sauce", "Garlic powder", "Pasta"],
+  "groceryItemsNeeded": ["Tortillas", "Canned tomatoes", "Yogurt"],
+  "dietaryPreferences": ["Simple high-protein meals"],
+  "allergiesOrAvoidances": ["No known allergies provided"],
+  "budgetLevel": "low",
+  "budgetNotes": "Use pantry items first and avoid specialty ingredients.",
+  "servings": "5 dinners for 1 adult",
+  "timeAvailableMinutes": 30,
+  "cookingSkillLevel": "beginner",
+  "kitchenEquipment": ["Stove", "Skillet", "Rice cooker"],
+  "mealType": "dinner",
+  "cuisinePreferences": ["Flexible"],
+  "leftoversOrBatchPrepGoal": "Reuse cooked rice and chicken across meals.",
+  "constraintsOrNotes": "Manual planning only; no shopping app or delivery order."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_food_cooking_grocery`.
+- `status` or `mode` indicates local-only response-only food, cooking, and grocery planning.
+- Safety fields show manual-input-only behavior with no external services, connectors, OAuth, account access, grocery app access, delivery app access, restaurant app access, health app access, payment access, location access, map access, web browsing, paid APIs, file access, database writes, task persistence, shell execution, orders, purchases, reservations, messages, mutation, medical nutrition advice, allergy safety certainty, clinical diet prescription, weight-loss guarantee, food-safety certification, nutritionist validation, or certification claims.
+- Limitations do not claim grocery, delivery, restaurant, health-app, account, payment, file, database, browser, location, map, GPS, connector, external-service, order, purchase, reservation, message, persistence, medical nutrition, allergy safety, clinical diet, weight-loss, food-safety, nutritionist, private-alpha certification, production readiness, or security certification behavior.
+
+## 28. Local Everyday Life Agent
 
 Endpoint: `POST /agents/everyday-life/local-plan`
 
@@ -786,7 +822,7 @@ Expected response checks:
 - Safety fields show manual-input-only behavior with no external services, connectors, OAuth, account access, web browsing, paid APIs, calendar access, email sending, public posting, purchases, file access, database writes, task persistence, shell execution, smart-home control, location access, mutation, or certification claims.
 - Limitations do not claim validation, automation, completion, scheduling, delivery, execution, professional validation, private-alpha certification, production readiness, or security certification.
 
-## 28. Local Online Presence Agent
+## 29. Local Online Presence Agent
 
 Endpoint: `POST /agents/online-presence/local-plan`
 
@@ -816,7 +852,7 @@ Expected response checks:
 - Safety fields show manual-input-only behavior with no external services, connectors, OAuth, account access, web browsing, paid APIs, social posting, scheduling, messaging, scraping, analytics access, email sending, public posting, file access, database writes, task persistence, shell execution, mutation, or certification claims.
 - Limitations do not claim brand success, follower growth, hiring results, live reputation verification, platform compliance review, public posting, private-alpha certification, production readiness, or security certification.
 
-## 29. Local Security/Safety Agent
+## 30. Local Security/Safety Agent
 
 Endpoint: `POST /agents/security-safety/local-review`
 
@@ -843,6 +879,232 @@ Expected response checks:
 - `status` or `mode` indicates local-only response-only security/safety review.
 - Safety fields show manual-input-only behavior with no external services, connectors, OAuth, account access, file reads, secret reads, browser/cookie access, password-manager access, network scanning, vulnerability scanning, malware scanning, shell execution, downloads, remediation, account recovery, email sending, public posting, purchases, database writes, task persistence, mutation, forensic validation, legal validation, compliance certification, or security certification.
 - Limitations do not claim scans, device inspection, account/file/secret access, remediation, forensic validation, legal validation, compliance certification, vulnerability confirmation, incident resolution, system security, private-alpha certification, production readiness, or security certification.
+
+## 31. Local Home / Room / Living Space Agent
+
+Endpoint: `POST /agents/home-room-living-space/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Create a weekly cleaning routine for a shared apartment.",
+  "outputType": "cleaning_plan",
+  "roomType": "shared apartment",
+  "livingSituation": "Shared apartment with roommates",
+  "spaceGoal": "Keep common areas and bedroom manageable.",
+  "currentItems": ["Vacuum", "Laundry basket", "Basic cleaning spray"],
+  "itemsToBuyOrConsider": ["Storage bins", "Trash bags"],
+  "budgetLevel": "low",
+  "roomDimensionsOrConstraints": "Small shared spaces.",
+  "storageConstraints": "Limited closet space.",
+  "cleaningOrMaintenanceNeeds": ["Kitchen reset", "Bathroom rotation", "Laundry"],
+  "aestheticPreferences": ["Simple"],
+  "productivityOrSleepGoals": ["Less clutter before studying"],
+  "safetyOrAccessibilityNotes": "Keep walkways clear.",
+  "timeline": "Weekly routine",
+  "constraintsOrNotes": "Manual planning only."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_home_room_living_space`.
+- `status` or `mode` indicates local-only response-only home/room planning.
+- Safety fields show no smart-home, landlord portal, utility account, map, location, store, payment, file, camera, sensor, account, connector, purchase, booking, landlord contact, maintenance request, device control, persistence, building-code compliance, professional inspection, electrical/plumbing certification, pest-control certification, legal habitability determination, or certification behavior.
+
+## 32. Local Legal / Immigration / Official Matters Agent
+
+Endpoint: `POST /agents/legal-immigration-official/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Turn this official notice into questions I should ask a qualified professional.",
+  "outputType": "question_list",
+  "matterType": "official notice review",
+  "jurisdictionOrCountryIfUserProvided": "User-provided jurisdiction only",
+  "currentStatus": "User received an official notice and wants to prepare questions.",
+  "documentList": ["Official notice", "ID document", "Prior correspondence"],
+  "deadlinesOrDates": ["Date mentioned in notice"],
+  "officeOrAgencyNameIfUserProvided": "User-provided agency name",
+  "userQuestions": ["What does this notice require next?"],
+  "desiredOutcome": "Prepare for a qualified review conversation.",
+  "riskLevelOrUrgency": "Potentially important deadline.",
+  "constraintsOrNotes": "Organizational/general information only."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_legal_immigration_official_matters`.
+- `status` or `mode` indicates local-only response-only official-matter organization.
+- Safety fields show no government portal, immigration account, school portal, court system, legal database, email, calendar, file, payment, map, location, connector, submission, filing, signing, fee payment, appointment booking, agency contact, persistence, legal advice, immigration advice, attorney review, eligibility certainty, deadline certainty, visa approval prediction, official compliance, or certification behavior.
+- Limitations include organizational/general information only and a qualified attorney, accredited immigration representative, school official, or relevant agency reminder.
+
+## 33. Local Emergency / Preparedness Agent
+
+Endpoint: `POST /agents/emergency-preparedness/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Create a 72-hour go-bag plan for one person.",
+  "outputType": "go_bag_checklist",
+  "scenarioType": "72-hour go-bag",
+  "householdSize": "1 person",
+  "pets": [],
+  "locationContextIfUserProvided": "Apartment preparedness context from user notes.",
+  "currentSupplies": ["Backpack", "Flashlight", "Water bottle"],
+  "vehicleOrTravelContext": "May need to leave by car or on foot.",
+  "medicalOrAccessibilityNeeds": [],
+  "budgetLevel": "low",
+  "budgetNotes": "Use current supplies first.",
+  "timeHorizon": "Build over the next week.",
+  "communicationContactsSummary": "User keeps contact list manually.",
+  "constraintsOrNotes": "Preparedness planning only."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_emergency_preparedness`.
+- `status` or `mode` indicates local-only response-only preparedness planning.
+- Safety fields show no emergency services, police/fire/EMS, weather service, map, GPS/location, smart device, alarm, camera, contacts, file, account, payment, connector, emergency call, alert, family contact, hotel booking, supply purchase, door unlock, device control, claim submission, persistence, live hazard detection, official emergency guidance, evacuation-order awareness, medical triage certainty, survival guarantee, or certification behavior.
+- Limitations include immediate-danger guidance to contact local emergency services or leave the area if safe to do so.
+
+## 34. Local Culture / Taste / High-Class Lifestyle Agent
+
+Endpoint: `POST /agents/culture-taste-high-class-lifestyle/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Prepare a respectful dinner-event polish plan based only on these notes.",
+  "outputType": "event_prep_plan",
+  "situationOrEvent": "Small professional dinner with unfamiliar guests",
+  "cultureGoal": "Feel prepared without pretending expertise.",
+  "currentStyleOrBaseline": "Usually casual, wants a cleaner and calmer presentation.",
+  "desiredImpression": "Attentive, relaxed, and respectful.",
+  "budgetLevel": "low",
+  "budgetNotes": "Use existing wardrobe first.",
+  "wardrobeOrItemsAvailable": ["Navy blazer", "Plain shirt", "Dark shoes"],
+  "diningOrEventContext": "Dinner context supplied by the user; no reservation or restaurant lookup.",
+  "conversationContext": "Guests may discuss books, travel, food, and local culture.",
+  "readingArtMusicFilmInterests": ["Film history", "Jazz", "Architecture"],
+  "etiquetteFocus": ["Introductions", "Dining pace", "Conversation balance"],
+  "timeline": "One week",
+  "constraintsOrNotes": "Planning only; no stores, reservations, messages, posts, or purchases."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_culture_taste_high_class_lifestyle`.
+- `status` or `mode` indicates local-only response-only culture/taste/style planning.
+- Safety fields show no stores, fashion apps, reservations, restaurants, maps, location, payments, accounts, social accounts, calendar, contacts, files, camera, photos, connector, purchase, reservation, contact, post, send, persistence, mutation, social acceptance guarantee, status guarantee, private elite-network access, image-consultant certification, legal etiquette authority, manipulation, deception, discrimination, or certification behavior.
+
+## 35. Local Hobbies / Adventure Agent
+
+Endpoint: `POST /agents/hobbies-adventure/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Create a conservative beginner weekend plan for a day hike.",
+  "outputType": "weekend_plan",
+  "hobbyOrActivity": "Beginner day hiking",
+  "experienceLevel": "Beginner",
+  "adventureGoal": "Try an easy outdoor activity without overcommitting.",
+  "availableGear": ["Comfortable shoes", "Small backpack", "Water bottle"],
+  "budgetLevel": "low",
+  "budgetNotes": "Use available gear where safe.",
+  "locationContextIfUserProvided": "User has already chosen a local beginner trail manually.",
+  "timeAvailable": "Saturday morning",
+  "groupSize": "2 people",
+  "transportationContext": "User will arrange transport manually.",
+  "riskTolerance": "Low",
+  "safetyOrAccessibilityNotes": "Avoid steep or remote routes.",
+  "constraintsOrNotes": "No maps, weather, park, booking, permit, purchase, or legal access verification."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_hobbies_adventure`.
+- `status` or `mode` indicates local-only response-only hobby/adventure planning.
+- Safety fields show no maps, GPS/location, weather, park systems, drone apps, license systems, booking apps, stores, payments, accounts, files, camera, sensors, connector, booking, purchase, permit application, license application, airspace verification, legal access verification, contacting, persistence, mutation, live safety verification, live legal verification, illegal trespass, unsafe stunt, poaching, vandalism, or certification behavior.
+- Drone-related outputs remind the user to verify current FAA/local rules, airspace, property rules, and safe conditions separately.
+
+## 36. Local Personal Knowledge / Memory Organizer Agent
+
+Endpoint: `POST /agents/personal-knowledge-memory-organizer/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Organize these personal learning notes into a manual memory index.",
+  "outputType": "memory_index",
+  "knowledgeArea": "Home lab networking notes",
+  "sourceNotesOrSummary": "Router reset steps worked after checking cable labels. VLAN notes still need review. Keep troubleshooting lessons separate from purchase ideas.",
+  "organizationGoal": "Find useful context quickly before the next setup session.",
+  "categoriesOrTags": ["networking", "troubleshooting", "home lab"],
+  "projectsOrLifeAreas": ["Home lab"],
+  "reviewFrequency": "Weekly while active",
+  "priorityLevel": "Medium",
+  "retentionGoal": "Remember setup decisions and unresolved questions.",
+  "decisionOrMemoryContext": "Future setup sessions should start with cable labels and known-good reset steps.",
+  "constraintsOrNotes": "No file, notes app, database, sync, export, or persistent memory action."
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_personal_knowledge_memory_organizer`.
+- `status` or `mode` indicates local-only response-only personal knowledge and memory organization.
+- Safety fields show no file, notes app, cloud drive, browser history, email, calendar, contact, memory store, database, account, payment, connector, create, edit, delete, move, persist, sync, export, mutation, file search, outside-memory search, secret storage, sensitive fact inference beyond provided text, or certification behavior.
+- Sensitive-looking inputs produce redaction and safer local-storage reminders.
+
+## 37. Local Life Dashboard / Cross-Agent Coordinator
+
+Endpoint: `POST /agents/life-dashboard-coordinator/local-plan`
+
+Example JSON request body:
+
+```json
+{
+  "request": "Turn my school, robotics, fitness, money, and social goals into a weekly life dashboard.",
+  "outputType": "life_dashboard",
+  "lifeAreas": ["School", "Robotics", "Fitness", "Money", "Social"],
+  "currentGoals": ["Keep classes on track", "Prepare the robotics build", "Restart workouts", "Stay inside the weekly budget"],
+  "currentProjects": ["Robotics competition", "Semester assignments", "Meal prep reset"],
+  "urgentItems": ["Math quiz Friday", "Robot drivetrain test", "Budget check before weekend"],
+  "timeHorizon": "Next 7 days",
+  "availableTime": "Two evenings and Saturday morning",
+  "energyLevel": "Medium with lower energy after school",
+  "constraintsOrNotes": "No calendar, task, reminder, file, connector, or account access.",
+  "priorityPreference": "Balance urgent school work with robotics progress.",
+  "domainsToCoordinate": ["school", "robotics", "fitness", "money", "relationships"],
+  "existingAgentOutputsOrNotes": ["Study plan needs a short review block", "Budget notes are user-provided only"],
+  "decisionContext": "Choose where to spend limited evening focus.",
+  "weeklyFocus": "Protect school deadlines while making visible robotics progress.",
+  "riskOrStressFlags": ["Overcommitting", "Skipping rest"],
+  "desiredDashboardStyle": "Compact weekly dashboard"
+}
+```
+
+Expected response checks:
+
+- `agentId` is `local_life_dashboard_cross_agent_coordinator`.
+- `status` or `mode` indicates local-only response-only life dashboard and cross-agent coordination.
+- `recommended_agents` entries are suggestions only; no local response agent is automatically run, invoked, queried, or handed off to.
+- Safety fields show no connectors, accounts, external services, persistence, tasks, reminders, file mutation, email, calendar, social posting, purchase, booking, submission, payment, official filing, emergency call, medical decision, legal action, financial transaction, or certification behavior.
+- High-stakes rows point to qualified professionals or official sources, and immediate-danger rows tell the user to contact local emergency services.
 
 ## What This Does Not Prove
 

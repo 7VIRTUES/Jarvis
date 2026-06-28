@@ -36,6 +36,14 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/everyday-life/local-plan",
     "POST /agents/online-presence/local-plan",
     "POST /agents/security-safety/local-review",
+    "POST /agents/food-cooking-grocery/local-plan",
+    "POST /agents/home-room-living-space/local-plan",
+    "POST /agents/legal-immigration-official/local-plan",
+    "POST /agents/emergency-preparedness/local-plan",
+    "POST /agents/culture-taste-high-class-lifestyle/local-plan",
+    "POST /agents/hobbies-adventure/local-plan",
+    "POST /agents/personal-knowledge-memory-organizer/local-plan",
+    "POST /agents/life-dashboard-coordinator/local-plan",
 ]
 
 
@@ -65,7 +73,7 @@ def test_template_includes_exactly_the_expected_endpoint_strings():
     template_text = TEMPLATE.read_text(encoding="utf-8")
 
     assert [endpoint for endpoint in EXPECTED_ENDPOINTS if endpoint in template_text] == EXPECTED_ENDPOINTS
-    assert template_text.count("POST /agents/") == 29
+    assert template_text.count("POST /agents/") == 37
 
 
 def test_template_includes_required_metadata_fields():
@@ -94,7 +102,7 @@ def test_template_includes_per_endpoint_evidence_fields():
     ]
 
     for field in fields:
-        assert lower_template.count(field) == 29
+        assert lower_template.count(field) == 30
 
 
 def test_template_includes_known_limitations():

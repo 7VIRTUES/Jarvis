@@ -28,21 +28,36 @@ from .local_business_agent import LocalBusinessAgentService, LocalBusinessReques
 from .local_career_agent import LocalCareerAgentService, LocalCareerRequest
 from .local_classification_agent import LocalClassificationAgentService, LocalClassificationRequest
 from .local_creator_agent import LocalCreatorAgentService, LocalCreatorRequest
+from .local_culture_taste_high_class_lifestyle_agent import LocalCultureTasteHighClassLifestyleAgentService, LocalCultureTasteHighClassLifestyleRequest
 from .local_decision_agent import LocalDecisionAgentService, LocalDecisionRequest
 from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
 from .local_emotional_reflection_agent import LocalEmotionalReflectionAgentService, LocalEmotionalReflectionRequest
+from .local_emergency_preparedness_agent import LocalEmergencyPreparednessAgentService, LocalEmergencyPreparednessRequest
 from .local_everyday_life_agent import LocalEverydayLifeAgentService, LocalEverydayLifeRequest
 from .local_extraction_agent import LocalExtractionAgentService, LocalExtractionRequest
 from .local_finance_budget_agent import LocalFinanceBudgetAgentService, LocalFinanceBudgetRequest
+from .local_food_cooking_grocery_agent import LocalFoodCookingGroceryAgentService, LocalFoodCookingGroceryRequest
+from .local_home_room_living_space_agent import LocalHomeRoomLivingSpaceAgentService, LocalHomeRoomLivingSpaceRequest
+from .local_hobbies_adventure_agent import LocalHobbiesAdventureAgentService, LocalHobbiesAdventureRequest
 from .local_health_fitness_agent import LocalHealthFitnessAgentService, LocalHealthFitnessRequest
 from .local_housing_move_travel_agent import LocalHousingMoveTravelAgentService, LocalHousingMoveTravelRequest
 from .local_learning_study_agent import LocalLearningStudyAgentService, LocalLearningStudyRequest
+from .local_legal_immigration_official_agent import LocalLegalImmigrationOfficialAgentService, LocalLegalImmigrationOfficialRequest
+from .local_life_dashboard_coordinator_agent import LocalLifeDashboardCoordinatorAgentService, LocalLifeDashboardCoordinatorRequest
 from .local_life_direction_agent import LocalLifeDirectionAgentService, LocalLifeDirectionRequest
 from .local_online_presence_agent import LocalOnlinePresenceAgentService, LocalOnlinePresenceRequest
 from .local_personal_admin_agent import LocalPersonalAdminAgentService, LocalPersonalAdminRequest
+from .local_personal_knowledge_memory_organizer_agent import LocalPersonalKnowledgeMemoryOrganizerAgentService, LocalPersonalKnowledgeMemoryOrganizerRequest
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
 from .local_projects_portfolio_agent import LocalProjectsPortfolioAgentService, LocalProjectsPortfolioRequest
 from .local_relationships_agent import LocalRelationshipsAgentService, LocalRelationshipsRequest
+from .local_response_agents_catalog import (
+    local_response_agent_categories,
+    local_response_agent_metadata,
+    local_response_agent_request_template,
+    local_response_agent_route_preview,
+    local_response_agents_discovery_catalog,
+)
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
@@ -64,6 +79,7 @@ from .task_control import TaskControlService
 from .tasks import TaskQueue
 from .validation_agent import ValidationAgentService
 from .vm_validation_prep import VmValidationPrepService
+from .web_research import agent_context_preview, fetch_public_url, validate_public_url, web_research_policy
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 DATA_ROOT = WORKSPACE_ROOT / "data" / "jarvis"
@@ -113,6 +129,14 @@ local_classification_agent = LocalClassificationAgentService()
 local_transformation_agent = LocalTransformationAgentService()
 local_business_agent = LocalBusinessAgentService()
 local_creator_agent = LocalCreatorAgentService()
+local_food_cooking_grocery_agent = LocalFoodCookingGroceryAgentService()
+local_home_room_living_space_agent = LocalHomeRoomLivingSpaceAgentService()
+local_legal_immigration_official_agent = LocalLegalImmigrationOfficialAgentService()
+local_emergency_preparedness_agent = LocalEmergencyPreparednessAgentService()
+local_culture_taste_high_class_lifestyle_agent = LocalCultureTasteHighClassLifestyleAgentService()
+local_hobbies_adventure_agent = LocalHobbiesAdventureAgentService()
+local_personal_knowledge_memory_organizer_agent = LocalPersonalKnowledgeMemoryOrganizerAgentService()
+local_life_dashboard_coordinator_agent = LocalLifeDashboardCoordinatorAgentService()
 local_health_fitness_agent = LocalHealthFitnessAgentService()
 local_everyday_life_agent = LocalEverydayLifeAgentService()
 local_online_presence_agent = LocalOnlinePresenceAgentService()
@@ -172,6 +196,49 @@ class ApprovalResolutionInput(BaseModel):
 
 class ReportValidationInput(BaseModel):
     text: str
+
+
+class LocalResponseAgentRoutePreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    prompt_text: str = ""
+    domainsToConsider: list[str] = Field(default_factory=list)
+    domains_to_consider: list[str] = Field(default_factory=list)
+    preferredOutputType: str = ""
+    preferred_output_type: str = ""
+    urgencyLevel: str = ""
+    urgency_level: str = ""
+    constraintsOrNotes: str = ""
+    constraints_or_notes: str = ""
+
+
+class WebResearchUrlInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = ""
+    purpose: str = ""
+    max_excerpt_chars: int = Field(default=1600, ge=200, le=6000)
+    allow_redirects: bool = True
+    constraintsOrNotes: str = ""
+    constraints_or_notes: str = ""
+
+
+class WebResearchAgentContextPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str = ""
+    agentId: str = ""
+    user_request: str = ""
+    userRequest: str = ""
+    urls: list[str] = Field(default_factory=list)
+    output_type: str = ""
+    outputType: str = ""
+    web_research_enabled: bool = False
+    webResearchEnabled: bool = False
+    constraintsOrNotes: str = ""
+    constraints_or_notes: str = ""
 
 
 class SecurityReviewInput(BaseModel):
@@ -377,6 +444,174 @@ class LocalHealthFitnessInput(BaseModel):
     habitsToBuild: list[str] = Field(default_factory=list)
     habitsToReduce: list[str] = Field(default_factory=list)
     desiredOutputType: str = "fitness_brief"
+
+
+class LocalFoodCookingGroceryInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    mealGoal: str = ""
+    availableIngredients: list[str] = Field(default_factory=list)
+    pantryItems: list[str] = Field(default_factory=list)
+    groceryItemsNeeded: list[str] = Field(default_factory=list)
+    dietaryPreferences: list[str] = Field(default_factory=list)
+    allergiesOrAvoidances: list[str] = Field(default_factory=list)
+    budgetLevel: str = ""
+    budgetNotes: str = ""
+    servings: str = ""
+    timeAvailableMinutes: int | None = None
+    cookingSkillLevel: str = ""
+    kitchenEquipment: list[str] = Field(default_factory=list)
+    mealType: str = ""
+    cuisinePreferences: list[str] = Field(default_factory=list)
+    leftoversOrBatchPrepGoal: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalHomeRoomLivingSpaceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    roomType: str = ""
+    livingSituation: str = ""
+    spaceGoal: str = ""
+    currentItems: list[str] = Field(default_factory=list)
+    itemsToBuyOrConsider: list[str] = Field(default_factory=list)
+    budgetLevel: str = ""
+    budgetNotes: str = ""
+    roomDimensionsOrConstraints: str = ""
+    storageConstraints: str = ""
+    cleaningOrMaintenanceNeeds: list[str] = Field(default_factory=list)
+    aestheticPreferences: list[str] = Field(default_factory=list)
+    productivityOrSleepGoals: list[str] = Field(default_factory=list)
+    safetyOrAccessibilityNotes: str = ""
+    timeline: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalLegalImmigrationOfficialInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    matterType: str = ""
+    jurisdictionOrCountryIfUserProvided: str = ""
+    currentStatus: str = ""
+    documentList: list[str] = Field(default_factory=list)
+    deadlinesOrDates: list[str] = Field(default_factory=list)
+    officeOrAgencyNameIfUserProvided: str = ""
+    userQuestions: list[str] = Field(default_factory=list)
+    desiredOutcome: str = ""
+    riskLevelOrUrgency: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalEmergencyPreparednessInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    scenarioType: str = ""
+    householdSize: str = ""
+    pets: list[str] = Field(default_factory=list)
+    locationContextIfUserProvided: str = ""
+    currentSupplies: list[str] = Field(default_factory=list)
+    vehicleOrTravelContext: str = ""
+    medicalOrAccessibilityNeeds: list[str] = Field(default_factory=list)
+    budgetLevel: str = ""
+    budgetNotes: str = ""
+    timeHorizon: str = ""
+    communicationContactsSummary: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalCultureTasteHighClassLifestyleInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    situationOrEvent: str = ""
+    cultureGoal: str = ""
+    currentStyleOrBaseline: str = ""
+    desiredImpression: str = ""
+    budgetLevel: str = ""
+    budgetNotes: str = ""
+    wardrobeOrItemsAvailable: list[str] = Field(default_factory=list)
+    diningOrEventContext: str = ""
+    conversationContext: str = ""
+    readingArtMusicFilmInterests: list[str] = Field(default_factory=list)
+    etiquetteFocus: list[str] = Field(default_factory=list)
+    timeline: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalHobbiesAdventureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    hobbyOrActivity: str = ""
+    experienceLevel: str = ""
+    adventureGoal: str = ""
+    availableGear: list[str] = Field(default_factory=list)
+    budgetLevel: str = ""
+    budgetNotes: str = ""
+    locationContextIfUserProvided: str = ""
+    timeAvailable: str = ""
+    groupSize: str = ""
+    transportationContext: str = ""
+    riskTolerance: str = ""
+    safetyOrAccessibilityNotes: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalPersonalKnowledgeMemoryOrganizerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    knowledgeArea: str = ""
+    sourceNotesOrSummary: str = ""
+    organizationGoal: str = ""
+    categoriesOrTags: list[str] = Field(default_factory=list)
+    projectsOrLifeAreas: list[str] = Field(default_factory=list)
+    reviewFrequency: str = ""
+    priorityLevel: str = ""
+    retentionGoal: str = ""
+    decisionOrMemoryContext: str = ""
+    constraintsOrNotes: str = ""
+
+
+class LocalLifeDashboardCoordinatorInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = ""
+    promptText: str = ""
+    outputType: str = "summary"
+    lifeAreas: list[str] = Field(default_factory=list)
+    currentGoals: list[str] = Field(default_factory=list)
+    currentProjects: list[str] = Field(default_factory=list)
+    urgentItems: list[str] = Field(default_factory=list)
+    timeHorizon: str = ""
+    availableTime: str = ""
+    energyLevel: str = ""
+    constraintsOrNotes: str = ""
+    priorityPreference: str = ""
+    domainsToCoordinate: list[str] = Field(default_factory=list)
+    existingAgentOutputsOrNotes: list[str] = Field(default_factory=list)
+    decisionContext: str = ""
+    weeklyFocus: str = ""
+    riskOrStressFlags: list[str] = Field(default_factory=list)
+    desiredDashboardStyle: str = ""
 
 
 class LocalEverydayLifeInput(BaseModel):
@@ -674,6 +909,88 @@ def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[s
     return dashboard.summary()
 
 
+@app.get("/agents/local-response-agents/catalog")
+def get_local_response_agents_catalog(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return local_response_agents_discovery_catalog()
+
+
+@app.get("/agents/local-response-agents/categories")
+def get_local_response_agent_categories(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return local_response_agent_categories()
+
+
+@app.get("/agents/local-response-agents/{agent_id}/request-template")
+def get_local_response_agent_request_template(
+    agent_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_response_agent_request_template(agent_id)
+
+
+@app.get("/agents/local-response-agents/{agent_id}")
+def get_local_response_agent_metadata(
+    agent_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_response_agent_metadata(agent_id)
+
+
+@app.post("/agents/local-response-agents/route-preview")
+def preview_local_response_agent_route(
+    payload: LocalResponseAgentRoutePreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_response_agent_route_preview(
+        text=payload.request or payload.promptText or payload.prompt_text,
+        domains_to_consider=payload.domainsToConsider or payload.domains_to_consider,
+        preferred_output_type=payload.preferredOutputType or payload.preferred_output_type,
+        urgency_level=payload.urgencyLevel or payload.urgency_level,
+        constraints_or_notes=payload.constraintsOrNotes or payload.constraints_or_notes,
+    )
+
+
+@app.get("/web-research/policy")
+def get_web_research_policy(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return web_research_policy(agent_count=37)
+
+
+@app.post("/web-research/validate-url")
+def validate_web_research_url(
+    payload: WebResearchUrlInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return validate_public_url(payload.url)
+
+
+@app.post("/web-research/fetch-public-url")
+def fetch_web_research_public_url(
+    payload: WebResearchUrlInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return fetch_public_url(
+        payload.url,
+        purpose=payload.purpose,
+        max_excerpt_chars=payload.max_excerpt_chars,
+        allow_redirects=payload.allow_redirects,
+        constraints_or_notes=payload.constraintsOrNotes or payload.constraints_or_notes,
+    )
+
+
+@app.post("/web-research/agent-context-preview")
+def preview_web_research_agent_context(
+    payload: WebResearchAgentContextPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return agent_context_preview(
+        agent_id=payload.agent_id or payload.agentId,
+        user_request=payload.user_request or payload.userRequest,
+        urls=payload.urls,
+        output_type=payload.output_type or payload.outputType,
+        web_research_enabled=payload.web_research_enabled or payload.webResearchEnabled,
+        constraints_or_notes=payload.constraintsOrNotes or payload.constraints_or_notes,
+    )
+
+
 @app.post("/agents/research/local-brief")
 def create_local_research_brief(
     payload: LocalResearchBriefInput,
@@ -922,6 +1239,222 @@ def create_local_health_fitness_plan(
             habits_to_build=payload.habitsToBuild,
             habits_to_reduce=payload.habitsToReduce,
             desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/food-cooking-grocery/local-plan")
+def create_local_food_cooking_grocery_plan(
+    payload: LocalFoodCookingGroceryInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_food_cooking_grocery_agent.create_plan(
+        LocalFoodCookingGroceryRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            meal_goal=payload.mealGoal,
+            available_ingredients=payload.availableIngredients,
+            pantry_items=payload.pantryItems,
+            grocery_items_needed=payload.groceryItemsNeeded,
+            dietary_preferences=payload.dietaryPreferences,
+            allergies_or_avoidances=payload.allergiesOrAvoidances,
+            budget_level=payload.budgetLevel,
+            budget_notes=payload.budgetNotes,
+            servings=payload.servings,
+            time_available_minutes=payload.timeAvailableMinutes,
+            cooking_skill_level=payload.cookingSkillLevel,
+            kitchen_equipment=payload.kitchenEquipment,
+            meal_type=payload.mealType,
+            cuisine_preferences=payload.cuisinePreferences,
+            leftovers_or_batch_prep_goal=payload.leftoversOrBatchPrepGoal,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/home-room-living-space/local-plan")
+def create_local_home_room_living_space_plan(
+    payload: LocalHomeRoomLivingSpaceInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_home_room_living_space_agent.create_plan(
+        LocalHomeRoomLivingSpaceRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            room_type=payload.roomType,
+            living_situation=payload.livingSituation,
+            space_goal=payload.spaceGoal,
+            current_items=payload.currentItems,
+            items_to_buy_or_consider=payload.itemsToBuyOrConsider,
+            budget_level=payload.budgetLevel,
+            budget_notes=payload.budgetNotes,
+            room_dimensions_or_constraints=payload.roomDimensionsOrConstraints,
+            storage_constraints=payload.storageConstraints,
+            cleaning_or_maintenance_needs=payload.cleaningOrMaintenanceNeeds,
+            aesthetic_preferences=payload.aestheticPreferences,
+            productivity_or_sleep_goals=payload.productivityOrSleepGoals,
+            safety_or_accessibility_notes=payload.safetyOrAccessibilityNotes,
+            timeline=payload.timeline,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/legal-immigration-official/local-plan")
+def create_local_legal_immigration_official_plan(
+    payload: LocalLegalImmigrationOfficialInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_legal_immigration_official_agent.create_plan(
+        LocalLegalImmigrationOfficialRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            matter_type=payload.matterType,
+            jurisdiction_or_country_if_user_provided=payload.jurisdictionOrCountryIfUserProvided,
+            current_status=payload.currentStatus,
+            document_list=payload.documentList,
+            deadlines_or_dates=payload.deadlinesOrDates,
+            office_or_agency_name_if_user_provided=payload.officeOrAgencyNameIfUserProvided,
+            user_questions=payload.userQuestions,
+            desired_outcome=payload.desiredOutcome,
+            risk_level_or_urgency=payload.riskLevelOrUrgency,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/emergency-preparedness/local-plan")
+def create_local_emergency_preparedness_plan(
+    payload: LocalEmergencyPreparednessInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_emergency_preparedness_agent.create_plan(
+        LocalEmergencyPreparednessRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            scenario_type=payload.scenarioType,
+            household_size=payload.householdSize,
+            pets=payload.pets,
+            location_context_if_user_provided=payload.locationContextIfUserProvided,
+            current_supplies=payload.currentSupplies,
+            vehicle_or_travel_context=payload.vehicleOrTravelContext,
+            medical_or_accessibility_needs=payload.medicalOrAccessibilityNeeds,
+            budget_level=payload.budgetLevel,
+            budget_notes=payload.budgetNotes,
+            time_horizon=payload.timeHorizon,
+            communication_contacts_summary=payload.communicationContactsSummary,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/culture-taste-high-class-lifestyle/local-plan")
+def create_local_culture_taste_high_class_lifestyle_plan(
+    payload: LocalCultureTasteHighClassLifestyleInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_culture_taste_high_class_lifestyle_agent.create_plan(
+        LocalCultureTasteHighClassLifestyleRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            situation_or_event=payload.situationOrEvent,
+            culture_goal=payload.cultureGoal,
+            current_style_or_baseline=payload.currentStyleOrBaseline,
+            desired_impression=payload.desiredImpression,
+            budget_level=payload.budgetLevel,
+            budget_notes=payload.budgetNotes,
+            wardrobe_or_items_available=payload.wardrobeOrItemsAvailable,
+            dining_or_event_context=payload.diningOrEventContext,
+            conversation_context=payload.conversationContext,
+            reading_art_music_film_interests=payload.readingArtMusicFilmInterests,
+            etiquette_focus=payload.etiquetteFocus,
+            timeline=payload.timeline,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/hobbies-adventure/local-plan")
+def create_local_hobbies_adventure_plan(
+    payload: LocalHobbiesAdventureInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_hobbies_adventure_agent.create_plan(
+        LocalHobbiesAdventureRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            hobby_or_activity=payload.hobbyOrActivity,
+            experience_level=payload.experienceLevel,
+            adventure_goal=payload.adventureGoal,
+            available_gear=payload.availableGear,
+            budget_level=payload.budgetLevel,
+            budget_notes=payload.budgetNotes,
+            location_context_if_user_provided=payload.locationContextIfUserProvided,
+            time_available=payload.timeAvailable,
+            group_size=payload.groupSize,
+            transportation_context=payload.transportationContext,
+            risk_tolerance=payload.riskTolerance,
+            safety_or_accessibility_notes=payload.safetyOrAccessibilityNotes,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/personal-knowledge-memory-organizer/local-plan")
+def create_local_personal_knowledge_memory_organizer_plan(
+    payload: LocalPersonalKnowledgeMemoryOrganizerInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_personal_knowledge_memory_organizer_agent.create_plan(
+        LocalPersonalKnowledgeMemoryOrganizerRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            knowledge_area=payload.knowledgeArea,
+            source_notes_or_summary=payload.sourceNotesOrSummary,
+            organization_goal=payload.organizationGoal,
+            categories_or_tags=payload.categoriesOrTags,
+            projects_or_life_areas=payload.projectsOrLifeAreas,
+            review_frequency=payload.reviewFrequency,
+            priority_level=payload.priorityLevel,
+            retention_goal=payload.retentionGoal,
+            decision_or_memory_context=payload.decisionOrMemoryContext,
+            constraints_or_notes=payload.constraintsOrNotes,
+        )
+    )
+
+
+@app.post("/agents/life-dashboard-coordinator/local-plan")
+def create_local_life_dashboard_coordinator_plan(
+    payload: LocalLifeDashboardCoordinatorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_life_dashboard_coordinator_agent.create_plan(
+        LocalLifeDashboardCoordinatorRequest(
+            request=payload.request,
+            prompt_text=payload.promptText,
+            output_type=payload.outputType,
+            life_areas=payload.lifeAreas,
+            current_goals=payload.currentGoals,
+            current_projects=payload.currentProjects,
+            urgent_items=payload.urgentItems,
+            time_horizon=payload.timeHorizon,
+            available_time=payload.availableTime,
+            energy_level=payload.energyLevel,
+            constraints_or_notes=payload.constraintsOrNotes,
+            priority_preference=payload.priorityPreference,
+            domains_to_coordinate=payload.domainsToCoordinate,
+            existing_agent_outputs_or_notes=payload.existingAgentOutputsOrNotes,
+            decision_context=payload.decisionContext,
+            weekly_focus=payload.weeklyFocus,
+            risk_or_stress_flags=payload.riskOrStressFlags,
+            desired_dashboard_style=payload.desiredDashboardStyle,
         )
     )
 

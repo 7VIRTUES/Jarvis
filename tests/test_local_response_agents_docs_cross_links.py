@@ -28,6 +28,14 @@ AGENT_DOCS = [
     Path("docs/local-relationships-agent.md"),
     Path("docs/local-emotional-reflection-agent.md"),
     Path("docs/local-health-fitness-agent.md"),
+    Path("docs/local-food-cooking-grocery-agent.md"),
+    Path("docs/local-home-room-living-space-agent.md"),
+    Path("docs/local-legal-immigration-official-agent.md"),
+    Path("docs/local-emergency-preparedness-agent.md"),
+    Path("docs/local-culture-taste-high-class-lifestyle-agent.md"),
+    Path("docs/local-hobbies-adventure-agent.md"),
+    Path("docs/local-personal-knowledge-memory-organizer-agent.md"),
+    Path("docs/local-life-dashboard-coordinator-agent.md"),
     Path("docs/local-everyday-life-agent.md"),
     Path("docs/local-online-presence-agent.md"),
     Path("docs/local-security-safety-agent.md"),
@@ -86,6 +94,107 @@ def test_everyday_life_doc_includes_manual_only_non_execution_boundaries():
     assert "no persistence" in lower_doc
     assert "no execution" in lower_doc
     assert "output is based only on user-provided input" in lower_doc
+
+
+def test_food_cooking_grocery_doc_includes_manual_only_non_ordering_or_medical_boundaries():
+    lower_doc = Path("docs/local-food-cooking-grocery-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access grocery apps, delivery apps, restaurant apps, health apps" in lower_doc
+    assert "payment systems, browser data, location, maps, gps" in lower_doc
+    assert "does not order groceries, create delivery orders, make purchases, book reservations" in lower_doc
+    assert "medical nutrition advice, allergy safety certainty, clinical diet prescriptions" in lower_doc
+    assert "food-safety reminders are conservative general reminders only" in lower_doc
+    assert "qualified medical or dietary professionals" in lower_doc
+
+
+def test_home_room_living_space_doc_includes_manual_only_non_device_or_landlord_boundaries():
+    lower_doc = Path("docs/local-home-room-living-space-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access smart-home devices, landlord portals, utility accounts" in lower_doc
+    assert "does not purchase furniture, book movers, contact landlords" in lower_doc
+    assert "building-code compliance" in lower_doc
+    assert "qualified local professionals or emergency services" in lower_doc
+
+
+def test_legal_immigration_official_doc_includes_non_legal_advice_boundaries():
+    lower_doc = Path("docs/local-legal-immigration-official-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access government portals, immigration accounts, school portals, court systems" in lower_doc
+    assert "does not submit forms, file applications, sign documents" in lower_doc
+    assert "does not provide legal advice, immigration advice, attorney review" in lower_doc
+    assert "qualified attorney, accredited immigration representative, school official" in lower_doc
+
+
+def test_emergency_preparedness_doc_includes_non_calling_non_live_guidance_boundaries():
+    lower_doc = Path("docs/local-emergency-preparedness-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access emergency services, police/fire/ems, weather services" in lower_doc
+    assert "does not call 911, send alerts, contact family" in lower_doc
+    assert "does not claim live hazard detection" in lower_doc
+    assert "contact local emergency services or leave the area if safe" in lower_doc
+
+
+def test_culture_taste_high_class_lifestyle_doc_includes_manual_only_non_status_boundaries():
+    lower_doc = Path("docs/local-culture-taste-high-class-lifestyle-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access stores, fashion apps, reservations, restaurants, maps" in lower_doc
+    assert "does not purchase, reserve, contact, post, send" in lower_doc
+    assert "does not guarantee social acceptance or status" in lower_doc
+    assert "no manipulation, deception, discrimination" in lower_doc
+
+
+def test_hobbies_adventure_doc_includes_manual_only_non_live_verification_boundaries():
+    lower_doc = Path("docs/local-hobbies-adventure-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access maps, gps/location, weather services, park systems" in lower_doc
+    assert "does not book, buy, apply for permits or licenses" in lower_doc
+    assert "drone-related outputs remind the user to verify current faa" in lower_doc
+    assert "official local conditions, rules, closures, and safety guidance" in lower_doc
+
+
+def test_personal_knowledge_memory_organizer_doc_includes_manual_only_non_file_boundaries():
+    lower_doc = Path("docs/local-personal-knowledge-memory-organizer-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "does not access files, notes apps, cloud drives, browser history" in lower_doc
+    assert "does not create, edit, delete, move, persist, sync, export" in lower_doc
+    assert "does not claim file search or memory outside provided input" in lower_doc
+    assert "redact secrets, credentials, private ids" in lower_doc
+
+
+def test_life_dashboard_coordinator_doc_includes_manual_only_non_runner_boundaries():
+    lower_doc = Path("docs/local-life-dashboard-coordinator-agent.md").read_text(encoding="utf-8").lower()
+
+    assert "manual-input-only" in lower_doc
+    assert "local-only" in lower_doc
+    assert "response-only" in lower_doc
+    assert "non-persistent" in lower_doc
+    assert "does not automatically run, invoke, hand off to, or query other local agents" in lower_doc
+    assert "does not access connectors, accounts, files, notes, memory, email, calendar, contacts, cloud services, browser history, payment systems, or external services" in lower_doc
+    assert "does not create tasks, schedule reminders, persist dashboards, mutate records, send messages, post publicly, buy, book, pay, submit forms, file official documents, call emergency services, make legal actions, make medical decisions, or make financial transactions" in lower_doc
+    assert "recommended agents are suggestions only" in lower_doc
+    assert "qualified professionals or official sources" in lower_doc
+    assert "contact local emergency services" in lower_doc
 
 
 def test_online_presence_doc_includes_manual_only_non_platform_boundaries():

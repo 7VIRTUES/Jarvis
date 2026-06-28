@@ -32,6 +32,14 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/relationships/local-plan",
     "POST /agents/emotional-reflection/local-reflect",
     "POST /agents/health-fitness/local-plan",
+    "POST /agents/food-cooking-grocery/local-plan",
+    "POST /agents/home-room-living-space/local-plan",
+    "POST /agents/legal-immigration-official/local-plan",
+    "POST /agents/emergency-preparedness/local-plan",
+    "POST /agents/culture-taste-high-class-lifestyle/local-plan",
+    "POST /agents/hobbies-adventure/local-plan",
+    "POST /agents/personal-knowledge-memory-organizer/local-plan",
+    "POST /agents/life-dashboard-coordinator/local-plan",
     "POST /agents/everyday-life/local-plan",
     "POST /agents/online-presence/local-plan",
     "POST /agents/security-safety/local-review",
@@ -64,6 +72,14 @@ EXPECTED_AGENT_IDS = [
     "local_relationships_agent",
     "local_emotional_reflection_agent",
     "local_health_fitness_agent",
+    "local_food_cooking_grocery",
+    "local_home_room_living_space",
+    "local_legal_immigration_official_matters",
+    "local_emergency_preparedness",
+    "local_culture_taste_high_class_lifestyle",
+    "local_hobbies_adventure",
+    "local_personal_knowledge_memory_organizer",
+    "local_life_dashboard_cross_agent_coordinator",
     "local_everyday_life_agent",
     "local_online_presence_agent",
     "local_security_safety_agent",
@@ -78,13 +94,13 @@ def test_smoke_runbook_includes_exactly_the_expected_endpoint_strings():
     doc_text = RUNBOOK.read_text(encoding="utf-8")
 
     assert [endpoint for endpoint in EXPECTED_ENDPOINTS if endpoint in doc_text] == EXPECTED_ENDPOINTS
-    assert doc_text.count("POST /agents/") == 29
+    assert doc_text.count("POST /agents/") == 37
 
 
 def test_smoke_runbook_includes_json_examples_for_all_agents():
     doc_text = RUNBOOK.read_text(encoding="utf-8")
 
-    assert doc_text.count("```json") == 29
+    assert doc_text.count("```json") == 37
     for agent_id in EXPECTED_AGENT_IDS:
         assert agent_id in doc_text
 
