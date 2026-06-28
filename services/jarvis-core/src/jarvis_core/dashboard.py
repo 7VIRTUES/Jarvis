@@ -1075,7 +1075,7 @@ def dashboard_html() -> str:
       <div id="local-response-agents-example-note" class="muted">Example request bodies are read-only JSON display only. This dashboard does not call agent endpoints or create artifacts from these examples.</div>
       <div id="local-response-agents-workbench" class="row stack">
         <h3>Local Response Agents Workbench</h3>
-        <div class="muted">Local-only workbench allowlisted to the 11 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
+        <div class="muted">Local-only workbench allowlisted to the 29 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
         <label>
           Select local response agent
           <select id="local-response-agents-workbench-select"></select>

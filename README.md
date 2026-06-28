@@ -29,7 +29,7 @@ v0.1C is a private-alpha readiness foundation. This repository is not yet a prod
 - LAN dashboard token protection
 - Loopback-only setup guidance
 - Stop-task boundary for Jarvis-owned task records
-- Local-only response agents for research notes, project metadata summaries, planning, drafting, review, decision support, troubleshooting triage, text summarization, structured extraction, local classification, and text transformation
+- Local-only response agents for research notes, project metadata summaries, planning, drafting, review, decision support, troubleshooting triage, text summarization, structured extraction, local classification, text transformation, business planning, creator planning, health/fitness planning, everyday-life planning, online presence planning, and security/safety review
 - Disabled placeholder future connectors
 
 ## What Is Not Included Yet
@@ -102,6 +102,24 @@ python -m pytest
 - [Local Extraction Agent](docs/local-extraction-agent.md)
 - [Local Classification Agent](docs/local-classification-agent.md)
 - [Local Transformation Agent](docs/local-transformation-agent.md)
+- [Local Business Agent](docs/local-business-agent.md)
+- [Local Creator Agent](docs/local-creator-agent.md)
+- [Local School / Robotics Agent](docs/local-school-robotics-agent.md)
+- [Local Career / Job Search Agent](docs/local-career-agent.md)
+- [Local Finance / Loans / Budget Agent](docs/local-finance-budget-agent.md)
+- [Local Housing / Move / Travel Agent](docs/local-housing-move-travel-agent.md)
+- [Local Projects / Portfolio Agent](docs/local-projects-portfolio-agent.md)
+- [Local Learning / Study Coach Agent](docs/local-learning-study-agent.md)
+- [Local Social / Networking / High-Class Coach Agent](docs/local-social-networking-agent.md)
+  - [Local Personal Admin / Documents Agent](docs/local-personal-admin-agent.md)
+  - [Local Vehicle / Devices / Gear Agent](docs/local-vehicle-devices-gear-agent.md)
+  - [Local Life Direction / Values Agent](docs/local-life-direction-agent.md)
+  - [Local Relationship / Family Agent](docs/local-relationships-agent.md)
+  - [Local Emotional Reflection / Resilience Agent](docs/local-emotional-reflection-agent.md)
+  - [Local Health/Fitness Agent](docs/local-health-fitness-agent.md)
+- [Local Everyday Life Agent](docs/local-everyday-life-agent.md)
+- [Local Online Presence Agent](docs/local-online-presence-agent.md)
+- [Local Security/Safety Agent](docs/local-security-safety-agent.md)
 - [Local Response Agents Index](docs/local-response-agents-index.md)
 - [Local Response Agents Manual Smoke Runbook](docs/local-response-agents-smoke-runbook.md)
 - [Local Response Agents Smoke Evidence Template](docs/local-response-agents-smoke-evidence-template.md)

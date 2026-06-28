@@ -15,6 +15,24 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/extraction/local-extract",
     "POST /agents/classification/local-classify",
     "POST /agents/transformation/local-transform",
+    "POST /agents/business/local-brief",
+    "POST /agents/health-fitness/local-plan",
+    "POST /agents/everyday-life/local-plan",
+    "POST /agents/online-presence/local-plan",
+    "POST /agents/security-safety/local-review",
+    "POST /agents/creator/local-plan",
+    "POST /agents/school-robotics/local-plan",
+    "POST /agents/career/local-plan",
+    "POST /agents/finance-budget/local-plan",
+    "POST /agents/housing-move-travel/local-plan",
+    "POST /agents/projects-portfolio/local-plan",
+    "POST /agents/learning-study/local-plan",
+    "POST /agents/social-networking/local-plan",
+    "POST /agents/personal-admin/local-plan",
+    "POST /agents/vehicle-devices-gear/local-plan",
+    "POST /agents/life-direction/local-plan",
+    "POST /agents/relationships/local-plan",
+    "POST /agents/emotional-reflection/local-reflect",
 ]
 
 
@@ -60,7 +78,7 @@ def test_dashboard_workbench_states_local_allowlisted_non_runner_boundaries(tmp_
     section = local_response_agents_section().lower()
 
     assert "local-only workbench" in section
-    assert "allowlisted to the 11 local response-agent endpoints" in section
+    assert "allowlisted to the 29 local response-agent endpoints" in section
     assert "not an arbitrary request runner" in section
     assert "not a connector runner" in section
     assert "not persistent" in section
@@ -161,6 +179,6 @@ def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, m
 
     index = app_module.dashboard_summary()["localResponseAgentsIndex"]
 
-    assert index["agentCount"] == 11
+    assert index["agentCount"] == 29
     assert [agent["endpoint"] for agent in index["agents"]] == EXPECTED_ENDPOINTS
     assert all(agent["exampleRequestBody"] for agent in index["agents"])

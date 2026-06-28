@@ -17,6 +17,24 @@ EXPECTED_ENDPOINTS = [
     "POST /agents/extraction/local-extract",
     "POST /agents/classification/local-classify",
     "POST /agents/transformation/local-transform",
+    "POST /agents/business/local-brief",
+    "POST /agents/creator/local-plan",
+    "POST /agents/school-robotics/local-plan",
+    "POST /agents/career/local-plan",
+    "POST /agents/finance-budget/local-plan",
+    "POST /agents/housing-move-travel/local-plan",
+    "POST /agents/projects-portfolio/local-plan",
+    "POST /agents/learning-study/local-plan",
+    "POST /agents/social-networking/local-plan",
+    "POST /agents/personal-admin/local-plan",
+    "POST /agents/vehicle-devices-gear/local-plan",
+    "POST /agents/life-direction/local-plan",
+    "POST /agents/relationships/local-plan",
+    "POST /agents/emotional-reflection/local-reflect",
+    "POST /agents/health-fitness/local-plan",
+    "POST /agents/everyday-life/local-plan",
+    "POST /agents/online-presence/local-plan",
+    "POST /agents/security-safety/local-review",
 ]
 
 EXPECTED_AGENT_IDS = [
@@ -31,6 +49,24 @@ EXPECTED_AGENT_IDS = [
     "local_extraction_agent",
     "local_classification_agent",
     "local_transformation_agent",
+    "local_business_agent",
+    "local_creator_agent",
+    "local_school_robotics_agent",
+    "local_career_agent",
+    "local_finance_budget_agent",
+    "local_housing_move_travel_agent",
+    "local_projects_portfolio_agent",
+    "local_learning_study_agent",
+    "local_social_networking_agent",
+    "local_personal_admin_agent",
+    "local_vehicle_devices_gear_agent",
+    "local_life_direction_agent",
+    "local_relationships_agent",
+    "local_emotional_reflection_agent",
+    "local_health_fitness_agent",
+    "local_everyday_life_agent",
+    "local_online_presence_agent",
+    "local_security_safety_agent",
 ]
 
 
@@ -42,13 +78,13 @@ def test_smoke_runbook_includes_exactly_the_expected_endpoint_strings():
     doc_text = RUNBOOK.read_text(encoding="utf-8")
 
     assert [endpoint for endpoint in EXPECTED_ENDPOINTS if endpoint in doc_text] == EXPECTED_ENDPOINTS
-    assert doc_text.count("POST /agents/") == 11
+    assert doc_text.count("POST /agents/") == 29
 
 
 def test_smoke_runbook_includes_json_examples_for_all_agents():
     doc_text = RUNBOOK.read_text(encoding="utf-8")
 
-    assert doc_text.count("```json") == 11
+    assert doc_text.count("```json") == 29
     for agent_id in EXPECTED_AGENT_IDS:
         assert agent_id in doc_text
 

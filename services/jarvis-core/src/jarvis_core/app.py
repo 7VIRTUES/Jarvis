@@ -24,17 +24,35 @@ from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
 from .inspector import inspect_project, write_markdown_report
+from .local_business_agent import LocalBusinessAgentService, LocalBusinessRequest
+from .local_career_agent import LocalCareerAgentService, LocalCareerRequest
 from .local_classification_agent import LocalClassificationAgentService, LocalClassificationRequest
+from .local_creator_agent import LocalCreatorAgentService, LocalCreatorRequest
 from .local_decision_agent import LocalDecisionAgentService, LocalDecisionRequest
 from .local_drafting_agent import LocalDraftingAgentService, LocalDraftingRequest
+from .local_emotional_reflection_agent import LocalEmotionalReflectionAgentService, LocalEmotionalReflectionRequest
+from .local_everyday_life_agent import LocalEverydayLifeAgentService, LocalEverydayLifeRequest
 from .local_extraction_agent import LocalExtractionAgentService, LocalExtractionRequest
+from .local_finance_budget_agent import LocalFinanceBudgetAgentService, LocalFinanceBudgetRequest
+from .local_health_fitness_agent import LocalHealthFitnessAgentService, LocalHealthFitnessRequest
+from .local_housing_move_travel_agent import LocalHousingMoveTravelAgentService, LocalHousingMoveTravelRequest
+from .local_learning_study_agent import LocalLearningStudyAgentService, LocalLearningStudyRequest
+from .local_life_direction_agent import LocalLifeDirectionAgentService, LocalLifeDirectionRequest
+from .local_online_presence_agent import LocalOnlinePresenceAgentService, LocalOnlinePresenceRequest
+from .local_personal_admin_agent import LocalPersonalAdminAgentService, LocalPersonalAdminRequest
 from .local_planning_agent import LocalPlanningAgentService, LocalPlanningRequest
+from .local_projects_portfolio_agent import LocalProjectsPortfolioAgentService, LocalProjectsPortfolioRequest
+from .local_relationships_agent import LocalRelationshipsAgentService, LocalRelationshipsRequest
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
+from .local_security_safety_agent import LocalSecuritySafetyAgentService, LocalSecuritySafetyRequest
+from .local_social_networking_agent import LocalSocialNetworkingAgentService, LocalSocialNetworkingRequest
+from .local_school_robotics_agent import LocalSchoolRoboticsAgentService, LocalSchoolRoboticsRequest
 from .local_summarization_agent import LocalSummarizationAgentService, LocalSummarizationRequest
 from .local_transformation_agent import LocalTransformationAgentService, LocalTransformationRequest
 from .local_troubleshooting_agent import LocalTroubleshootingAgentService, LocalTroubleshootingRequest
+from .local_vehicle_devices_gear_agent import LocalVehicleDevicesGearAgentService, LocalVehicleDevicesGearRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
 from .readiness_snapshot_agent import PrivateAlphaReadinessSnapshotService
@@ -93,6 +111,24 @@ local_summarization_agent = LocalSummarizationAgentService()
 local_extraction_agent = LocalExtractionAgentService()
 local_classification_agent = LocalClassificationAgentService()
 local_transformation_agent = LocalTransformationAgentService()
+local_business_agent = LocalBusinessAgentService()
+local_creator_agent = LocalCreatorAgentService()
+local_health_fitness_agent = LocalHealthFitnessAgentService()
+local_everyday_life_agent = LocalEverydayLifeAgentService()
+local_online_presence_agent = LocalOnlinePresenceAgentService()
+local_security_safety_agent = LocalSecuritySafetyAgentService()
+local_school_robotics_agent = LocalSchoolRoboticsAgentService()
+local_career_agent = LocalCareerAgentService()
+local_finance_budget_agent = LocalFinanceBudgetAgentService()
+local_housing_move_travel_agent = LocalHousingMoveTravelAgentService()
+local_learning_study_agent = LocalLearningStudyAgentService()
+local_projects_portfolio_agent = LocalProjectsPortfolioAgentService()
+local_social_networking_agent = LocalSocialNetworkingAgentService()
+local_personal_admin_agent = LocalPersonalAdminAgentService()
+local_vehicle_devices_gear_agent = LocalVehicleDevicesGearAgentService()
+local_life_direction_agent = LocalLifeDirectionAgentService()
+local_relationships_agent = LocalRelationshipsAgentService()
+local_emotional_reflection_agent = LocalEmotionalReflectionAgentService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -302,6 +338,315 @@ class LocalTransformationInput(BaseModel):
     mustPreserve: list[str] = Field(default_factory=list)
     mustAvoid: list[str] = Field(default_factory=list)
     detailLevel: str = "medium"
+
+
+class LocalBusinessInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    businessName: str = ""
+    businessIdea: str
+    targetCustomer: str = ""
+    problem: str = ""
+    offer: str = ""
+    pricingNotes: str = ""
+    operationsNotes: str = ""
+    marketingNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "business_brief"
+
+
+class LocalHealthFitnessInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    primaryGoal: str
+    currentFitnessLevel: str = ""
+    ageRange: str = ""
+    heightWeightNotes: str = ""
+    scheduleNotes: str = ""
+    equipmentAvailable: list[str] = Field(default_factory=list)
+    preferredActivities: list[str] = Field(default_factory=list)
+    dislikedActivities: list[str] = Field(default_factory=list)
+    nutritionNotes: str = ""
+    sleepRecoveryNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    injuriesOrLimitations: list[str] = Field(default_factory=list)
+    habitsToBuild: list[str] = Field(default_factory=list)
+    habitsToReduce: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "fitness_brief"
+
+
+class LocalEverydayLifeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lifeArea: str = ""
+    situation: str
+    goals: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    scheduleNotes: str = ""
+    householdNotes: str = ""
+    errands: list[str] = Field(default_factory=list)
+    peopleInvolved: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    energyNotes: str = ""
+    budgetNotes: str = ""
+    desiredOutputType: str = "life_brief"
+
+
+class LocalOnlinePresenceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    platforms: list[str] = Field(default_factory=list)
+    currentBio: str = ""
+    goals: list[str] = Field(default_factory=list)
+    targetAudience: str = ""
+    tone: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    contentIdeas: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    reputationConcerns: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "presence_brief"
+
+
+class LocalSecuritySafetyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reviewName: str = ""
+    situation: str
+    assetsOrAccounts: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    currentControls: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    riskTolerance: str = ""
+    environmentNotes: str = ""
+    incidentNotes: str = ""
+    desiredOutputType: str = "safety_brief"
+
+
+class LocalCreatorInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    creatorName: str = ""
+    platforms: list[str] = Field(default_factory=list)
+    niche: str = ""
+    audience: str = ""
+    contentIdea: str
+    goals: list[str] = Field(default_factory=list)
+    tone: str = ""
+    formatNotes: str = ""
+    productionResources: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    existingContentNotes: str = ""
+    desiredOutputType: str = "creator_brief"
+
+
+class LocalSchoolRoboticsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    studentName: str = ""
+    schoolName: str = ""
+    programName: str = ""
+    termOrTimeline: str = ""
+    academicGoal: str
+    roboticsFocus: str = ""
+    courses: list[str] = Field(default_factory=list)
+    professorsOrLabs: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    currentPreparation: str = ""
+    desiredOutputType: str = "school_brief"
+
+
+class LocalCareerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    careerGoal: str
+    targetRoles: list[str] = Field(default_factory=list)
+    targetIndustries: list[str] = Field(default_factory=list)
+    currentExperience: str = ""
+    educationNotes: str = ""
+    skills: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    resumeNotes: str = ""
+    jobSearchNotes: str = ""
+    networkingNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "career_brief"
+
+
+class LocalFinanceBudgetInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    financialGoal: str
+    incomeNotes: str = ""
+    expenseNotes: str = ""
+    debtNotes: str = ""
+    loanNotes: str = ""
+    rentHousingNotes: str = ""
+    moveCostNotes: str = ""
+    savingsNotes: str = ""
+    spendingNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "finance_brief"
+
+
+class LocalHousingMoveTravelInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    planName: str = ""
+    destination: str = ""
+    housingGoal: str
+    timeline: str = ""
+    budgetNotes: str = ""
+    housingOptions: list[str] = Field(default_factory=list)
+    moveItems: list[str] = Field(default_factory=list)
+    transportationNotes: str = ""
+    commuteNotes: str = ""
+    utilitySetupNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "move_brief"
+
+
+class LocalProjectsPortfolioInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    portfolioGoal: str
+    targetAudience: str = ""
+    targetRoles: list[str] = Field(default_factory=list)
+    projectNotes: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    proofArtifacts: list[str] = Field(default_factory=list)
+    currentStatus: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
+    timeline: str = ""
+    desiredOutputType: str = "portfolio_brief"
+
+
+class LocalLearningStudyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    learnerName: str = ""
+    learningGoal: str
+    topics: list[str] = Field(default_factory=list)
+    currentLevel: str = ""
+    timeline: str = ""
+    availableTime: str = ""
+    resources: list[str] = Field(default_factory=list)
+    weakAreas: list[str] = Field(default_factory=list)
+    preferredMethods: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    motivationNotes: str = ""
+    desiredOutputType: str = "learning_brief"
+
+
+class LocalSocialNetworkingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    socialGoal: str
+    setting: str = ""
+    peopleContext: str = ""
+    eventNotes: str = ""
+    conversationTopics: list[str] = Field(default_factory=list)
+    networkingGoals: list[str] = Field(default_factory=list)
+    presentationNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    comfortLevel: str = ""
+    desiredOutputType: str = "social_brief"
+
+
+class LocalPersonalAdminInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    adminGoal: str
+    documentTypes: list[str] = Field(default_factory=list)
+    deadlines: list[str] = Field(default_factory=list)
+    requirements: list[str] = Field(default_factory=list)
+    currentStatus: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    peopleOrOfficesInvolved: list[str] = Field(default_factory=list)
+    notes: str = ""
+    desiredOutputType: str = "admin_brief"
+
+
+class LocalVehicleDevicesGearInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    gearGoal: str
+    vehicleNotes: str = ""
+    deviceNotes: str = ""
+    droneScooterNotes: str = ""
+    inventoryItems: list[str] = Field(default_factory=list)
+    maintenanceConcerns: list[str] = Field(default_factory=list)
+    troubleshootingNotes: str = ""
+    packingNotes: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "gear_brief"
+
+
+class LocalLifeDirectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    lifeQuestion: str
+    currentSeason: str = ""
+    values: list[str] = Field(default_factory=list)
+    longTermGoals: list[str] = Field(default_factory=list)
+    currentPriorities: list[str] = Field(default_factory=list)
+    tensionsOrTradeoffs: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    areasToImprove: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    nonNegotiables: list[str] = Field(default_factory=list)
+    reflectionNotes: str = ""
+    desiredOutputType: str = "life_direction_brief"
+
+
+class LocalRelationshipsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    relationshipGoal: str
+    relationshipType: str = ""
+    peopleContext: str = ""
+    situationNotes: str = ""
+    communicationGoals: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    boundaries: list[str] = Field(default_factory=list)
+    desiredTone: str = ""
+    constraints: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "relationship_brief"
+
+
+class LocalEmotionalReflectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profileName: str = ""
+    reflectionGoal: str
+    currentMoodNotes: str = ""
+    stressors: list[str] = Field(default_factory=list)
+    energyNotes: str = ""
+    recentWins: list[str] = Field(default_factory=list)
+    currentChallenges: list[str] = Field(default_factory=list)
+    patternsNoticed: list[str] = Field(default_factory=list)
+    supportOptions: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    desiredOutputType: str = "reflection_brief"
 
 
 @app.get("/health")
@@ -526,6 +871,423 @@ def create_local_transformation(
             must_preserve=payload.mustPreserve,
             must_avoid=payload.mustAvoid,
             detail_level=payload.detailLevel,
+        )
+    )
+
+
+@app.post("/agents/business/local-brief")
+def create_local_business_brief(
+    payload: LocalBusinessInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_business_agent.create_brief(
+        LocalBusinessRequest(
+            business_name=payload.businessName,
+            business_idea=payload.businessIdea,
+            target_customer=payload.targetCustomer,
+            problem=payload.problem,
+            offer=payload.offer,
+            pricing_notes=payload.pricingNotes,
+            operations_notes=payload.operationsNotes,
+            marketing_notes=payload.marketingNotes,
+            constraints=payload.constraints,
+            resources=payload.resources,
+            risks=payload.risks,
+            goals=payload.goals,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/health-fitness/local-plan")
+def create_local_health_fitness_plan(
+    payload: LocalHealthFitnessInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_health_fitness_agent.create_plan(
+        LocalHealthFitnessRequest(
+            profile_name=payload.profileName,
+            primary_goal=payload.primaryGoal,
+            current_fitness_level=payload.currentFitnessLevel,
+            age_range=payload.ageRange,
+            height_weight_notes=payload.heightWeightNotes,
+            schedule_notes=payload.scheduleNotes,
+            equipment_available=payload.equipmentAvailable,
+            preferred_activities=payload.preferredActivities,
+            disliked_activities=payload.dislikedActivities,
+            nutrition_notes=payload.nutritionNotes,
+            sleep_recovery_notes=payload.sleepRecoveryNotes,
+            constraints=payload.constraints,
+            injuries_or_limitations=payload.injuriesOrLimitations,
+            habits_to_build=payload.habitsToBuild,
+            habits_to_reduce=payload.habitsToReduce,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/everyday-life/local-plan")
+def create_local_everyday_life_plan(
+    payload: LocalEverydayLifeInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_everyday_life_agent.create_plan(
+        LocalEverydayLifeRequest(
+            life_area=payload.lifeArea,
+            situation=payload.situation,
+            goals=payload.goals,
+            constraints=payload.constraints,
+            schedule_notes=payload.scheduleNotes,
+            household_notes=payload.householdNotes,
+            errands=payload.errands,
+            people_involved=payload.peopleInvolved,
+            resources=payload.resources,
+            energy_notes=payload.energyNotes,
+            budget_notes=payload.budgetNotes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/online-presence/local-plan")
+def create_local_online_presence_plan(
+    payload: LocalOnlinePresenceInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_online_presence_agent.create_plan(
+        LocalOnlinePresenceRequest(
+            profile_name=payload.profileName,
+            platforms=payload.platforms,
+            current_bio=payload.currentBio,
+            goals=payload.goals,
+            target_audience=payload.targetAudience,
+            tone=payload.tone,
+            strengths=payload.strengths,
+            projects=payload.projects,
+            content_ideas=payload.contentIdeas,
+            constraints=payload.constraints,
+            reputation_concerns=payload.reputationConcerns,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/security-safety/local-review")
+def create_local_security_safety_review(
+    payload: LocalSecuritySafetyInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_security_safety_agent.create_review(
+        LocalSecuritySafetyRequest(
+            review_name=payload.reviewName,
+            situation=payload.situation,
+            assets_or_accounts=payload.assetsOrAccounts,
+            concerns=payload.concerns,
+            current_controls=payload.currentControls,
+            constraints=payload.constraints,
+            risk_tolerance=payload.riskTolerance,
+            environment_notes=payload.environmentNotes,
+            incident_notes=payload.incidentNotes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/creator/local-plan")
+def create_local_creator_plan(
+    payload: LocalCreatorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_creator_agent.create_plan(
+        LocalCreatorRequest(
+            creator_name=payload.creatorName,
+            platforms=payload.platforms,
+            niche=payload.niche,
+            audience=payload.audience,
+            content_idea=payload.contentIdea,
+            goals=payload.goals,
+            tone=payload.tone,
+            format_notes=payload.formatNotes,
+            production_resources=payload.productionResources,
+            constraints=payload.constraints,
+            existing_content_notes=payload.existingContentNotes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/school-robotics/local-plan")
+def create_local_school_robotics_plan(
+    payload: LocalSchoolRoboticsInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_school_robotics_agent.create_plan(
+        LocalSchoolRoboticsRequest(
+            student_name=payload.studentName,
+            school_name=payload.schoolName,
+            program_name=payload.programName,
+            term_or_timeline=payload.termOrTimeline,
+            academic_goal=payload.academicGoal,
+            robotics_focus=payload.roboticsFocus,
+            courses=payload.courses,
+            professors_or_labs=payload.professorsOrLabs,
+            projects=payload.projects,
+            constraints=payload.constraints,
+            resources=payload.resources,
+            current_preparation=payload.currentPreparation,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/career/local-plan")
+def create_local_career_plan(
+    payload: LocalCareerInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_career_agent.create_plan(
+        LocalCareerRequest(
+            profile_name=payload.profileName,
+            career_goal=payload.careerGoal,
+            target_roles=payload.targetRoles,
+            target_industries=payload.targetIndustries,
+            current_experience=payload.currentExperience,
+            education_notes=payload.educationNotes,
+            skills=payload.skills,
+            projects=payload.projects,
+            resume_notes=payload.resumeNotes,
+            job_search_notes=payload.jobSearchNotes,
+            networking_notes=payload.networkingNotes,
+            constraints=payload.constraints,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/finance-budget/local-plan")
+def create_local_finance_budget_plan(
+    payload: LocalFinanceBudgetInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_finance_budget_agent.create_plan(
+        LocalFinanceBudgetRequest(
+            profile_name=payload.profileName,
+            financial_goal=payload.financialGoal,
+            income_notes=payload.incomeNotes,
+            expense_notes=payload.expenseNotes,
+            debt_notes=payload.debtNotes,
+            loan_notes=payload.loanNotes,
+            rent_housing_notes=payload.rentHousingNotes,
+            move_cost_notes=payload.moveCostNotes,
+            savings_notes=payload.savingsNotes,
+            spending_notes=payload.spendingNotes,
+            constraints=payload.constraints,
+            priorities=payload.priorities,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/housing-move-travel/local-plan")
+def create_local_housing_move_travel_plan(
+    payload: LocalHousingMoveTravelInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_housing_move_travel_agent.create_plan(
+        LocalHousingMoveTravelRequest(
+            plan_name=payload.planName,
+            destination=payload.destination,
+            housing_goal=payload.housingGoal,
+            timeline=payload.timeline,
+            budget_notes=payload.budgetNotes,
+            housing_options=payload.housingOptions,
+            move_items=payload.moveItems,
+            transportation_notes=payload.transportationNotes,
+            commute_notes=payload.commuteNotes,
+            utility_setup_notes=payload.utilitySetupNotes,
+            constraints=payload.constraints,
+            priorities=payload.priorities,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/projects-portfolio/local-plan")
+def create_local_projects_portfolio_plan(
+    payload: LocalProjectsPortfolioInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_projects_portfolio_agent.create_plan(
+        LocalProjectsPortfolioRequest(
+            profile_name=payload.profileName,
+            portfolio_goal=payload.portfolioGoal,
+            target_audience=payload.targetAudience,
+            target_roles=payload.targetRoles,
+            project_notes=payload.projectNotes,
+            skills=payload.skills,
+            proof_artifacts=payload.proofArtifacts,
+            current_status=payload.currentStatus,
+            constraints=payload.constraints,
+            priorities=payload.priorities,
+            timeline=payload.timeline,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/learning-study/local-plan")
+def create_local_learning_study_plan(
+    payload: LocalLearningStudyInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_learning_study_agent.create_plan(
+        LocalLearningStudyRequest(
+            learner_name=payload.learnerName,
+            learning_goal=payload.learningGoal,
+            topics=payload.topics,
+            current_level=payload.currentLevel,
+            timeline=payload.timeline,
+            available_time=payload.availableTime,
+            resources=payload.resources,
+            weak_areas=payload.weakAreas,
+            preferred_methods=payload.preferredMethods,
+            constraints=payload.constraints,
+            motivation_notes=payload.motivationNotes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/social-networking/local-plan")
+def create_local_social_networking_plan(
+    payload: LocalSocialNetworkingInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_social_networking_agent.create_plan(
+        LocalSocialNetworkingRequest(
+            profile_name=payload.profileName,
+            social_goal=payload.socialGoal,
+            setting=payload.setting,
+            people_context=payload.peopleContext,
+            event_notes=payload.eventNotes,
+            conversation_topics=payload.conversationTopics,
+            networking_goals=payload.networkingGoals,
+            presentation_notes=payload.presentationNotes,
+            constraints=payload.constraints,
+            comfort_level=payload.comfortLevel,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/personal-admin/local-plan")
+def create_local_personal_admin_plan(
+    payload: LocalPersonalAdminInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_personal_admin_agent.create_plan(
+        LocalPersonalAdminRequest(
+            profile_name=payload.profileName,
+            admin_goal=payload.adminGoal,
+            document_types=payload.documentTypes,
+            deadlines=payload.deadlines,
+            requirements=payload.requirements,
+            current_status=payload.currentStatus,
+            constraints=payload.constraints,
+            people_or_offices_involved=payload.peopleOrOfficesInvolved,
+            notes=payload.notes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/vehicle-devices-gear/local-plan")
+def create_local_vehicle_devices_gear_plan(
+    payload: LocalVehicleDevicesGearInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_vehicle_devices_gear_agent.create_plan(
+        LocalVehicleDevicesGearRequest(
+            profile_name=payload.profileName,
+            gear_goal=payload.gearGoal,
+            vehicle_notes=payload.vehicleNotes,
+            device_notes=payload.deviceNotes,
+            drone_scooter_notes=payload.droneScooterNotes,
+            inventory_items=payload.inventoryItems,
+            maintenance_concerns=payload.maintenanceConcerns,
+            troubleshooting_notes=payload.troubleshootingNotes,
+            packing_notes=payload.packingNotes,
+            constraints=payload.constraints,
+            priorities=payload.priorities,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/life-direction/local-plan")
+def create_local_life_direction_plan(
+    payload: LocalLifeDirectionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_life_direction_agent.create_plan(
+        LocalLifeDirectionRequest(
+            profile_name=payload.profileName,
+            life_question=payload.lifeQuestion,
+            current_season=payload.currentSeason,
+            values=payload.values,
+            long_term_goals=payload.longTermGoals,
+            current_priorities=payload.currentPriorities,
+            tensions_or_tradeoffs=payload.tensionsOrTradeoffs,
+            constraints=payload.constraints,
+            areas_to_improve=payload.areasToImprove,
+            strengths=payload.strengths,
+            non_negotiables=payload.nonNegotiables,
+            reflection_notes=payload.reflectionNotes,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/relationships/local-plan")
+def create_local_relationships_plan(
+    payload: LocalRelationshipsInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_relationships_agent.create_plan(
+        LocalRelationshipsRequest(
+            profile_name=payload.profileName,
+            relationship_goal=payload.relationshipGoal,
+            relationship_type=payload.relationshipType,
+            people_context=payload.peopleContext,
+            situation_notes=payload.situationNotes,
+            communication_goals=payload.communicationGoals,
+            concerns=payload.concerns,
+            boundaries=payload.boundaries,
+            desired_tone=payload.desiredTone,
+            constraints=payload.constraints,
+            desired_output_type=payload.desiredOutputType,
+        )
+    )
+
+
+@app.post("/agents/emotional-reflection/local-reflect")
+def create_local_emotional_reflection_plan(
+    payload: LocalEmotionalReflectionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_emotional_reflection_agent.create_plan(
+        LocalEmotionalReflectionRequest(
+            profile_name=payload.profileName,
+            reflection_goal=payload.reflectionGoal,
+            current_mood_notes=payload.currentMoodNotes,
+            stressors=payload.stressors,
+            energy_notes=payload.energyNotes,
+            recent_wins=payload.recentWins,
+            current_challenges=payload.currentChallenges,
+            patterns_noticed=payload.patternsNoticed,
+            support_options=payload.supportOptions,
+            constraints=payload.constraints,
+            desired_output_type=payload.desiredOutputType,
         )
     )
 

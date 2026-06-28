@@ -17,6 +17,24 @@ EXPECTED_AGENTS = [
     "Local Extraction Agent",
     "Local Classification Agent",
     "Local Transformation Agent",
+    "Local Business Agent",
+    "Local Health/Fitness Agent",
+    "Local Everyday Life Agent",
+    "Local Online Presence Agent",
+    "Local Security/Safety Agent",
+    "Local Creator Agent",
+    "Local School / Robotics Agent",
+    "Local Career / Job Search Agent",
+    "Local Finance / Loans / Budget Agent",
+    "Local Housing / Move / Travel Agent",
+    "Local Projects / Portfolio Agent",
+    "Local Learning / Study Coach Agent",
+    "Local Social / Networking / High-Class Coach Agent",
+    "Local Personal Admin / Documents Agent",
+    "Local Vehicle / Devices / Gear Agent",
+    "Local Life Direction / Values Agent",
+    "Local Relationship / Family Agent",
+    "Local Emotional Reflection / Resilience Agent",
 ]
 
 
@@ -39,7 +57,7 @@ def test_dashboard_summary_exposes_local_response_agents_index(tmp_path, monkeyp
     assert summary["capabilities"]["localResponseAgentsIndex"] == "read_only_index"
     assert summary["safety"]["localResponseAgentsIndex"]["connectorExecution"] is False
     assert index["status"] == "read_only_index"
-    assert index["agentCount"] == 11
+    assert index["agentCount"] == 29
     assert index["docsLink"] == "/docs/local-response-agents-index.md"
     assert index["addsAgents"] is False
     assert index["addsEndpoint"] is False
@@ -124,7 +142,7 @@ def test_docs_page_includes_agents_and_global_boundaries():
     for agent_name in EXPECTED_AGENTS:
         assert agent_name in doc_text
 
-    assert doc_text.count("implemented_local_only") == 11
+    assert doc_text.count("implemented_local_only") == 29
     assert "No paid APIs." in doc_text
     assert "No connectors." in doc_text
     assert "No OAuth or account access." in doc_text
