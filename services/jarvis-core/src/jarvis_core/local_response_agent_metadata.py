@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .web_research import WEB_RESEARCH_AGENT_MODE, WEB_RESEARCH_LIMITATIONS, web_research_agent_metadata
+from .web_research import (
+    WEB_CONTEXT_RESPONSE_LIMITATIONS,
+    WEB_RESEARCH_AGENT_MODE,
+    WEB_RESEARCH_LIMITATIONS,
+    build_web_context_template_sample,
+    web_research_agent_metadata,
+)
 
 
 LOCAL_RESPONSE_AGENT_COUNT = 37
@@ -283,6 +289,24 @@ def discovery_metadata_for_agent(agent: dict[str, Any]) -> dict[str, Any]:
         "webResearchIsOptional": enriched["webResearchIsOptional"],
         "web_research_limitations": list(enriched["web_research_limitations"]),
         "webResearchLimitations": list(enriched["webResearchLimitations"]),
+        "web_context_supported": enriched["web_context_supported"],
+        "webContextSupported": enriched["webContextSupported"],
+        "web_context_is_optional": enriched["web_context_is_optional"],
+        "webContextIsOptional": enriched["webContextIsOptional"],
+        "web_context_is_non_persistent": enriched["web_context_is_non_persistent"],
+        "webContextIsNonPersistent": enriched["webContextIsNonPersistent"],
+        "web_research_requires_manual_fetch": enriched["web_research_requires_manual_fetch"],
+        "webResearchRequiresManualFetch": enriched["webResearchRequiresManualFetch"],
+        "agents_do_not_auto_browse": enriched["agents_do_not_auto_browse"],
+        "agentsDoNotAutoBrowse": enriched["agentsDoNotAutoBrowse"],
+        "source_evidence_supported": enriched["source_evidence_supported"],
+        "sourceEvidenceSupported": enriched["sourceEvidenceSupported"],
+        "citation_labels_supported": enriched["citation_labels_supported"],
+        "citationLabelsSupported": enriched["citationLabelsSupported"],
+        "source_recency_flags_supported": enriched["source_recency_flags_supported"],
+        "sourceRecencyFlagsSupported": enriched["sourceRecencyFlagsSupported"],
+        "source_aware_response_supported": enriched["source_aware_response_supported"],
+        "sourceAwareResponseSupported": enriched["sourceAwareResponseSupported"],
     }
 
 
@@ -345,6 +369,8 @@ def build_local_agent_request_template(agent_id: str, agents: list[dict[str, Any
         }
     agent = metadata_result["agent"]
     sample_payload = dict(agent["examples"][0])
+    sample_payload.setdefault("web_context", [])
+    sample_payload.setdefault("prior_agent_context", None)
     return {
         "found": True,
         "agent_id": agent["agent_id"],
@@ -355,17 +381,127 @@ def build_local_agent_request_template(agent_id: str, agents: list[dict[str, Any
         "default_output_type": _default_output_type(agent["output_types"]),
         "supported_output_types": list(agent["output_types"]),
         "sample_payload": sample_payload,
-        "boundary_reminder": "Manual input only, local only, response only, non-persistent, no connectors, no accounts, no external services, and no automatic actions.",
+        "boundary_reminder": "Manual input only, local only, response only, non-persistent, no connectors, no accounts, no external services, no automatic actions, and reviewed public source excerpts only; agents do not auto-browse.",
         "high_stakes_limitations": HIGH_STAKES_LIMITATIONS_BY_CATEGORY.get(agent["category"], []),
         "web_research_available": True,
         "web_research_mode": WEB_RESEARCH_AGENT_MODE,
         "web_research_requires_user_enabled": True,
         "web_research_is_optional": True,
         "web_research_limitations": list(WEB_RESEARCH_LIMITATIONS),
+        "web_context_supported": True,
+        "webContextSupported": True,
+        "web_context_is_optional": True,
+        "webContextIsOptional": True,
+        "web_context_is_non_persistent": True,
+        "webContextIsNonPersistent": True,
+        "web_research_requires_manual_fetch": True,
+        "webResearchRequiresManualFetch": True,
+        "agents_do_not_auto_browse": True,
+        "agentsDoNotAutoBrowse": True,
+        "source_evidence_supported": True,
+        "sourceEvidenceSupported": True,
+        "citation_labels_supported": True,
+        "citationLabelsSupported": True,
+        "source_recency_flags_supported": True,
+        "sourceRecencyFlagsSupported": True,
+        "source_aware_response_supported": True,
+        "sourceAwareResponseSupported": True,
+        "web_context_template_sample": build_web_context_template_sample(),
+        "prior_agent_context_supported": True,
+        "priorAgentContextSupported": True,
+        "prior_agent_context_is_optional": True,
+        "priorAgentContextIsOptional": True,
+        "prior_agent_context_is_non_persistent": True,
+        "priorAgentContextIsNonPersistent": True,
+        "prior_agent_context_template_sample": {
+            "previous_agent_id": "local_planning_agent",
+            "previous_agent_name": "Local Planning Agent",
+            "previous_output_type": "checklist",
+            "previous_summary": "User-reviewed summary from a previous visible local response.",
+            "previous_key_points": ["Only include points the user reviewed manually."],
+            "previous_next_actions": ["Run one selected agent at a time."],
+            "previous_limitations": ["Prior context is not loaded automatically."],
+            "user_notes": "Optional manual context inserted after user review.",
+            "source_type": "manual_prior_agent_output",
+        },
+        "prior_agent_context_fields": [
+            "previous_agent_id",
+            "previous_agent_name",
+            "previous_output_type",
+            "previous_summary",
+            "previous_key_points",
+            "previous_next_actions",
+            "previous_limitations",
+            "user_notes",
+            "source_type",
+        ],
+        "prior_agent_context_guidance": [
+            "Optional manual context from a prior local response-agent result.",
+            "Not loaded automatically.",
+            "Not persisted.",
+            "Use only after the user reviews and inserts it manually.",
+            "Does not trigger multi-agent execution.",
+        ],
+        "prior_agent_context_response_fields": [
+            "prior_context_used",
+            "prior_context_summary",
+            "prior_context",
+            "prior_context_limitations",
+        ],
+        "web_context_response_fields": [
+            "source_evidence",
+            "citation_labels",
+            "source_quality_warnings",
+            "source_recency_notes",
+            "source_context_summary",
+            "sources_used",
+            "web_context_limitations",
+            "source_use_summary",
+            "source_supported_points",
+            "source_cautions",
+            "source_followup_checks",
+            "source_informed_assumptions",
+            "citation_usage_note",
+        ],
+        "source_aware_response_fields": [
+            "source_use_summary",
+            "source_supported_points",
+            "source_cautions",
+            "source_followup_checks",
+            "source_informed_assumptions",
+            "citation_usage_note",
+        ],
+        "web_context_evidence_fields": [
+            "source_id",
+            "citation_label",
+            "source_url",
+            "final_url",
+            "title",
+            "domain",
+            "excerpt",
+            "fetched_at",
+            "recency_note",
+            "quality_warnings",
+            "limitations",
+        ],
+        "citation_reminder": "Sources are labeled for reference, not certified.",
+        "web_context_supported_behavior": [
+            "web_context is optional and may be empty.",
+            "Agents consume reviewed excerpts provided in the manual request payload.",
+            "Reviewed excerpts may support source-aware response sections when present.",
+            "Agents do not auto-browse, fetch, search, follow links, or persist source context.",
+            "Sources are labeled for reference, not certified.",
+            "Source freshness and authority must be manually reviewed.",
+        ],
+        "web_context_not_supported": [
+            "No login, account, private portal, connector, search-engine API, browser automation, form submission, purchase, booking, posting, or background browsing behavior.",
+        ],
+        "web_context_limitations": list(WEB_CONTEXT_RESPONSE_LIMITATIONS),
         "web_research_context_fields": [
-            "Manual public source excerpts may be pasted into an existing text field for review.",
+            "Reviewed public source excerpts belong in the optional web_context list.",
+            "Reviewed public source excerpts can support source-aware response sections.",
             "No source context is submitted automatically.",
-            "Do not add unsupported fields to strict agent schemas unless the user reviews the payload first.",
+            "The dashboard inserts web_context only after a manual preview/add action.",
         ],
     }
 
@@ -427,6 +563,153 @@ def preview_local_agent_route(
             "High-stakes requests require qualified professionals or official sources before action.",
         ],
         "follow_up_questions": _route_follow_up_questions(request_text, domains, preferred_output_type, urgency_level),
+    }
+
+
+def _candidate_ids_from_route_suggestions(route_preview_suggestions: list[Any] | None) -> list[str]:
+    candidate_ids: list[str] = []
+    for suggestion in route_preview_suggestions or []:
+        if isinstance(suggestion, str):
+            candidate_ids.append(suggestion)
+        elif isinstance(suggestion, dict):
+            candidate_ids.append(str(suggestion.get("agent_id") or suggestion.get("agentId") or suggestion.get("id") or ""))
+    return [candidate_id for candidate_id in candidate_ids if _clean_text(candidate_id)]
+
+
+def _workflow_candidate_agents(
+    user_goal: str,
+    candidate_agent_ids: list[str] | None,
+    route_preview_suggestions: list[Any] | None,
+    max_steps: int,
+    agents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched_agents = [enrich_local_response_agent(agent) for agent in agents]
+    agents_by_id = {_normalize_id(agent["agentId"]): agent for agent in enriched_agents}
+    ordered_ids = list(candidate_agent_ids or []) + _candidate_ids_from_route_suggestions(route_preview_suggestions)
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate_id in ordered_ids:
+        normalized = _normalize_id(candidate_id)
+        agent = agents_by_id.get(normalized)
+        if agent and normalized not in seen:
+            selected.append(agent)
+            seen.add(normalized)
+        if len(selected) >= max_steps:
+            return selected
+    combined = _clean_text(user_goal).lower()
+    scored: list[tuple[int, dict[str, Any], list[str]]] = []
+    for agent in enriched_agents:
+        normalized = _normalize_id(agent["agentId"])
+        if normalized in seen:
+            continue
+        keywords = LOCAL_RESPONSE_AGENT_ROUTE_KEYWORDS.get(agent["agentId"], ())
+        reasons = [keyword for keyword in keywords if keyword in combined]
+        if reasons:
+            scored.append((len(reasons), agent, reasons))
+    scored.sort(key=lambda item: (-item[0], item[1]["displayName"]))
+    for _, agent, _reasons in scored:
+        selected.append(agent)
+        seen.add(_normalize_id(agent["agentId"]))
+        if len(selected) >= max_steps:
+            return selected
+    if not selected:
+        coordinator = agents_by_id.get(_normalize_id("local_life_dashboard_cross_agent_coordinator"))
+        if coordinator:
+            selected.append(coordinator)
+    return selected[:max_steps]
+
+
+def preview_manual_agent_workflow(
+    user_goal: str,
+    candidate_agent_ids: list[str] | None,
+    route_preview_suggestions: list[Any] | None,
+    max_steps: int,
+    include_web_context: bool,
+    constraints_or_notes: str,
+    agents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    request_text = _clean_text(user_goal)
+    step_limit = min(max(int(max_steps or 4), 1), 8)
+    selected_agents = _workflow_candidate_agents(
+        request_text,
+        candidate_agent_ids or [],
+        route_preview_suggestions or [],
+        step_limit,
+        agents,
+    )
+    workflow_steps = []
+    for index, agent in enumerate(selected_agents, start=1):
+        output_types = list(agent.get("outputTypes") or agent.get("output_types") or [])
+        workflow_steps.append(
+            {
+                "step_number": index,
+                "stepNumber": index,
+                "agent_id": agent["agentId"],
+                "agentId": agent["agentId"],
+                "display_name": agent["displayName"],
+                "displayName": agent["displayName"],
+                "category": agent["category"],
+                "endpoint": agent["endpoint"],
+                "suggested_output_type": _default_output_type(output_types),
+                "suggestedOutputType": _default_output_type(output_types),
+                "why_this_step": "Selected from manual candidates, route-preview suggestions, or local catalog keyword metadata.",
+                "whyThisStep": "Selected from manual candidates, route-preview suggestions, or local catalog keyword metadata.",
+                "suggested_manual_payload_notes": [
+                    "Review the request template for this agent.",
+                    "Paste only user-approved context into the editable JSON payload.",
+                    "Insert prior_agent_context only after reviewing the previous visible response.",
+                    "Run this selected agent manually before considering another step.",
+                ],
+                "suggestedManualPayloadNotes": [
+                    "Review the request template for this agent.",
+                    "Paste only user-approved context into the editable JSON payload.",
+                    "Insert prior_agent_context only after reviewing the previous visible response.",
+                    "Run this selected agent manually before considering another step.",
+                ],
+                "expected_result_to_review": "Review the local response output before using it as prior_agent_context for any later step.",
+                "expectedResultToReview": "Review the local response output before using it as prior_agent_context for any later step.",
+                "next_step_handoff_note": "No automatic handoff is created; copy or insert reviewed context manually if another step is useful.",
+                "nextStepHandoffNote": "No automatic handoff is created; copy or insert reviewed context manually if another step is useful.",
+                "suggested_only": True,
+                "suggestedOnly": True,
+                "invoked": False,
+                "handoff_created": False,
+                "handoffCreated": False,
+            }
+        )
+    return {
+        "title": "Manual Multi-Agent Workflow Preview",
+        "summary": "Catalog-only manual workflow suggestions. No agent was invoked, no handoff was created, and no workflow was persisted.",
+        "user_goal": request_text,
+        "userGoal": request_text,
+        "workflow_steps": workflow_steps,
+        "workflowSteps": workflow_steps,
+        "include_web_context_requested": bool(include_web_context),
+        "includeWebContextRequested": bool(include_web_context),
+        "constraints_or_notes": _clean_text(constraints_or_notes),
+        "constraintsOrNotes": _clean_text(constraints_or_notes),
+        "not_executed_notice": "Manual workflow preview is suggestions only; it does not invoke agents, run background workflows, create handoffs, persist workflows, mutate files, access connectors, or contact external services.",
+        "manual_only_boundaries": [
+            "Manual workflow only.",
+            "Steps are suggestions, not execution.",
+            "Run one selected agent at a time.",
+            "Prior context is inserted only after user review.",
+            "No automatic handoff.",
+            "No persistence.",
+            "No connectors.",
+        ],
+        "limitations": [
+            "Uses local catalog metadata and deterministic keyword matching only.",
+            "No previous agent output is loaded automatically.",
+            "No automatic multi-agent execution is available.",
+            "Review each output before using it as prior_agent_context.",
+            "High-stakes guidance remains informational and requires qualified review before action.",
+        ],
+        "follow_up_questions": [
+            "Which suggested step should be reviewed first?",
+            "What prior result, if any, should be inserted manually into prior_agent_context?",
+            "What output type should the selected agent use?",
+        ],
     }
 
 

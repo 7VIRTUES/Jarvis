@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -53,6 +54,7 @@ from .local_projects_portfolio_agent import LocalProjectsPortfolioAgentService, 
 from .local_relationships_agent import LocalRelationshipsAgentService, LocalRelationshipsRequest
 from .local_response_agents_catalog import (
     local_response_agent_categories,
+    local_response_agent_manual_workflow_preview,
     local_response_agent_metadata,
     local_response_agent_request_template,
     local_response_agent_route_preview,
@@ -79,7 +81,13 @@ from .task_control import TaskControlService
 from .tasks import TaskQueue
 from .validation_agent import ValidationAgentService
 from .vm_validation_prep import VmValidationPrepService
-from .web_research import agent_context_preview, fetch_public_url, validate_public_url, web_research_policy
+from .web_research import (
+    agent_context_preview,
+    apply_source_aware_response_fields,
+    fetch_public_url,
+    validate_public_url,
+    web_research_policy,
+)
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 DATA_ROOT = WORKSPACE_ROOT / "data" / "jarvis"
@@ -214,6 +222,23 @@ class LocalResponseAgentRoutePreviewInput(BaseModel):
     constraints_or_notes: str = ""
 
 
+class LocalResponseAgentManualWorkflowPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_goal: str = ""
+    userGoal: str = ""
+    candidate_agent_ids: list[str] = Field(default_factory=list)
+    candidateAgentIds: list[str] = Field(default_factory=list)
+    route_preview_suggestions: list[Any] = Field(default_factory=list)
+    routePreviewSuggestions: list[Any] = Field(default_factory=list)
+    max_steps: int = 4
+    maxSteps: int | None = None
+    include_web_context: bool = False
+    includeWebContext: bool | None = None
+    constraints_or_notes: str = ""
+    constraintsOrNotes: str = ""
+
+
 class WebResearchUrlInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -279,7 +304,46 @@ class ValidationStepResultInput(BaseModel):
     evidence: str | None = None
 
 
-class LocalResearchBriefInput(BaseModel):
+class WebContextSourceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = ""
+    citation_label: str = ""
+    source_url: str = ""
+    final_url: str = ""
+    title: str = ""
+    domain: str = ""
+    excerpt: str = Field(default="", max_length=4000)
+    content_type: str = ""
+    fetched: bool = False
+    fetched_at: str = ""
+    user_notes: str = ""
+    source_type: str = "public_web_excerpt"
+    recency_note: str = ""
+    quality_warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class PriorAgentContextInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    previous_agent_id: str = Field(default="", max_length=4000)
+    previous_agent_name: str = Field(default="", max_length=4000)
+    previous_output_type: str = Field(default="", max_length=4000)
+    previous_summary: str = Field(default="", max_length=4000)
+    previous_key_points: list[str] | str = Field(default_factory=list)
+    previous_next_actions: list[str] | str = Field(default_factory=list)
+    previous_limitations: list[str] | str = Field(default_factory=list)
+    user_notes: str = Field(default="", max_length=4000)
+    source_type: str = "manual_prior_agent_output"
+
+
+class LocalResponseAgentInputBase(BaseModel):
+    web_context: list[WebContextSourceInput] = Field(default_factory=list)
+    prior_agent_context: PriorAgentContextInput | None = None
+
+
+class LocalResearchBriefInput(LocalResponseAgentInputBase):
     topic: str
     userProvidedNotes: str
     sourceTitles: list[str] = Field(default_factory=list)
@@ -287,13 +351,13 @@ class LocalResearchBriefInput(BaseModel):
     desiredOutputType: str = "brief"
 
 
-class FileDataSummaryInput(BaseModel):
+class FileDataSummaryInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     projectName: str
 
 
-class LocalPlanningInput(BaseModel):
+class LocalPlanningInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     goal: str
@@ -305,7 +369,7 @@ class LocalPlanningInput(BaseModel):
     desiredOutputType: str = "project_plan"
 
 
-class LocalDraftingInput(BaseModel):
+class LocalDraftingInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     purpose: str
@@ -318,7 +382,7 @@ class LocalDraftingInput(BaseModel):
     mustAvoid: list[str] = Field(default_factory=list)
 
 
-class LocalReviewInput(BaseModel):
+class LocalReviewInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     subject: str
@@ -330,7 +394,7 @@ class LocalReviewInput(BaseModel):
     severity: str = "balanced"
 
 
-class LocalDecisionInput(BaseModel):
+class LocalDecisionInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
@@ -342,7 +406,7 @@ class LocalDecisionInput(BaseModel):
     decisionStyle: str = "balanced"
 
 
-class LocalTroubleshootingInput(BaseModel):
+class LocalTroubleshootingInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     problem: str
@@ -355,7 +419,7 @@ class LocalTroubleshootingInput(BaseModel):
     troubleshootingType: str = "general"
 
 
-class LocalSummarizationInput(BaseModel):
+class LocalSummarizationInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     title: str = ""
@@ -368,7 +432,7 @@ class LocalSummarizationInput(BaseModel):
     mustAvoid: list[str] = Field(default_factory=list)
 
 
-class LocalExtractionInput(BaseModel):
+class LocalExtractionInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     title: str = ""
@@ -380,7 +444,7 @@ class LocalExtractionInput(BaseModel):
     detailLevel: str = "medium"
 
 
-class LocalClassificationInput(BaseModel):
+class LocalClassificationInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     title: str = ""
@@ -393,7 +457,7 @@ class LocalClassificationInput(BaseModel):
     detailLevel: str = "medium"
 
 
-class LocalTransformationInput(BaseModel):
+class LocalTransformationInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     title: str = ""
@@ -407,7 +471,7 @@ class LocalTransformationInput(BaseModel):
     detailLevel: str = "medium"
 
 
-class LocalBusinessInput(BaseModel):
+class LocalBusinessInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     businessName: str = ""
@@ -425,7 +489,7 @@ class LocalBusinessInput(BaseModel):
     desiredOutputType: str = "business_brief"
 
 
-class LocalHealthFitnessInput(BaseModel):
+class LocalHealthFitnessInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -446,7 +510,7 @@ class LocalHealthFitnessInput(BaseModel):
     desiredOutputType: str = "fitness_brief"
 
 
-class LocalFoodCookingGroceryInput(BaseModel):
+class LocalFoodCookingGroceryInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -470,7 +534,7 @@ class LocalFoodCookingGroceryInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalHomeRoomLivingSpaceInput(BaseModel):
+class LocalHomeRoomLivingSpaceInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -493,7 +557,7 @@ class LocalHomeRoomLivingSpaceInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalLegalImmigrationOfficialInput(BaseModel):
+class LocalLegalImmigrationOfficialInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -511,7 +575,7 @@ class LocalLegalImmigrationOfficialInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalEmergencyPreparednessInput(BaseModel):
+class LocalEmergencyPreparednessInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -531,7 +595,7 @@ class LocalEmergencyPreparednessInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalCultureTasteHighClassLifestyleInput(BaseModel):
+class LocalCultureTasteHighClassLifestyleInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -552,7 +616,7 @@ class LocalCultureTasteHighClassLifestyleInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalHobbiesAdventureInput(BaseModel):
+class LocalHobbiesAdventureInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -573,7 +637,7 @@ class LocalHobbiesAdventureInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalPersonalKnowledgeMemoryOrganizerInput(BaseModel):
+class LocalPersonalKnowledgeMemoryOrganizerInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -591,7 +655,7 @@ class LocalPersonalKnowledgeMemoryOrganizerInput(BaseModel):
     constraintsOrNotes: str = ""
 
 
-class LocalLifeDashboardCoordinatorInput(BaseModel):
+class LocalLifeDashboardCoordinatorInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -614,7 +678,7 @@ class LocalLifeDashboardCoordinatorInput(BaseModel):
     desiredDashboardStyle: str = ""
 
 
-class LocalEverydayLifeInput(BaseModel):
+class LocalEverydayLifeInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     lifeArea: str = ""
@@ -631,7 +695,7 @@ class LocalEverydayLifeInput(BaseModel):
     desiredOutputType: str = "life_brief"
 
 
-class LocalOnlinePresenceInput(BaseModel):
+class LocalOnlinePresenceInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -648,7 +712,7 @@ class LocalOnlinePresenceInput(BaseModel):
     desiredOutputType: str = "presence_brief"
 
 
-class LocalSecuritySafetyInput(BaseModel):
+class LocalSecuritySafetyInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     reviewName: str = ""
@@ -663,7 +727,7 @@ class LocalSecuritySafetyInput(BaseModel):
     desiredOutputType: str = "safety_brief"
 
 
-class LocalCreatorInput(BaseModel):
+class LocalCreatorInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     creatorName: str = ""
@@ -680,7 +744,7 @@ class LocalCreatorInput(BaseModel):
     desiredOutputType: str = "creator_brief"
 
 
-class LocalSchoolRoboticsInput(BaseModel):
+class LocalSchoolRoboticsInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     studentName: str = ""
@@ -698,7 +762,7 @@ class LocalSchoolRoboticsInput(BaseModel):
     desiredOutputType: str = "school_brief"
 
 
-class LocalCareerInput(BaseModel):
+class LocalCareerInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -716,7 +780,7 @@ class LocalCareerInput(BaseModel):
     desiredOutputType: str = "career_brief"
 
 
-class LocalFinanceBudgetInput(BaseModel):
+class LocalFinanceBudgetInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -734,7 +798,7 @@ class LocalFinanceBudgetInput(BaseModel):
     desiredOutputType: str = "finance_brief"
 
 
-class LocalHousingMoveTravelInput(BaseModel):
+class LocalHousingMoveTravelInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     planName: str = ""
@@ -752,7 +816,7 @@ class LocalHousingMoveTravelInput(BaseModel):
     desiredOutputType: str = "move_brief"
 
 
-class LocalProjectsPortfolioInput(BaseModel):
+class LocalProjectsPortfolioInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -769,7 +833,7 @@ class LocalProjectsPortfolioInput(BaseModel):
     desiredOutputType: str = "portfolio_brief"
 
 
-class LocalLearningStudyInput(BaseModel):
+class LocalLearningStudyInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     learnerName: str = ""
@@ -786,7 +850,7 @@ class LocalLearningStudyInput(BaseModel):
     desiredOutputType: str = "learning_brief"
 
 
-class LocalSocialNetworkingInput(BaseModel):
+class LocalSocialNetworkingInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -802,7 +866,7 @@ class LocalSocialNetworkingInput(BaseModel):
     desiredOutputType: str = "social_brief"
 
 
-class LocalPersonalAdminInput(BaseModel):
+class LocalPersonalAdminInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -817,7 +881,7 @@ class LocalPersonalAdminInput(BaseModel):
     desiredOutputType: str = "admin_brief"
 
 
-class LocalVehicleDevicesGearInput(BaseModel):
+class LocalVehicleDevicesGearInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -834,7 +898,7 @@ class LocalVehicleDevicesGearInput(BaseModel):
     desiredOutputType: str = "gear_brief"
 
 
-class LocalLifeDirectionInput(BaseModel):
+class LocalLifeDirectionInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -852,7 +916,7 @@ class LocalLifeDirectionInput(BaseModel):
     desiredOutputType: str = "life_direction_brief"
 
 
-class LocalRelationshipsInput(BaseModel):
+class LocalRelationshipsInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -868,7 +932,7 @@ class LocalRelationshipsInput(BaseModel):
     desiredOutputType: str = "relationship_brief"
 
 
-class LocalEmotionalReflectionInput(BaseModel):
+class LocalEmotionalReflectionInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -882,6 +946,148 @@ class LocalEmotionalReflectionInput(BaseModel):
     supportOptions: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     desiredOutputType: str = "reflection_brief"
+
+
+LOCAL_RESPONSE_AGENT_SOURCE_CONTEXT: dict[str, tuple[str, str]] = {
+    "LocalResearchBriefInput": ("local_research_agent", "Coding/Core"),
+    "FileDataSummaryInput": ("file_data_agent", "Coding/Core"),
+    "LocalPlanningInput": ("local_planning_agent", "Coding/Core"),
+    "LocalDraftingInput": ("local_drafting_agent", "Coding/Core"),
+    "LocalReviewInput": ("local_review_agent", "Coding/Core"),
+    "LocalDecisionInput": ("local_decision_agent", "Coding/Core"),
+    "LocalTroubleshootingInput": ("local_troubleshooting_agent", "Coding/Core"),
+    "LocalSummarizationInput": ("local_summarization_agent", "Coding/Core"),
+    "LocalExtractionInput": ("local_extraction_agent", "Coding/Core"),
+    "LocalClassificationInput": ("local_classification_agent", "Coding/Core"),
+    "LocalTransformationInput": ("local_transformation_agent", "Coding/Core"),
+    "LocalBusinessInput": ("local_business_agent", "Coding/Core"),
+    "LocalHealthFitnessInput": ("local_health_fitness_agent", "Health/Food/Home"),
+    "LocalFoodCookingGroceryInput": ("local_food_cooking_grocery", "Health/Food/Home"),
+    "LocalHomeRoomLivingSpaceInput": ("local_home_room_living_space", "Health/Food/Home"),
+    "LocalLegalImmigrationOfficialInput": ("local_legal_immigration_official_matters", "Safety/Emergency"),
+    "LocalEmergencyPreparednessInput": ("local_emergency_preparedness", "Safety/Emergency"),
+    "LocalCultureTasteHighClassLifestyleInput": ("local_culture_taste_high_class_lifestyle", "Creativity/Hobbies"),
+    "LocalHobbiesAdventureInput": ("local_hobbies_adventure", "Creativity/Hobbies"),
+    "LocalPersonalKnowledgeMemoryOrganizerInput": ("local_personal_knowledge_memory_organizer", "Knowledge/Coordinator"),
+    "LocalLifeDashboardCoordinatorInput": ("local_life_dashboard_cross_agent_coordinator", "Knowledge/Coordinator"),
+    "LocalEverydayLifeInput": ("local_everyday_life_agent", "Life/Admin"),
+    "LocalOnlinePresenceInput": ("local_online_presence_agent", "Social/Family"),
+    "LocalSecuritySafetyInput": ("local_security_safety_agent", "Safety/Emergency"),
+    "LocalCreatorInput": ("local_creator_agent", "Creativity/Hobbies"),
+    "LocalSchoolRoboticsInput": ("local_school_robotics_agent", "School/Career"),
+    "LocalCareerInput": ("local_career_agent", "School/Career"),
+    "LocalFinanceBudgetInput": ("local_finance_budget_agent", "Finance/Housing/Travel"),
+    "LocalHousingMoveTravelInput": ("local_housing_move_travel_agent", "Finance/Housing/Travel"),
+    "LocalProjectsPortfolioInput": ("local_projects_portfolio_agent", "School/Career"),
+    "LocalLearningStudyInput": ("local_learning_study_agent", "School/Career"),
+    "LocalSocialNetworkingInput": ("local_social_networking_agent", "Social/Family"),
+    "LocalPersonalAdminInput": ("local_personal_admin_agent", "Life/Admin"),
+    "LocalVehicleDevicesGearInput": ("local_vehicle_devices_gear_agent", "Life/Admin"),
+    "LocalLifeDirectionInput": ("local_life_direction_agent", "Life/Admin"),
+    "LocalRelationshipsInput": ("local_relationships_agent", "Social/Family"),
+    "LocalEmotionalReflectionInput": ("local_emotional_reflection_agent", "Social/Family"),
+}
+
+
+def _clean_prior_agent_text(value: object, max_length: int = 4000) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text[:max_length]
+
+
+def _clean_prior_agent_list(value: object, max_items: int = 20) -> list[str]:
+    if value is None:
+        return []
+    raw_items = value if isinstance(value, list) else [value]
+    cleaned: list[str] = []
+    for item in raw_items:
+        text = _clean_prior_agent_text(item)
+        if text:
+            cleaned.append(text)
+        if len(cleaned) >= max_items:
+            break
+    return cleaned
+
+
+def normalize_prior_agent_context(raw_context: PriorAgentContextInput | dict[str, object] | None) -> dict[str, object] | None:
+    if raw_context is None:
+        return None
+    raw = raw_context.model_dump() if isinstance(raw_context, PriorAgentContextInput) else dict(raw_context)
+    normalized = {
+        "previous_agent_id": _clean_prior_agent_text(raw.get("previous_agent_id")),
+        "previous_agent_name": _clean_prior_agent_text(raw.get("previous_agent_name")),
+        "previous_output_type": _clean_prior_agent_text(raw.get("previous_output_type")),
+        "previous_summary": _clean_prior_agent_text(raw.get("previous_summary")),
+        "previous_key_points": _clean_prior_agent_list(raw.get("previous_key_points")),
+        "previous_next_actions": _clean_prior_agent_list(raw.get("previous_next_actions")),
+        "previous_limitations": _clean_prior_agent_list(raw.get("previous_limitations")),
+        "user_notes": _clean_prior_agent_text(raw.get("user_notes")),
+        "source_type": _clean_prior_agent_text(raw.get("source_type")) or "manual_prior_agent_output",
+    }
+    if not any(
+        normalized[key]
+        for key in (
+            "previous_agent_id",
+            "previous_agent_name",
+            "previous_output_type",
+            "previous_summary",
+            "previous_key_points",
+            "previous_next_actions",
+            "previous_limitations",
+            "user_notes",
+        )
+    ):
+        return None
+    return normalized
+
+
+def prior_context_response_fields(raw_context: PriorAgentContextInput | dict[str, object] | None) -> dict[str, object]:
+    context = normalize_prior_agent_context(raw_context)
+    if context is None:
+        return {
+            "prior_context_used": False,
+            "prior_context_summary": "No manual prior agent context was provided.",
+            "prior_context_limitations": [
+                "No prior_agent_context was provided; no previous agent result was loaded or inferred.",
+            ],
+        }
+    previous_name = context["previous_agent_name"] or context["previous_agent_id"] or "a prior local response agent"
+    previous_output_type = context["previous_output_type"] or "unspecified output type"
+    previous_summary = context["previous_summary"] or "No prior summary text was provided."
+    return {
+        "prior_context_used": True,
+        "prior_context_summary": (
+            f"Manual prior context from {previous_name} ({previous_output_type}) was included. "
+            f"Summary: {previous_summary}"
+        ),
+        "prior_context": context,
+        "prior_context_limitations": [
+            "Prior context was provided manually in this request.",
+            "Jarvis did not load previous runs automatically.",
+            "No previous agent was automatically invoked.",
+            "Prior context is not persisted by this response.",
+            "Review prior output before using it as input.",
+        ],
+    }
+
+
+def apply_prior_context_response_fields(
+    response: dict[str, object],
+    raw_context: PriorAgentContextInput | dict[str, object] | None,
+) -> dict[str, object]:
+    enriched = dict(response)
+    enriched.update(prior_context_response_fields(raw_context))
+    return enriched
+
+
+def _local_response_with_web_context(response: dict[str, object], payload: LocalResponseAgentInputBase) -> dict[str, object]:
+    agent_id, category = LOCAL_RESPONSE_AGENT_SOURCE_CONTEXT.get(payload.__class__.__name__, ("local_response_agent", "General"))
+    source_response = apply_source_aware_response_fields(
+        response,
+        agent_id,
+        category,
+        [source.model_dump() for source in payload.web_context],
+    )
+    return apply_prior_context_response_fields(source_response, payload.prior_agent_context)
 
 
 @app.get("/health")
@@ -949,6 +1155,21 @@ def preview_local_response_agent_route(
     )
 
 
+@app.post("/agents/local-response-agents/manual-workflow-preview")
+def preview_local_response_agent_manual_workflow(
+    payload: LocalResponseAgentManualWorkflowPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return local_response_agent_manual_workflow_preview(
+        user_goal=payload.user_goal or payload.userGoal,
+        candidate_agent_ids=payload.candidate_agent_ids or payload.candidateAgentIds,
+        route_preview_suggestions=payload.route_preview_suggestions or payload.routePreviewSuggestions,
+        max_steps=payload.maxSteps if payload.maxSteps is not None else payload.max_steps,
+        include_web_context=payload.includeWebContext if payload.includeWebContext is not None else payload.include_web_context,
+        constraints_or_notes=payload.constraints_or_notes or payload.constraintsOrNotes,
+    )
+
+
 @app.get("/web-research/policy")
 def get_web_research_policy(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return web_research_policy(agent_count=37)
@@ -996,7 +1217,7 @@ def create_local_research_brief(
     payload: LocalResearchBriefInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_research_agent.create_brief(
+    return _local_response_with_web_context(local_research_agent.create_brief(
         LocalResearchBriefRequest(
             topic=payload.topic,
             user_provided_notes=payload.userProvidedNotes,
@@ -1004,7 +1225,7 @@ def create_local_research_brief(
             questions=payload.questions,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/files/local-summary")
@@ -1013,7 +1234,7 @@ def create_file_data_summary(
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
     try:
-        return file_data_agent.local_summary(payload.projectName)
+        return _local_response_with_web_context(file_data_agent.local_summary(payload.projectName), payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (PermissionError, ValueError) as exc:
@@ -1025,7 +1246,7 @@ def create_local_plan(
     payload: LocalPlanningInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_planning_agent.create_plan(
+    return _local_response_with_web_context(local_planning_agent.create_plan(
         LocalPlanningRequest(
             goal=payload.goal,
             context_notes=payload.contextNotes,
@@ -1035,7 +1256,7 @@ def create_local_plan(
             timeframe=payload.timeframe,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/drafting/local-draft")
@@ -1043,7 +1264,7 @@ def create_local_draft(
     payload: LocalDraftingInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_drafting_agent.create_draft(
+    return _local_response_with_web_context(local_drafting_agent.create_draft(
         LocalDraftingRequest(
             purpose=payload.purpose,
             audience=payload.audience,
@@ -1054,7 +1275,7 @@ def create_local_draft(
             must_include=payload.mustInclude,
             must_avoid=payload.mustAvoid,
         )
-    )
+    ), payload)
 
 
 
@@ -1066,7 +1287,7 @@ def create_local_review(
     payload: LocalReviewInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_review_agent.create_review(
+    return _local_response_with_web_context(local_review_agent.create_review(
         LocalReviewRequest(
             subject=payload.subject,
             content=payload.content,
@@ -1076,7 +1297,7 @@ def create_local_review(
             constraints=payload.constraints,
             severity=payload.severity,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/decision/local-decision")
@@ -1084,7 +1305,7 @@ def create_local_decision(
     payload: LocalDecisionInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_decision_agent.compare_options(
+    return _local_response_with_web_context(local_decision_agent.compare_options(
         LocalDecisionRequest(
             decision=payload.decision,
             options=payload.options,
@@ -1094,7 +1315,7 @@ def create_local_decision(
             context_notes=payload.contextNotes,
             decision_style=payload.decisionStyle,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/troubleshooting/local-triage")
@@ -1102,7 +1323,7 @@ def create_local_troubleshooting_triage(
     payload: LocalTroubleshootingInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_troubleshooting_agent.create_triage(
+    return _local_response_with_web_context(local_troubleshooting_agent.create_triage(
         LocalTroubleshootingRequest(
             problem=payload.problem,
             symptoms=payload.symptoms,
@@ -1113,7 +1334,7 @@ def create_local_troubleshooting_triage(
             urgency=payload.urgency,
             troubleshooting_type=payload.troubleshootingType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/summarization/local-summary")
@@ -1121,7 +1342,7 @@ def create_local_summarization(
     payload: LocalSummarizationInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_summarization_agent.create_summary(
+    return _local_response_with_web_context(local_summarization_agent.create_summary(
         LocalSummarizationRequest(
             title=payload.title,
             content=payload.content,
@@ -1132,7 +1353,7 @@ def create_local_summarization(
             must_preserve=payload.mustPreserve,
             must_avoid=payload.mustAvoid,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/extraction/local-extract")
@@ -1140,7 +1361,7 @@ def create_local_extraction(
     payload: LocalExtractionInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_extraction_agent.extract_items(
+    return _local_response_with_web_context(local_extraction_agent.extract_items(
         LocalExtractionRequest(
             title=payload.title,
             content=payload.content,
@@ -1150,7 +1371,7 @@ def create_local_extraction(
             must_ignore=payload.mustIgnore,
             detail_level=payload.detailLevel,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/classification/local-classify")
@@ -1158,7 +1379,7 @@ def create_local_classification(
     payload: LocalClassificationInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_classification_agent.classify(
+    return _local_response_with_web_context(local_classification_agent.classify(
         LocalClassificationRequest(
             title=payload.title,
             content=payload.content,
@@ -1169,7 +1390,7 @@ def create_local_classification(
             constraints=payload.constraints,
             detail_level=payload.detailLevel,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/transformation/local-transform")
@@ -1177,7 +1398,7 @@ def create_local_transformation(
     payload: LocalTransformationInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_transformation_agent.transform(
+    return _local_response_with_web_context(local_transformation_agent.transform(
         LocalTransformationRequest(
             title=payload.title,
             content=payload.content,
@@ -1189,7 +1410,7 @@ def create_local_transformation(
             must_avoid=payload.mustAvoid,
             detail_level=payload.detailLevel,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/business/local-brief")
@@ -1197,7 +1418,7 @@ def create_local_business_brief(
     payload: LocalBusinessInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_business_agent.create_brief(
+    return _local_response_with_web_context(local_business_agent.create_brief(
         LocalBusinessRequest(
             business_name=payload.businessName,
             business_idea=payload.businessIdea,
@@ -1213,7 +1434,7 @@ def create_local_business_brief(
             goals=payload.goals,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/health-fitness/local-plan")
@@ -1221,7 +1442,7 @@ def create_local_health_fitness_plan(
     payload: LocalHealthFitnessInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_health_fitness_agent.create_plan(
+    return _local_response_with_web_context(local_health_fitness_agent.create_plan(
         LocalHealthFitnessRequest(
             profile_name=payload.profileName,
             primary_goal=payload.primaryGoal,
@@ -1240,7 +1461,7 @@ def create_local_health_fitness_plan(
             habits_to_reduce=payload.habitsToReduce,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/food-cooking-grocery/local-plan")
@@ -1248,7 +1469,7 @@ def create_local_food_cooking_grocery_plan(
     payload: LocalFoodCookingGroceryInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_food_cooking_grocery_agent.create_plan(
+    return _local_response_with_web_context(local_food_cooking_grocery_agent.create_plan(
         LocalFoodCookingGroceryRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1270,7 +1491,7 @@ def create_local_food_cooking_grocery_plan(
             leftovers_or_batch_prep_goal=payload.leftoversOrBatchPrepGoal,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/home-room-living-space/local-plan")
@@ -1278,7 +1499,7 @@ def create_local_home_room_living_space_plan(
     payload: LocalHomeRoomLivingSpaceInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_home_room_living_space_agent.create_plan(
+    return _local_response_with_web_context(local_home_room_living_space_agent.create_plan(
         LocalHomeRoomLivingSpaceRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1299,7 +1520,7 @@ def create_local_home_room_living_space_plan(
             timeline=payload.timeline,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/legal-immigration-official/local-plan")
@@ -1307,7 +1528,7 @@ def create_local_legal_immigration_official_plan(
     payload: LocalLegalImmigrationOfficialInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_legal_immigration_official_agent.create_plan(
+    return _local_response_with_web_context(local_legal_immigration_official_agent.create_plan(
         LocalLegalImmigrationOfficialRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1323,7 +1544,7 @@ def create_local_legal_immigration_official_plan(
             risk_level_or_urgency=payload.riskLevelOrUrgency,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/emergency-preparedness/local-plan")
@@ -1331,7 +1552,7 @@ def create_local_emergency_preparedness_plan(
     payload: LocalEmergencyPreparednessInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_emergency_preparedness_agent.create_plan(
+    return _local_response_with_web_context(local_emergency_preparedness_agent.create_plan(
         LocalEmergencyPreparednessRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1349,7 +1570,7 @@ def create_local_emergency_preparedness_plan(
             communication_contacts_summary=payload.communicationContactsSummary,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/culture-taste-high-class-lifestyle/local-plan")
@@ -1357,7 +1578,7 @@ def create_local_culture_taste_high_class_lifestyle_plan(
     payload: LocalCultureTasteHighClassLifestyleInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_culture_taste_high_class_lifestyle_agent.create_plan(
+    return _local_response_with_web_context(local_culture_taste_high_class_lifestyle_agent.create_plan(
         LocalCultureTasteHighClassLifestyleRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1376,7 +1597,7 @@ def create_local_culture_taste_high_class_lifestyle_plan(
             timeline=payload.timeline,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/hobbies-adventure/local-plan")
@@ -1384,7 +1605,7 @@ def create_local_hobbies_adventure_plan(
     payload: LocalHobbiesAdventureInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_hobbies_adventure_agent.create_plan(
+    return _local_response_with_web_context(local_hobbies_adventure_agent.create_plan(
         LocalHobbiesAdventureRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1403,7 +1624,7 @@ def create_local_hobbies_adventure_plan(
             safety_or_accessibility_notes=payload.safetyOrAccessibilityNotes,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/personal-knowledge-memory-organizer/local-plan")
@@ -1411,7 +1632,7 @@ def create_local_personal_knowledge_memory_organizer_plan(
     payload: LocalPersonalKnowledgeMemoryOrganizerInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_personal_knowledge_memory_organizer_agent.create_plan(
+    return _local_response_with_web_context(local_personal_knowledge_memory_organizer_agent.create_plan(
         LocalPersonalKnowledgeMemoryOrganizerRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1427,7 +1648,7 @@ def create_local_personal_knowledge_memory_organizer_plan(
             decision_or_memory_context=payload.decisionOrMemoryContext,
             constraints_or_notes=payload.constraintsOrNotes,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/life-dashboard-coordinator/local-plan")
@@ -1435,7 +1656,7 @@ def create_local_life_dashboard_coordinator_plan(
     payload: LocalLifeDashboardCoordinatorInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_life_dashboard_coordinator_agent.create_plan(
+    return _local_response_with_web_context(local_life_dashboard_coordinator_agent.create_plan(
         LocalLifeDashboardCoordinatorRequest(
             request=payload.request,
             prompt_text=payload.promptText,
@@ -1456,7 +1677,7 @@ def create_local_life_dashboard_coordinator_plan(
             risk_or_stress_flags=payload.riskOrStressFlags,
             desired_dashboard_style=payload.desiredDashboardStyle,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/everyday-life/local-plan")
@@ -1464,7 +1685,7 @@ def create_local_everyday_life_plan(
     payload: LocalEverydayLifeInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_everyday_life_agent.create_plan(
+    return _local_response_with_web_context(local_everyday_life_agent.create_plan(
         LocalEverydayLifeRequest(
             life_area=payload.lifeArea,
             situation=payload.situation,
@@ -1479,7 +1700,7 @@ def create_local_everyday_life_plan(
             budget_notes=payload.budgetNotes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/online-presence/local-plan")
@@ -1487,7 +1708,7 @@ def create_local_online_presence_plan(
     payload: LocalOnlinePresenceInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_online_presence_agent.create_plan(
+    return _local_response_with_web_context(local_online_presence_agent.create_plan(
         LocalOnlinePresenceRequest(
             profile_name=payload.profileName,
             platforms=payload.platforms,
@@ -1502,7 +1723,7 @@ def create_local_online_presence_plan(
             reputation_concerns=payload.reputationConcerns,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/security-safety/local-review")
@@ -1510,7 +1731,7 @@ def create_local_security_safety_review(
     payload: LocalSecuritySafetyInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_security_safety_agent.create_review(
+    return _local_response_with_web_context(local_security_safety_agent.create_review(
         LocalSecuritySafetyRequest(
             review_name=payload.reviewName,
             situation=payload.situation,
@@ -1523,7 +1744,7 @@ def create_local_security_safety_review(
             incident_notes=payload.incidentNotes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/creator/local-plan")
@@ -1531,7 +1752,7 @@ def create_local_creator_plan(
     payload: LocalCreatorInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_creator_agent.create_plan(
+    return _local_response_with_web_context(local_creator_agent.create_plan(
         LocalCreatorRequest(
             creator_name=payload.creatorName,
             platforms=payload.platforms,
@@ -1546,7 +1767,7 @@ def create_local_creator_plan(
             existing_content_notes=payload.existingContentNotes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/school-robotics/local-plan")
@@ -1554,7 +1775,7 @@ def create_local_school_robotics_plan(
     payload: LocalSchoolRoboticsInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_school_robotics_agent.create_plan(
+    return _local_response_with_web_context(local_school_robotics_agent.create_plan(
         LocalSchoolRoboticsRequest(
             student_name=payload.studentName,
             school_name=payload.schoolName,
@@ -1570,7 +1791,7 @@ def create_local_school_robotics_plan(
             current_preparation=payload.currentPreparation,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/career/local-plan")
@@ -1578,7 +1799,7 @@ def create_local_career_plan(
     payload: LocalCareerInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_career_agent.create_plan(
+    return _local_response_with_web_context(local_career_agent.create_plan(
         LocalCareerRequest(
             profile_name=payload.profileName,
             career_goal=payload.careerGoal,
@@ -1594,7 +1815,7 @@ def create_local_career_plan(
             constraints=payload.constraints,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/finance-budget/local-plan")
@@ -1602,7 +1823,7 @@ def create_local_finance_budget_plan(
     payload: LocalFinanceBudgetInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_finance_budget_agent.create_plan(
+    return _local_response_with_web_context(local_finance_budget_agent.create_plan(
         LocalFinanceBudgetRequest(
             profile_name=payload.profileName,
             financial_goal=payload.financialGoal,
@@ -1618,7 +1839,7 @@ def create_local_finance_budget_plan(
             priorities=payload.priorities,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/housing-move-travel/local-plan")
@@ -1626,7 +1847,7 @@ def create_local_housing_move_travel_plan(
     payload: LocalHousingMoveTravelInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_housing_move_travel_agent.create_plan(
+    return _local_response_with_web_context(local_housing_move_travel_agent.create_plan(
         LocalHousingMoveTravelRequest(
             plan_name=payload.planName,
             destination=payload.destination,
@@ -1642,7 +1863,7 @@ def create_local_housing_move_travel_plan(
             priorities=payload.priorities,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/projects-portfolio/local-plan")
@@ -1650,7 +1871,7 @@ def create_local_projects_portfolio_plan(
     payload: LocalProjectsPortfolioInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_projects_portfolio_agent.create_plan(
+    return _local_response_with_web_context(local_projects_portfolio_agent.create_plan(
         LocalProjectsPortfolioRequest(
             profile_name=payload.profileName,
             portfolio_goal=payload.portfolioGoal,
@@ -1665,7 +1886,7 @@ def create_local_projects_portfolio_plan(
             timeline=payload.timeline,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/learning-study/local-plan")
@@ -1673,7 +1894,7 @@ def create_local_learning_study_plan(
     payload: LocalLearningStudyInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_learning_study_agent.create_plan(
+    return _local_response_with_web_context(local_learning_study_agent.create_plan(
         LocalLearningStudyRequest(
             learner_name=payload.learnerName,
             learning_goal=payload.learningGoal,
@@ -1688,7 +1909,7 @@ def create_local_learning_study_plan(
             motivation_notes=payload.motivationNotes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/social-networking/local-plan")
@@ -1696,7 +1917,7 @@ def create_local_social_networking_plan(
     payload: LocalSocialNetworkingInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_social_networking_agent.create_plan(
+    return _local_response_with_web_context(local_social_networking_agent.create_plan(
         LocalSocialNetworkingRequest(
             profile_name=payload.profileName,
             social_goal=payload.socialGoal,
@@ -1710,7 +1931,7 @@ def create_local_social_networking_plan(
             comfort_level=payload.comfortLevel,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/personal-admin/local-plan")
@@ -1718,7 +1939,7 @@ def create_local_personal_admin_plan(
     payload: LocalPersonalAdminInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_personal_admin_agent.create_plan(
+    return _local_response_with_web_context(local_personal_admin_agent.create_plan(
         LocalPersonalAdminRequest(
             profile_name=payload.profileName,
             admin_goal=payload.adminGoal,
@@ -1731,7 +1952,7 @@ def create_local_personal_admin_plan(
             notes=payload.notes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/vehicle-devices-gear/local-plan")
@@ -1739,7 +1960,7 @@ def create_local_vehicle_devices_gear_plan(
     payload: LocalVehicleDevicesGearInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_vehicle_devices_gear_agent.create_plan(
+    return _local_response_with_web_context(local_vehicle_devices_gear_agent.create_plan(
         LocalVehicleDevicesGearRequest(
             profile_name=payload.profileName,
             gear_goal=payload.gearGoal,
@@ -1754,7 +1975,7 @@ def create_local_vehicle_devices_gear_plan(
             priorities=payload.priorities,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/life-direction/local-plan")
@@ -1762,7 +1983,7 @@ def create_local_life_direction_plan(
     payload: LocalLifeDirectionInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_life_direction_agent.create_plan(
+    return _local_response_with_web_context(local_life_direction_agent.create_plan(
         LocalLifeDirectionRequest(
             profile_name=payload.profileName,
             life_question=payload.lifeQuestion,
@@ -1778,7 +1999,7 @@ def create_local_life_direction_plan(
             reflection_notes=payload.reflectionNotes,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/relationships/local-plan")
@@ -1786,7 +2007,7 @@ def create_local_relationships_plan(
     payload: LocalRelationshipsInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_relationships_agent.create_plan(
+    return _local_response_with_web_context(local_relationships_agent.create_plan(
         LocalRelationshipsRequest(
             profile_name=payload.profileName,
             relationship_goal=payload.relationshipGoal,
@@ -1800,7 +2021,7 @@ def create_local_relationships_plan(
             constraints=payload.constraints,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.post("/agents/emotional-reflection/local-reflect")
@@ -1808,7 +2029,7 @@ def create_local_emotional_reflection_plan(
     payload: LocalEmotionalReflectionInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return local_emotional_reflection_agent.create_plan(
+    return _local_response_with_web_context(local_emotional_reflection_agent.create_plan(
         LocalEmotionalReflectionRequest(
             profile_name=payload.profileName,
             reflection_goal=payload.reflectionGoal,
@@ -1822,7 +2043,7 @@ def create_local_emotional_reflection_plan(
             constraints=payload.constraints,
             desired_output_type=payload.desiredOutputType,
         )
-    )
+    ), payload)
 
 
 @app.get("/vm-validation/prep")

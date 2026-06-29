@@ -10,10 +10,11 @@ from .local_response_agent_metadata import (
     enrich_local_response_agent,
     get_local_agent_metadata,
     list_local_agent_categories,
+    preview_manual_agent_workflow,
     preview_local_agent_route,
     validate_catalog_consistency,
 )
-from .web_research import WEB_RESEARCH_AGENT_MODE, WEB_RESEARCH_LIMITATIONS
+from .web_research import WEB_CONTEXT_RESPONSE_LIMITATIONS, WEB_RESEARCH_AGENT_MODE, WEB_RESEARCH_LIMITATIONS
 
 
 LOCAL_RESPONSE_AGENTS_INDEX: list[dict[str, Any]] = [
@@ -984,6 +985,9 @@ LOCAL_RESPONSE_AGENTS_GLOBAL_BOUNDARIES = [
     "No email sending, posting, or purchases.",
     "No task persistence for response-only agents.",
     "Optional read-only public URL source context is available only when the user explicitly enables it; no background browsing.",
+    "Reviewed web_context source excerpts are manual, optional, non-persistent, and agents do not auto-browse.",
+    "Source labels are for reference, not proof, certification, or source authority validation.",
+    "Source-aware response sections use reviewed excerpts only and do not claim browsing, live verification, or independent fact-checking.",
     "No claims of clean Windows VM validation, CI validation, private-alpha certification, production readiness, or security certification.",
 ]
 
@@ -1026,6 +1030,26 @@ def local_response_agents_summary() -> dict[str, Any]:
         "web_research_is_optional": True,
         "webResearchLimitations": list(WEB_RESEARCH_LIMITATIONS),
         "web_research_limitations": list(WEB_RESEARCH_LIMITATIONS),
+        "webContextSupported": True,
+        "web_context_supported": True,
+        "webContextIsOptional": True,
+        "web_context_is_optional": True,
+        "webContextIsNonPersistent": True,
+        "web_context_is_non_persistent": True,
+        "webResearchRequiresManualFetch": True,
+        "web_research_requires_manual_fetch": True,
+        "agentsDoNotAutoBrowse": True,
+        "agents_do_not_auto_browse": True,
+        "sourceEvidenceSupported": True,
+        "source_evidence_supported": True,
+        "citationLabelsSupported": True,
+        "citation_labels_supported": True,
+        "sourceRecencyFlagsSupported": True,
+        "source_recency_flags_supported": True,
+        "sourceAwareResponseSupported": True,
+        "source_aware_response_supported": True,
+        "webContextLimitations": list(WEB_CONTEXT_RESPONSE_LIMITATIONS),
+        "web_context_limitations": list(WEB_CONTEXT_RESPONSE_LIMITATIONS),
         "certificationClaims": False,
     }
 
@@ -1053,6 +1077,24 @@ def local_response_agents_discovery_catalog() -> dict[str, Any]:
         "webResearchRequiresUserEnabled": True,
         "web_research_is_optional": True,
         "webResearchIsOptional": True,
+        "web_context_supported": True,
+        "webContextSupported": True,
+        "web_context_is_optional": True,
+        "webContextIsOptional": True,
+        "web_context_is_non_persistent": True,
+        "webContextIsNonPersistent": True,
+        "web_research_requires_manual_fetch": True,
+        "webResearchRequiresManualFetch": True,
+        "agents_do_not_auto_browse": True,
+        "agentsDoNotAutoBrowse": True,
+        "source_evidence_supported": True,
+        "sourceEvidenceSupported": True,
+        "citation_labels_supported": True,
+        "citationLabelsSupported": True,
+        "source_recency_flags_supported": True,
+        "sourceRecencyFlagsSupported": True,
+        "source_aware_response_supported": True,
+        "sourceAwareResponseSupported": True,
     }
 
 
@@ -1080,6 +1122,25 @@ def local_response_agent_route_preview(
         domains_to_consider or [],
         preferred_output_type,
         urgency_level,
+        constraints_or_notes,
+        local_response_agents_index(),
+    )
+
+
+def local_response_agent_manual_workflow_preview(
+    user_goal: str,
+    candidate_agent_ids: list[str] | None = None,
+    route_preview_suggestions: list[Any] | None = None,
+    max_steps: int = 4,
+    include_web_context: bool = False,
+    constraints_or_notes: str = "",
+) -> dict[str, Any]:
+    return preview_manual_agent_workflow(
+        user_goal,
+        candidate_agent_ids or [],
+        route_preview_suggestions or [],
+        max_steps,
+        include_web_context,
         constraints_or_notes,
         local_response_agents_index(),
     )
