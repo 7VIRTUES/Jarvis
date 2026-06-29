@@ -727,6 +727,29 @@ def dashboard_html() -> str:
     .check-ok { color: #226b38; }
     .check-warn { color: #9a5b00; }
     .button-link { display: inline-flex; align-items: center; justify-content: center; }
+    .workbench-nav { position: sticky; top: 0; z-index: 4; border-color: #c9d8e8; background: #f8fbff; }
+    .workbench-nav-title { font-weight: 700; }
+    .workbench-nav .chips a { text-decoration: none; font-weight: 600; }
+    .workbench-area-label { margin-top: 8px; color: #314154; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; }
+    .workbench-panel { background: #ffffff; }
+    .workbench-panel-heading { display: flex; gap: 10px; align-items: start; justify-content: space-between; }
+    .workbench-panel-heading h3, .workbench-panel-heading h4 { margin: 0; }
+    .workbench-panel-toggle { white-space: nowrap; }
+    .workbench-panel.collapsed > :not(.workbench-panel-heading) { display: none; }
+    .empty-state { border: 1px dashed #bac6d4; border-radius: 6px; padding: 10px; background: #f8fafc; color: #5e6b7a; }
+    .safety-copy { border-left: 4px solid #8aa4c2; background: #f8fafc; }
+    pre, textarea { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .result-matrix { overflow-x: auto; }
+    @media (max-width: 760px) {
+      main { padding: 14px; gap: 12px; }
+      header { padding: 14px 16px; }
+      section, .row { padding: 12px; }
+      .grid, .two-column { grid-template-columns: 1fr; }
+      .actions { align-items: stretch; }
+      .actions > button, .actions > .button-link { flex: 1 1 180px; }
+      .workbench-nav { position: static; }
+      .workbench-panel-heading { display: grid; }
+    }
   </style>
 </head>
 <body>
@@ -1101,6 +1124,24 @@ def dashboard_html() -> str:
           <span class="pill">Non-persistent</span>
         </div>
       </div>
+      <nav id="local-response-agents-workbench-nav" class="row stack workbench-nav" aria-label="Local response agent workbench sections">
+        <div class="workbench-nav-title">Workbench sections</div>
+        <div class="muted">Client-side links for the local response-agent workspace. Collapsed panels stay in this page only and do not persist.</div>
+        <div class="chips">
+          <a class="chip" href="#local-response-agents-command-center">Command Center</a>
+          <a class="chip" href="#local-response-agents-composer">Request Composer</a>
+          <a class="chip" href="#local-response-agents-web-research">Reviewed Sources / Evidence</a>
+          <a class="chip" href="#local-response-agents-context-kit">Context Kit</a>
+          <a class="chip" href="#local-response-agents-playbooks">Playbooks</a>
+          <a class="chip" href="#local-response-agents-manual-workflow-builder">Manual Workflow Builder</a>
+          <a class="chip" href="#local-response-agents-session-result-board">Result Board</a>
+          <a class="chip" href="#local-response-agents-result-comparison-matrix">Comparison Matrix</a>
+          <a class="chip" href="#local-response-agents-decision-summary-composer">Decision Summary</a>
+          <a class="chip" href="#local-response-agents-review-packet-composer">Review Packet</a>
+          <a class="chip" href="#local-response-agents-manual-workflow-scratchpad">Workflow Packet</a>
+        </div>
+      </nav>
+      <div class="workbench-area-label">Find and choose agent</div>
       <div id="local-response-agents-command-center" class="row stack">
         <h3>Local Response Agent Command Center</h3>
         <div class="muted">Session-only finder for the existing 37 local response agents. Quick actions update this page only; no agent is invoked automatically.</div>
@@ -1117,7 +1158,7 @@ def dashboard_html() -> str:
         <div id="local-response-agents-command-count" class="muted">Showing 0 of 37 agents.</div>
         <div id="local-response-agents-high-stakes-banner" class="row stack notice" hidden>
           <strong>High-stakes manual review reminder</strong>
-          <div>Response-only guidance. Manual review is required. Verify important details before acting. No professional, legal, medical, or financial decision automation is provided, and no external actions are taken.</div>
+          <div>Response-only support. Manual review is required. Verify important details before acting. No connector call, external action, automatic handoff, or professional/legal/medical/financial decision automation occurs.</div>
         </div>
         <div class="two-column">
           <div class="row stack">
@@ -1139,6 +1180,7 @@ def dashboard_html() -> str:
         <div id="local-response-agents-playbook-status" class="muted">Choose a preset to preview a manual sequence.</div>
         <pre id="local-response-agents-playbook-preview">No playbook selected.</pre>
       </div>
+      <div class="workbench-area-label">Discovery and route preview</div>
       <div id="local-response-agents-browser" class="grid">
         <div class="row stack">
           <h3>Categories</h3>
@@ -1187,6 +1229,7 @@ def dashboard_html() -> str:
         </label>
         <pre id="local-response-agents-route-preview-result">No route preview yet.</pre>
       </div>
+      <div class="workbench-area-label">Build manual workflow packets</div>
       <div id="local-response-agents-manual-workflow-builder" class="row stack">
         <h3>Manual Multi-Agent Workflow Builder</h3>
         <div class="muted">Manual workflow only. Steps are suggestions, not execution. Run one selected agent at a time. Prior context is inserted only after user review.</div>
@@ -1265,10 +1308,12 @@ def dashboard_html() -> str:
         </div>
         <pre id="local-response-agents-manual-workflow-result">No manual workflow preview yet.</pre>
       </div>
+      <div class="workbench-area-label">Reference and examples</div>
       <div id="local-response-agents-index-list" class="stack"></div>
       <div id="local-response-agents-examples-heading"><strong>Read-only example request bodies</strong></div>
       <div class="local-response-agent-example muted">Examples render from the local dashboard summary after load.</div>
       <div id="local-response-agents-example-note" class="muted">Example request bodies are read-only JSON display only. This dashboard does not call agent endpoints or create artifacts from these examples.</div>
+      <div class="workbench-area-label">Prepare request, context, and response review</div>
       <div id="local-response-agents-workbench" class="row stack">
         <h3>Local Response Agents Workbench</h3>
         <div class="muted">Local-only workbench allowlisted to the 37 local response-agent endpoints. It is not an arbitrary request runner, not a connector runner, not persistent, and not certification or validation.</div>
@@ -2300,8 +2345,15 @@ def dashboard_html() -> str:
       const agentId = localResponseAgentId(agent);
       return agentId ? `/agents/local-response-agents/${encodeURIComponent(agentId)}/request-template` : '';
     }
+    function emptyStateHtml(text) {
+      return `<div class="empty-state">${escapeHtml(text)}</div>`;
+    }
     function renderLocalResponseAgentJson(target, value, fallbackText) {
-      target.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
+      try {
+        target.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
+      } catch (error) {
+        target.textContent = `${fallbackText || 'Metadata unavailable.'} JSON display failed: ${error.message}.`;
+      }
     }
     function localResponseAgentTemplateOutputTypes(template, agent) {
       const templateTypes = template && (template.supported_output_types || template.supportedOutputTypes || template.output_types || template.outputTypes);
@@ -2421,11 +2473,89 @@ def dashboard_html() -> str:
     }
     function renderWorkbenchError(target, title, message, details) {
       target.className = 'row stack';
+      let detailText = '';
+      if (details) {
+        try {
+          detailText = JSON.stringify(details, null, 2);
+        } catch (error) {
+          detailText = `Details unavailable: ${error.message}.`;
+        }
+      }
       target.innerHTML = `
         <div><strong>${escapeHtml(title)}</strong></div>
         <div class="muted">${escapeHtml(message)}</div>
-        ${details ? `<pre>${escapeHtml(JSON.stringify(details, null, 2))}</pre>` : ''}
+        ${detailText ? `<pre>${escapeHtml(detailText)}</pre>` : ''}
       `;
+    }
+    const localResponseSafetyCopy = 'Response-only support. Manual review is required. Verify important details before acting. No connector call, external action, automatic handoff, or professional/legal/medical/financial decision automation occurs.';
+    const collapsedWorkbenchPanels = new Set([
+      'local-response-agents-playbooks',
+      'local-response-agents-browser',
+      'local-response-agents-template-viewer',
+      'local-response-agents-route-preview-panel',
+      'local-response-agents-manual-workflow-builder',
+      'local-response-agents-context-kit',
+      'local-response-agents-web-research',
+      'local-response-agents-session-result-board',
+      'local-response-agents-result-comparison-matrix',
+      'local-response-agents-decision-summary-composer',
+      'local-response-agents-review-packet-composer',
+    ]);
+    const workbenchPanelIds = [
+      'local-response-agents-command-center',
+      'local-response-agents-playbooks',
+      'local-response-agents-browser',
+      'local-response-agents-template-viewer',
+      'local-response-agents-route-preview-panel',
+      'local-response-agents-manual-workflow-builder',
+      'local-response-agents-workbench',
+      'local-response-agents-composer',
+      'local-response-agents-context-kit',
+      'local-response-agents-quality-coach',
+      'local-response-agents-web-research',
+      'local-response-agents-evidence-pack-builder',
+      'local-response-agents-session-result-board',
+      'local-response-agents-result-comparison-matrix',
+      'local-response-agents-decision-summary-composer',
+      'local-response-agents-review-packet-composer',
+    ];
+    function enhanceWorkbenchPanels() {
+      workbenchPanelIds.forEach((panelId) => {
+        const panel = document.getElementById(panelId);
+        if (!panel || panel.dataset.workbenchPanelEnhanced === 'true') {
+          return;
+        }
+        const heading = panel.querySelector(':scope > h3, :scope > h4');
+        if (!heading) {
+          return;
+        }
+        panel.dataset.workbenchPanelEnhanced = 'true';
+        panel.classList.add('workbench-panel');
+        const headingWrap = document.createElement('div');
+        headingWrap.className = 'workbench-panel-heading';
+        panel.insertBefore(headingWrap, heading);
+        headingWrap.appendChild(heading);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'workbench-panel-toggle';
+        button.setAttribute('aria-controls', panelId);
+        const updateButton = () => {
+          const collapsed = collapsedWorkbenchPanels.has(panelId);
+          panel.classList.toggle('collapsed', collapsed);
+          button.textContent = collapsed ? 'Show' : 'Hide';
+          button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        };
+        button.onclick = () => {
+          if (collapsedWorkbenchPanels.has(panelId)) {
+            collapsedWorkbenchPanels.delete(panelId);
+          } else {
+            collapsedWorkbenchPanels.add(panelId);
+          }
+          updateButton();
+        };
+        headingWrap.appendChild(button);
+        updateButton();
+      });
     }
     function initializeLocalResponseAgentsWorkbench(index) {
       const agents = Array.isArray(index && index.agents) ? index.agents : [];
@@ -2719,13 +2849,13 @@ def dashboard_html() -> str:
               </div>
             </div>
           `).join('')
-          : emptyText;
+          : emptyStateHtml(emptyText);
       }
       function renderPinnedAndRecentAgents() {
         pinnedList.className = pinnedAgentIds.length ? 'compact-list' : 'compact-list muted';
         recentList.className = recentAgentIds.length ? 'compact-list' : 'compact-list muted';
-        pinnedList.innerHTML = renderSessionAgentList(pinnedAgentIds, 'No pinned agents in this session.');
-        recentList.innerHTML = renderSessionAgentList(recentAgentIds, 'No recent agents in this session.');
+        pinnedList.innerHTML = renderSessionAgentList(pinnedAgentIds, 'No pinned agents in this page session. Pin an existing agent from the Command Center when you want it close by.');
+        recentList.innerHTML = renderSessionAgentList(recentAgentIds, 'No recent agents yet. Manual selections appear here for this page session only.');
         bindCommandButtons(pinnedList);
         bindCommandButtons(recentList);
       }
@@ -2762,7 +2892,7 @@ def dashboard_html() -> str:
                 </div>
               `;
             }).join('')
-          : 'No existing agents match the current command-center filter.';
+          : emptyStateHtml('No existing agents match the current command-center filter. Clear the filter or choose another category; no new agents are created from this view.');
         bindCommandButtons(commandList);
         renderPinnedAndRecentAgents();
         updateReadinessUi();
@@ -2838,7 +2968,7 @@ def dashboard_html() -> str:
         return agents.slice(0, 4);
       }
       function renderPlaybooks() {
-        playbookList.innerHTML = responseAgentPlaybooks.map((playbook) => `
+        playbookList.innerHTML = responseAgentPlaybooks.length ? responseAgentPlaybooks.map((playbook) => `
           <div class="row stack">
             <strong>${escapeHtml(playbook.title)}</strong>
             <div class="muted">${escapeHtml(playbook.goal)}</div>
@@ -2848,7 +2978,7 @@ def dashboard_html() -> str:
               <button type="button" data-playbook-id="${escapeHtml(playbook.id)}" data-playbook-action="load">Load into manual builder</button>
             </div>
           </div>
-        `).join('');
+        `).join('') : emptyStateHtml('No manual playbook presets are available. Build a workflow manually from existing agents.');
         playbookList.querySelectorAll('button[data-playbook-id]').forEach((button) => {
           button.onclick = () => handlePlaybookAction(button.getAttribute('data-playbook-id'), button.getAttribute('data-playbook-action'));
         });
@@ -2912,7 +3042,7 @@ def dashboard_html() -> str:
       }
       function renderContextKitPreview() {
         const text = contextKitText();
-        contextPreview.textContent = text || 'No context kit content yet.';
+        contextPreview.textContent = text || 'No context kit text yet. Add goal, background, constraints, evidence, or prior output notes if this request needs reusable context.';
         updateReadinessUi();
       }
       function readPayloadObject(statusTarget) {
@@ -3022,7 +3152,7 @@ def dashboard_html() -> str:
             <strong>High-stakes manual review reminder</strong>
             <div>Detected category: ${escapeHtml(terms.join(', ') || 'source/request context')}</div>
             ${weakSource ? '<div>Source reminder: high-stakes content needs reviewed sources with clear labels and usable recency. Missing, cautioned, or unknown-recency sources require extra manual verification.</div>' : '<div>Reviewed sources are attached. Still verify authority, freshness, and exact details manually.</div>'}
-            <div>Response-only guidance. Manual review is required. Verify important details before acting. No professional, legal, medical, or financial decision automation is provided, and no external actions are taken.</div>
+            <div>${escapeHtml(localResponseSafetyCopy)}</div>
           `;
         }
       }
@@ -3464,7 +3594,7 @@ def dashboard_html() -> str:
                 </div>
               `;
             }).join('')
-          : 'No workflow step cards yet.';
+          : emptyStateHtml('No workflow step cards yet. Preview a manual workflow or add existing agents from the Command Center; nothing is executed automatically.');
         manualWorkflowStepCards.querySelectorAll('button[data-workflow-step-action]').forEach((button) => {
           button.onclick = async () => {
             await handleWorkflowStepAction(Number(button.getAttribute('data-workflow-step-index') || 0), button.getAttribute('data-workflow-step-action'));
@@ -3997,7 +4127,7 @@ def dashboard_html() -> str:
         renderSessionBoardTagFilters();
         if (!sessionResultBoard.length) {
           sessionBoardEntries.className = 'stack muted';
-          sessionBoardEntries.textContent = 'No board entries yet. Add latest response to session board after a structured response returns.';
+          sessionBoardEntries.innerHTML = emptyStateHtml('No board entries yet. After manually running one selected local response agent and reviewing the result, add it here for session-only comparison.');
           sessionBoardFilterStatus.textContent = 'Showing all board entries.';
           return;
         }
@@ -4005,7 +4135,7 @@ def dashboard_html() -> str:
         sessionBoardFilterStatus.textContent = sessionBoardFilterLabel(entries.length);
         if (!entries.length) {
           sessionBoardEntries.className = 'stack muted';
-          sessionBoardEntries.textContent = 'No board entries match the current session-only filter.';
+          sessionBoardEntries.innerHTML = emptyStateHtml('No board entries match the current session-only filter. Clear the filter or choose a broader scope; entries remain in page memory only.');
           return;
         }
         sessionBoardEntries.className = 'stack';
@@ -4134,12 +4264,12 @@ def dashboard_html() -> str:
         const entries = comparisonEntriesForScope();
         if (!entries.length) {
           resultComparisonBody.className = 'muted';
-          resultComparisonBody.textContent = 'No board entries match the current comparison scope.';
+          resultComparisonBody.innerHTML = emptyStateHtml('No board entries match the current comparison scope. Add or select entries in the session board first.');
           return;
         }
         if (entries.length < 2) {
           resultComparisonBody.className = 'muted';
-          resultComparisonBody.textContent = 'Fewer than 2 entries for comparison. Choose a broader scope or mark more entries.';
+          resultComparisonBody.innerHTML = emptyStateHtml('Fewer than 2 entries are available for comparison. Choose a broader scope or mark more entries.');
           return;
         }
         resultComparisonBody.className = '';
@@ -4479,12 +4609,12 @@ def dashboard_html() -> str:
       function renderReviewedSourceManager(entries) {
         if (!Array.isArray(entries)) {
           reviewedSourceList.className = 'stack muted';
-          reviewedSourceList.textContent = 'Reviewed-source manager unavailable while payload JSON is invalid.';
+          reviewedSourceList.innerHTML = emptyStateHtml('Reviewed-source manager is unavailable while editable payload JSON is invalid. Fix the JSON before changing reviewed sources.');
           return;
         }
         if (!entries.length) {
           reviewedSourceList.className = 'stack muted';
-          reviewedSourceList.textContent = 'No reviewed sources in payload.';
+          reviewedSourceList.innerHTML = emptyStateHtml('No reviewed sources are attached to the payload. Add public source excerpts only when source support matters for this manual request.');
           return;
         }
         reviewedSourceList.className = 'stack';
@@ -4652,7 +4782,7 @@ def dashboard_html() -> str:
         lines.push(checklistItems.length ? checklistItems.map((item) => `- ${item}`).join('\n') : '- No checklist items marked.');
         if (sourceContextIsHighStakes()) {
           lines.push('', 'High-stakes reminder');
-          lines.push('Response-only support. Manual review is required. Verify important details before acting. No professional/legal/medical/financial decision automation and no external action are provided.');
+          lines.push(localResponseSafetyCopy);
         }
         return lines.join('\n').slice(0, 7000);
       }
@@ -5136,6 +5266,7 @@ def dashboard_html() -> str:
       renderAgentOptions();
       loadDiscoveryCatalogMetadata();
       loadCategoryMetadata();
+      enhanceWorkbenchPanels();
       renderCommandCenter();
       renderPlaybooks();
       renderContextKitPreview();
