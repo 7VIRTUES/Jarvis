@@ -1356,13 +1356,52 @@ def dashboard_html() -> str:
             <button id="local-response-agents-session-board-insert-packet-button" type="button">Insert review packet as prior_agent_context</button>
             <button id="local-response-agents-session-board-clear-button" type="button">Clear session board</button>
           </div>
+          <div class="row stack">
+            <strong>Session board filters</strong>
+            <div class="muted">Filters and tags use current page memory only. Filtering does not remove entries and does not call the backend.</div>
+            <div class="actions" id="local-response-agents-session-board-tag-filters"></div>
+            <div class="actions">
+              <button id="local-response-agents-session-board-filter-selected-button" type="button">Show selected entries</button>
+              <button id="local-response-agents-session-board-filter-best-button" type="button">Show best output</button>
+              <button id="local-response-agents-session-board-clear-filter-button" type="button">Clear board filter</button>
+            </div>
+            <div id="local-response-agents-session-board-filter-status" class="muted">Showing all board entries.</div>
+          </div>
           <div id="local-response-agents-session-board-status" class="muted">No latest response yet. The board uses current dashboard page memory only.</div>
           <div id="local-response-agents-session-board-entries" class="stack muted">No board entries yet.</div>
         </div>
         <div id="local-response-agents-result-comparison-matrix" class="row stack">
           <h3>Result Comparison Matrix</h3>
-          <div class="muted">Uses selected board entries only. No agent execution, no persistence, and no backend call.</div>
+          <div class="muted">Uses current session board entries only. No agent execution, no persistence, and no backend call.</div>
+          <div class="actions">
+            <label>
+              Comparison scope
+              <select id="local-response-agents-comparison-scope">
+                <option value="selected">Selected board entries</option>
+                <option value="all">All board entries</option>
+                <option value="filtered">Filtered board entries</option>
+                <option value="shortlist">Tagged shortlist entries</option>
+              </select>
+            </label>
+          </div>
           <div id="local-response-agents-result-comparison-body" class="muted">Select at least two board entries, then build comparison.</div>
+        </div>
+        <div id="local-response-agents-decision-summary-composer" class="row stack">
+          <h3>Decision Summary Composer</h3>
+          <div class="muted">Plain text for manual review. It is session-only, not persisted, not sent, and not copied automatically.</div>
+          <div class="two-column">
+            <label>Decision question or goal<textarea id="local-response-agents-decision-question" spellcheck="false"></textarea></label>
+            <label>Decision criteria<textarea id="local-response-agents-decision-criteria" spellcheck="false"></textarea></label>
+            <label>Risk notes<textarea id="local-response-agents-decision-risk-notes" spellcheck="false"></textarea></label>
+            <label>Unresolved questions<textarea id="local-response-agents-decision-unresolved" spellcheck="false"></textarea></label>
+            <label>Next manual action<textarea id="local-response-agents-decision-next-action" spellcheck="false"></textarea></label>
+          </div>
+          <div class="actions">
+            <button id="local-response-agents-decision-summary-build-button" type="button">Build decision summary</button>
+            <button id="local-response-agents-decision-summary-insert-button" type="button">Insert decision summary as prior_agent_context</button>
+          </div>
+          <div id="local-response-agents-decision-summary-status" class="muted">No decision summary built yet.</div>
+          <textarea id="local-response-agents-decision-summary-output" spellcheck="false" readonly>No decision summary yet.</textarea>
         </div>
         <div id="local-response-agents-review-packet-composer" class="row stack">
           <h3>Review Packet Composer</h3>
@@ -2357,7 +2396,22 @@ def dashboard_html() -> str:
       const sessionBoardClearButton = document.getElementById('local-response-agents-session-board-clear-button');
       const sessionBoardStatus = document.getElementById('local-response-agents-session-board-status');
       const sessionBoardEntries = document.getElementById('local-response-agents-session-board-entries');
+      const sessionBoardTagFilters = document.getElementById('local-response-agents-session-board-tag-filters');
+      const sessionBoardFilterSelectedButton = document.getElementById('local-response-agents-session-board-filter-selected-button');
+      const sessionBoardFilterBestButton = document.getElementById('local-response-agents-session-board-filter-best-button');
+      const sessionBoardClearFilterButton = document.getElementById('local-response-agents-session-board-clear-filter-button');
+      const sessionBoardFilterStatus = document.getElementById('local-response-agents-session-board-filter-status');
+      const comparisonScope = document.getElementById('local-response-agents-comparison-scope');
       const resultComparisonBody = document.getElementById('local-response-agents-result-comparison-body');
+      const decisionQuestion = document.getElementById('local-response-agents-decision-question');
+      const decisionCriteria = document.getElementById('local-response-agents-decision-criteria');
+      const decisionRiskNotes = document.getElementById('local-response-agents-decision-risk-notes');
+      const decisionUnresolved = document.getElementById('local-response-agents-decision-unresolved');
+      const decisionNextAction = document.getElementById('local-response-agents-decision-next-action');
+      const decisionSummaryBuildButton = document.getElementById('local-response-agents-decision-summary-build-button');
+      const decisionSummaryInsertButton = document.getElementById('local-response-agents-decision-summary-insert-button');
+      const decisionSummaryStatus = document.getElementById('local-response-agents-decision-summary-status');
+      const decisionSummaryOutput = document.getElementById('local-response-agents-decision-summary-output');
       const reviewPacketOutput = document.getElementById('local-response-agents-review-packet-output');
       const webResearchEnabled = document.getElementById('local-response-agents-web-research-enabled');
       const webResearchUrls = document.getElementById('local-response-agents-web-research-urls');
@@ -2413,6 +2467,9 @@ def dashboard_html() -> str:
       let sessionResultBoard = [];
       let sessionResultBoardSequence = 1;
       let latestReviewPacketText = '';
+      let latestDecisionSummaryText = '';
+      let bestOutputEntryId = '';
+      let sessionBoardFilter = { type: 'all', value: '' };
       let pinnedAgentIds = [];
       let recentAgentIds = [];
       let selectedPlaybook = null;
@@ -3070,6 +3127,139 @@ def dashboard_html() -> str:
       function selectedSessionBoardEntries() {
         return sessionResultBoard.filter((entry) => entry.selected);
       }
+      const sessionBoardTagOptions = [
+        'shortlist',
+        'compare',
+        'needs source review',
+        'high-stakes',
+        'best candidate',
+        'follow-up needed',
+        'rejected',
+      ];
+      const sessionScoreOptions = ['not marked', '1', '2', '3', '4', '5'];
+      const sessionRiskOptions = ['not marked', 'low', 'medium', 'high'];
+      const sessionReadinessOptions = ['not marked', 'not ready', 'review first', 'ready for manual use'];
+      function sessionEntryIsHighStakes(entry) {
+        return matchingHighStakesTerms([
+          entry.agent_id,
+          entry.display_name,
+          entry.output_type,
+          entry.title,
+          entry.summary,
+          entry.safety_notes.join(' '),
+          entry.tags.join(' '),
+        ].join(' ')).length > 0 || entry.tags.includes('high-stakes');
+      }
+      function sourceSummaryFromReviewedPayload() {
+        const entries = localResponseReviewedSourcesFromPayload();
+        if (!Array.isArray(entries) || !entries.length) {
+          return { count: 0, labels: [], cautions: ['No reviewed sources attached.'], recency: [] };
+        }
+        const labels = entries.map((source, index) => {
+          const safeSource = source || {};
+          return safeSource.citation_label || safeSource.citationLabel || safeSource.title || safeSource.final_url || safeSource.source_url || localResponseSourceLabel(index);
+        }).filter(Boolean).slice(0, 10);
+        const cautions = entries.flatMap((source, index) => localResponseReviewedSourceWarnings(source || {}, localResponseSourceLabel(index))).slice(0, 12);
+        const recency = entries.map((source) => source && (source.fetched_at || source.fetchedAt || source.published_at || source.publishedAt)).filter(Boolean).slice(0, 10);
+        return { count: entries.length, labels, cautions, recency };
+      }
+      function sourceSummaryFromResponse(responseBody, payloadSummary) {
+        const sourcesUsed = localResponseKnownValue(responseBody, 'sources_used') || localResponseKnownValue(responseBody, 'sourcesUsed') || [];
+        const labelsFromResponse = Array.isArray(sourcesUsed)
+          ? sourcesUsed.map((source) => source && (source.citation_label || source.citationLabel || source.source_id || source.sourceId || source.title)).filter(Boolean)
+          : [];
+        const sourceLabels = localResponseList(localResponseFirstValue(responseBody, ['citation_labels', 'citationLabels'])).concat(labelsFromResponse);
+        const sourceCautions = localResponseList(localResponseFirstValue(responseBody, ['source_cautions', 'sourceCautions', 'source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes']));
+        return {
+          count: Math.max(payloadSummary.count || 0, sourceLabels.length, Array.isArray(sourcesUsed) ? sourcesUsed.length : 0),
+          labels: Array.from(new Set((payloadSummary.labels || []).concat(sourceLabels))).slice(0, 20),
+          cautions: Array.from(new Set((payloadSummary.cautions || []).concat(sourceCautions))).slice(0, 20),
+          recency: Array.from(new Set(payloadSummary.recency || [])).slice(0, 10),
+        };
+      }
+      function defaultSessionMarks(entry) {
+        const hasSources = entry && entry.source_summary && entry.source_summary.count > 0;
+        return {
+          clarity: 'not marked',
+          usefulness: 'not marked',
+          sourceConfidence: hasSources ? '3' : 'not marked',
+          riskLevel: entry && sessionEntryIsHighStakes(entry) ? 'high' : 'not marked',
+          decisionReadiness: 'not marked',
+        };
+      }
+      function filteredSessionBoardEntries() {
+        if (sessionBoardFilter.type === 'tag') {
+          return sessionResultBoard.filter((entry) => entry.tags.includes(sessionBoardFilter.value));
+        }
+        if (sessionBoardFilter.type === 'selected') {
+          return selectedSessionBoardEntries();
+        }
+        if (sessionBoardFilter.type === 'best') {
+          return sessionResultBoard.filter((entry) => entry.id === bestOutputEntryId);
+        }
+        return sessionResultBoard.slice();
+      }
+      function sessionBoardFilterLabel(count) {
+        if (sessionBoardFilter.type === 'tag') {
+          return `Showing ${count} board entr${count === 1 ? 'y' : 'ies'} tagged "${sessionBoardFilter.value}". Filtering is session-only and does not remove entries.`;
+        }
+        if (sessionBoardFilter.type === 'selected') {
+          return `Showing ${count} selected board entr${count === 1 ? 'y' : 'ies'}. Filtering is session-only and does not remove entries.`;
+        }
+        if (sessionBoardFilter.type === 'best') {
+          return `Showing ${count} current best-output entr${count === 1 ? 'y' : 'ies'}. Filtering is session-only and does not remove entries.`;
+        }
+        return `Showing all ${count} board entr${count === 1 ? 'y' : 'ies'}.`;
+      }
+      function renderSessionBoardTagFilters() {
+        sessionBoardTagFilters.innerHTML = sessionBoardTagOptions.map((tag) => {
+          const count = sessionResultBoard.filter((entry) => entry.tags.includes(tag)).length;
+          return `<button type="button" data-session-board-filter-tag="${escapeHtml(tag)}">${escapeHtml(tag)} (${escapeHtml(count)})</button>`;
+        }).join('');
+        sessionBoardTagFilters.querySelectorAll('button[data-session-board-filter-tag]').forEach((button) => {
+          button.onclick = () => {
+            sessionBoardFilter = { type: 'tag', value: button.getAttribute('data-session-board-filter-tag') || '' };
+            renderSessionResultBoard();
+          };
+        });
+      }
+      function comparisonEntriesForScope() {
+        const scope = comparisonScope.value || 'selected';
+        if (scope === 'all') {
+          return sessionResultBoard.slice();
+        }
+        if (scope === 'filtered') {
+          return filteredSessionBoardEntries();
+        }
+        if (scope === 'shortlist') {
+          return sessionResultBoard.filter((entry) => entry.tags.includes('shortlist'));
+        }
+        return selectedSessionBoardEntries();
+      }
+      function bestOutputEntry() {
+        return sessionResultBoard.find((entry) => entry.id === bestOutputEntryId) || null;
+      }
+      function entryMarksText(entry) {
+        const marks = entry.marks || {};
+        return `clarity=${marks.clarity || 'not marked'}; usefulness=${marks.usefulness || 'not marked'}; source confidence=${marks.sourceConfidence || 'not marked'}; risk=${marks.riskLevel || 'not marked'}; readiness=${marks.decisionReadiness || 'not marked'}`;
+      }
+      function entrySourceText(entry) {
+        const sourceSummary = entry.source_summary || { count: 0, labels: [], cautions: [] };
+        if (!sourceSummary.count) {
+          return 'No reviewed sources attached.';
+        }
+        const labels = (sourceSummary.labels || []).join(', ') || 'labels unavailable';
+        const cautions = (sourceSummary.cautions || []).concat(entry.source_cautions || []).slice(0, 4).join(' ') || 'No source cautions returned.';
+        return `${sourceSummary.count} source item(s): ${labels}. ${cautions}`;
+      }
+      function refreshDecisionArtifacts() {
+        if (latestDecisionSummaryText && latestDecisionSummaryText !== 'No decision summary yet.') {
+          buildDecisionSummary();
+        }
+        if (latestReviewPacketText) {
+          buildReviewPacket();
+        }
+      }
       function sessionBoardEntryFromLatestResponse() {
         if (!latestLocalResponseBody || typeof latestLocalResponseBody !== 'object' || Array.isArray(latestLocalResponseBody)) {
           return null;
@@ -3080,11 +3270,15 @@ def dashboard_html() -> str:
         const derivedSourceLabels = Array.isArray(sourcesUsed)
           ? sourcesUsed.map((source) => source && (source.citation_label || source.citationLabel || source.source_id || source.sourceId)).filter(Boolean)
           : [];
-        return {
+        const payloadSourceSummary = sourceSummaryFromReviewedPayload();
+        const sourceSummary = sourceSummaryFromResponse(latestLocalResponseBody, payloadSourceSummary);
+        const entry = {
           id: `session-board-entry-${sessionResultBoardSequence++}`,
           entryNumber: sessionResultBoard.length + 1,
           timestamp: new Date().toLocaleString(),
           selected: true,
+          tags: [],
+          marks: {},
           agent_id: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['agent_id', 'agentId']) || localResponseAgentId(agent)),
           display_name: localResponsePlainText(localResponseAgentName(agent)),
           output_type: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['output_type', 'outputType']) || outputTypeSelect.value),
@@ -3096,36 +3290,71 @@ def dashboard_html() -> str:
           limitations: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['limitations', 'prior_context_limitations', 'priorContextLimitations'])),
           safety_notes: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['safety_notes', 'safetyNotes'])),
           source_context_summary: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['source_context_summary', 'sourceContextSummary'])),
-          citation_labels: Array.from(new Set(sourceLabels.concat(localResponseList(derivedSourceLabels)))).slice(0, 20),
+          citation_labels: Array.from(new Set(sourceLabels.concat(localResponseList(derivedSourceLabels), sourceSummary.labels))).slice(0, 20),
           source_cautions: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_cautions', 'sourceCautions'])),
+          source_summary: sourceSummary,
           prior_context_used: localResponseKnownValue(latestLocalResponseBody, 'prior_context_used') ?? localResponseKnownValue(latestLocalResponseBody, 'priorContextUsed') ?? '',
           prior_context_summary: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['prior_context_summary', 'priorContextSummary'])),
           prior_context_limitations: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['prior_context_limitations', 'priorContextLimitations'])),
         };
+        if (sessionEntryIsHighStakes(entry)) {
+          entry.tags.push('high-stakes');
+          if (!sourceSummary.count) {
+            entry.tags.push('needs source review');
+          }
+        }
+        entry.marks = defaultSessionMarks(entry);
+        return entry;
       }
       function renderSessionResultBoard() {
+        renderSessionBoardTagFilters();
         if (!sessionResultBoard.length) {
           sessionBoardEntries.className = 'stack muted';
           sessionBoardEntries.textContent = 'No board entries yet. Add latest response to session board after a structured response returns.';
+          sessionBoardFilterStatus.textContent = 'Showing all board entries.';
+          return;
+        }
+        const entries = filteredSessionBoardEntries();
+        sessionBoardFilterStatus.textContent = sessionBoardFilterLabel(entries.length);
+        if (!entries.length) {
+          sessionBoardEntries.className = 'stack muted';
+          sessionBoardEntries.textContent = 'No board entries match the current session-only filter.';
           return;
         }
         sessionBoardEntries.className = 'stack';
-        sessionBoardEntries.innerHTML = sessionResultBoard.map((entry, index) => {
+        sessionBoardEntries.innerHTML = entries.map((entry) => {
+          const index = sessionResultBoard.indexOf(entry);
           const limitationPreview = entry.limitations.length
             ? `${entry.limitations.length} limitation item(s): ${entry.limitations.slice(0, 2).join(' ')}`
             : 'No limitations returned.';
           const priorContextUsed = entry.prior_context_used === '' ? 'not returned' : String(entry.prior_context_used);
+          const sourceSummary = entry.source_summary || { count: 0, labels: [], cautions: [] };
+          const isBest = bestOutputEntryId === entry.id;
+          const highStakes = sessionEntryIsHighStakes(entry);
           return `
-            <div class="row stack">
+            <div class="row stack${isBest ? ' notice' : ''}">
               <label><input type="checkbox" data-session-board-select="${escapeHtml(entry.id)}" ${entry.selected ? 'checked' : ''}> Select for packet/comparison</label>
-              <div><strong>Entry ${escapeHtml(entry.entryNumber)}</strong> · ${escapeHtml(entry.timestamp || 'current session')}</div>
+              <div><strong>Entry ${escapeHtml(entry.entryNumber)}</strong> ${isBest ? '· Current best output' : ''} · ${escapeHtml(entry.timestamp || 'current session')}</div>
               <div>Agent: <code>${escapeHtml(entry.agent_id || 'unknown_agent')}</code> ${escapeHtml(entry.display_name || '')}</div>
               <div>Output type: <code>${escapeHtml(entry.output_type || 'unspecified')}</code></div>
               <div>Title: ${escapeHtml(entry.title || 'No title returned.')}</div>
               <div>Summary: ${escapeHtml(entry.summary || 'No summary returned.')}</div>
+              <div>Tags: ${sessionBoardTagOptions.map((tag) => `<label class="button-link"><input type="checkbox" data-session-board-tag="${escapeHtml(entry.id)}" data-tag="${escapeHtml(tag)}" ${entry.tags.includes(tag) ? 'checked' : ''}> ${escapeHtml(tag)}</label>`).join(' ')}</div>
+              <div class="two-column">
+                <label>Clarity score<select data-session-board-mark="${escapeHtml(entry.id)}" data-mark="clarity">${sessionScoreOptions.map((value) => `<option value="${escapeHtml(value)}" ${entry.marks.clarity === value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select></label>
+                <label>Usefulness score<select data-session-board-mark="${escapeHtml(entry.id)}" data-mark="usefulness">${sessionScoreOptions.map((value) => `<option value="${escapeHtml(value)}" ${entry.marks.usefulness === value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select></label>
+                <label>Source confidence<select data-session-board-mark="${escapeHtml(entry.id)}" data-mark="sourceConfidence">${sessionScoreOptions.map((value) => `<option value="${escapeHtml(value)}" ${entry.marks.sourceConfidence === value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select></label>
+                <label>Risk level<select data-session-board-mark="${escapeHtml(entry.id)}" data-mark="riskLevel">${sessionRiskOptions.map((value) => `<option value="${escapeHtml(value)}" ${entry.marks.riskLevel === value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select></label>
+                <label>Decision readiness<select data-session-board-mark="${escapeHtml(entry.id)}" data-mark="decisionReadiness">${sessionReadinessOptions.map((value) => `<option value="${escapeHtml(value)}" ${entry.marks.decisionReadiness === value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select></label>
+              </div>
               <div>Limitations: ${escapeHtml(limitationPreview)}</div>
-              <div>Source labels: ${escapeHtml(entry.citation_labels.join(', ') || 'None returned.')}</div>
+              <div>Source summary: ${escapeHtml(sourceSummary.count ? `${sourceSummary.count} reviewed/source item(s): ${(sourceSummary.labels || []).join(', ') || 'labels unavailable'}` : 'No reviewed sources attached.')}</div>
+              <div class="muted">Source/evidence cautions: ${escapeHtml((sourceSummary.cautions || []).concat(entry.source_cautions || []).slice(0, 4).join(' ') || 'No source cautions returned.')}</div>
+              ${highStakes ? '<div class="row notice">High-stakes entry: review sources and verify important details manually before acting. No external action is taken.</div>' : ''}
               <div>Prior context used: ${escapeHtml(priorContextUsed)}</div>
+              <div class="actions">
+                <button type="button" data-session-board-best="${escapeHtml(entry.id)}">${isBest ? 'Current best output' : 'Mark as best output'}</button>
+              </div>
               <button type="button" data-session-board-remove="${escapeHtml(index)}">Remove entry</button>
             </div>
           `;
@@ -3135,17 +3364,69 @@ def dashboard_html() -> str:
             const entry = sessionResultBoard.find((item) => item.id === checkbox.getAttribute('data-session-board-select'));
             if (entry) {
               entry.selected = checkbox.checked;
+              refreshDecisionArtifacts();
             }
+          };
+        });
+        sessionBoardEntries.querySelectorAll('input[data-session-board-tag]').forEach((checkbox) => {
+          checkbox.onchange = () => {
+            const entry = sessionResultBoard.find((item) => item.id === checkbox.getAttribute('data-session-board-tag'));
+            const tag = checkbox.getAttribute('data-tag') || '';
+            if (entry && tag) {
+              entry.tags = checkbox.checked
+                ? Array.from(new Set(entry.tags.concat(tag)))
+                : entry.tags.filter((value) => value !== tag);
+              if (tag === 'best candidate' && checkbox.checked) {
+                bestOutputEntryId = entry.id;
+                sessionResultBoard.forEach((item) => {
+                  if (item.id !== entry.id) {
+                    item.tags = item.tags.filter((value) => value !== 'best candidate');
+                  }
+                });
+              }
+              if (tag === 'best candidate' && !checkbox.checked && bestOutputEntryId === entry.id) {
+                bestOutputEntryId = '';
+              }
+              refreshDecisionArtifacts();
+              renderSessionResultBoard();
+            }
+          };
+        });
+        sessionBoardEntries.querySelectorAll('select[data-session-board-mark]').forEach((selectControl) => {
+          selectControl.onchange = () => {
+            const entry = sessionResultBoard.find((item) => item.id === selectControl.getAttribute('data-session-board-mark'));
+            const mark = selectControl.getAttribute('data-mark') || '';
+            if (entry && mark) {
+              entry.marks[mark] = selectControl.value;
+              refreshDecisionArtifacts();
+            }
+          };
+        });
+        sessionBoardEntries.querySelectorAll('button[data-session-board-best]').forEach((button) => {
+          button.onclick = () => {
+            bestOutputEntryId = button.getAttribute('data-session-board-best') || '';
+            sessionResultBoard.forEach((entry) => {
+              entry.tags = entry.id === bestOutputEntryId
+                ? Array.from(new Set(entry.tags.concat('best candidate')))
+                : entry.tags.filter((tag) => tag !== 'best candidate');
+            });
+            sessionBoardStatus.textContent = 'Best output marker updated in this dashboard session only. No handoff or agent execution occurred.';
+            refreshDecisionArtifacts();
+            renderSessionResultBoard();
           };
         });
         sessionBoardEntries.querySelectorAll('button[data-session-board-remove]').forEach((button) => {
           button.onclick = () => {
             const index = Number(button.getAttribute('data-session-board-remove'));
+            if (sessionResultBoard[index] && sessionResultBoard[index].id === bestOutputEntryId) {
+              bestOutputEntryId = '';
+            }
             sessionResultBoard.splice(index, 1);
             sessionResultBoard.forEach((entry, entryIndex) => {
               entry.entryNumber = entryIndex + 1;
             });
             sessionBoardStatus.textContent = 'Board entry removed from current session only. No persistence, no handoff, and no agent execution occurred.';
+            refreshDecisionArtifacts();
             renderSessionResultBoard();
           };
         });
@@ -3161,15 +3442,15 @@ def dashboard_html() -> str:
         renderSessionResultBoard();
       }
       function buildSessionComparison() {
-        const entries = selectedSessionBoardEntries();
+        const entries = comparisonEntriesForScope();
         if (!entries.length) {
           resultComparisonBody.className = 'muted';
-          resultComparisonBody.textContent = 'No selected entries. Select board entries before building a comparison.';
+          resultComparisonBody.textContent = 'No board entries match the current comparison scope.';
           return;
         }
         if (entries.length < 2) {
           resultComparisonBody.className = 'muted';
-          resultComparisonBody.textContent = 'Fewer than 2 selected entries for comparison. Select at least two board entries.';
+          resultComparisonBody.textContent = 'Fewer than 2 entries for comparison. Choose a broader scope or mark more entries.';
           return;
         }
         resultComparisonBody.className = '';
@@ -3179,40 +3460,149 @@ def dashboard_html() -> str:
             <tbody>
               ${[
                 ['agent', (entry) => `${entry.display_name || ''} ${entry.agent_id || ''}`],
-                ['output_type', (entry) => entry.output_type],
-                ['title', (entry) => entry.title],
                 ['summary', (entry) => entry.summary],
-                ['key next actions', (entry) => entry.next_actions.join('; ')],
-                ['limitations', (entry) => entry.limitations.concat(entry.safety_notes).join('; ')],
-                ['source labels', (entry) => entry.citation_labels.join(', ')],
+                ['tags', (entry) => entry.tags.join(', ') || 'No tags'],
+                ['clarity', (entry) => entry.marks.clarity],
+                ['usefulness', (entry) => entry.marks.usefulness],
+                ['source confidence', (entry) => entry.marks.sourceConfidence],
+                ['risk level', (entry) => entry.marks.riskLevel],
+                ['decision readiness', (entry) => entry.marks.decisionReadiness],
+                ['high-stakes/source warning status', (entry) => {
+                  const sourceSummary = entry.source_summary || { count: 0 };
+                  return sessionEntryIsHighStakes(entry) ? (sourceSummary.count ? 'High-stakes; reviewed sources attached' : 'High-stakes; needs source review') : (sourceSummary.count ? 'Sources attached' : 'No reviewed sources attached');
+                }],
+                ['reviewed sources', (entry) => entrySourceText(entry)],
                 ['prior context used', (entry) => String(entry.prior_context_used || '')],
+                ['best output', (entry) => entry.id === bestOutputEntryId ? 'Current best output' : ''],
               ].map(([label, reader]) => `<tr><th>${escapeHtml(label)}</th>${entries.map((entry) => `<td>${escapeHtml(reader(entry) || 'No value returned.')}</td>`).join('')}</tr>`).join('')}
             </tbody>
           </table>
         `;
-        sessionBoardStatus.textContent = 'Comparison built from selected session board entries only. No agent was run and nothing was persisted.';
+        sessionBoardStatus.textContent = 'Comparison built from current session board entries only. No agent was run and nothing was persisted.';
+      }
+      function selectedDecisionEntries() {
+        const selected = selectedSessionBoardEntries();
+        return selected.length ? selected : filteredSessionBoardEntries();
+      }
+      function buildDecisionSummaryText(entries) {
+        const best = bestOutputEntry();
+        const lines = [
+          'Decision Summary',
+          '',
+          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no automatic handoff.',
+          '',
+          `Decision question or goal: ${decisionQuestion.value.trim() || 'Not provided.'}`,
+          `Decision criteria: ${decisionCriteria.value.trim() || 'Not provided.'}`,
+          '',
+          'Selected entries',
+        ];
+        entries.forEach((entry) => {
+          lines.push(`- Entry ${entry.entryNumber}: ${entry.display_name || entry.agent_id} (${entry.output_type || 'unspecified'}). Tags: ${entry.tags.join(', ') || 'none'}. Marks: ${entryMarksText(entry)}.`);
+        });
+        lines.push('', 'Best output');
+        lines.push(best ? `Entry ${best.entryNumber}: ${best.display_name || best.agent_id}. ${best.summary || best.title || 'No summary returned.'}` : 'No best output selected.');
+        lines.push('', 'Key strengths');
+        entries.forEach((entry) => {
+          const strength = [entry.summary, entry.recommended_plan.join('; '), entry.next_actions.join('; ')].filter(Boolean).join(' ').slice(0, 600);
+          lines.push(`- Entry ${entry.entryNumber}: ${strength || 'No strength notes returned.'}`);
+        });
+        lines.push('', 'Key concerns and risks');
+        entries.forEach((entry) => {
+          const concerns = entry.limitations.concat(entry.safety_notes, entry.source_cautions, sessionEntryIsHighStakes(entry) ? ['High-stakes: verify important details manually.'] : []).join('; ');
+          lines.push(`- Entry ${entry.entryNumber}: ${concerns || 'No concerns returned.'}`);
+        });
+        lines.push('', 'Source/evidence notes');
+        entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entrySourceText(entry)}`));
+        lines.push('', 'Unresolved questions');
+        const unresolved = decisionUnresolved.value.trim();
+        if (unresolved) {
+          unresolved.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => lines.push(`- ${line}`));
+        } else {
+          lines.push('- Not provided.');
+        }
+        lines.push('', 'Risk notes');
+        lines.push(decisionRiskNotes.value.trim() || 'Not provided.');
+        lines.push('', 'Recommended next manual action');
+        lines.push(decisionNextAction.value.trim() || 'Review the best output and selected evidence manually before choosing any next step.');
+        return lines.join('\n').slice(0, 6000);
+      }
+      function buildDecisionSummary() {
+        const entries = selectedDecisionEntries();
+        if (!entries.length) {
+          latestDecisionSummaryText = '';
+          decisionSummaryOutput.value = 'No board entries available for a decision summary.';
+          decisionSummaryStatus.textContent = 'No board entries available. Nothing was persisted and no agent was run.';
+          return;
+        }
+        latestDecisionSummaryText = buildDecisionSummaryText(entries);
+        decisionSummaryOutput.value = latestDecisionSummaryText;
+        decisionSummaryStatus.textContent = 'Decision summary built from current session board state only. No persistence, connector, handoff, or agent execution occurred.';
+      }
+      function priorContextFromDecisionSummary() {
+        const text = latestDecisionSummaryText || decisionSummaryOutput.value || '';
+        if (!text || text === 'No decision summary yet.' || text === 'No board entries available for a decision summary.') {
+          return null;
+        }
+        const best = bestOutputEntry();
+        return {
+          previous_agent_id: 'manual_decision_summary',
+          previous_agent_name: 'Decision Summary Composer',
+          previous_output_type: 'decision_summary',
+          previous_summary: text.slice(0, 4000),
+          previous_key_points: text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_next_actions: [decisionNextAction.value.trim() || 'Review manually before using as prior context.'],
+          previous_limitations: [
+            'Created manually from current dashboard session board entries.',
+            'Not persisted.',
+            'Not sent.',
+            'No connector.',
+            'No automatic handoff.',
+          ],
+          user_notes: best ? `Best output marker: Entry ${best.entryNumber} (${best.display_name || best.agent_id}).` : 'No best output marker selected.',
+          source_type: 'manual_decision_summary',
+        };
+      }
+      function insertDecisionSummaryAsPriorContext() {
+        const context = priorContextFromDecisionSummary();
+        if (!context) {
+          decisionSummaryStatus.textContent = 'Build a decision summary before inserting prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          context,
+          'prior_agent_context insertion succeeded from the decision summary, but agent was not run. Editable JSON payload updated only.'
+        );
+        decisionSummaryStatus.textContent = 'Decision summary inserted as prior_agent_context by manual click. No handoff or agent execution occurred.';
       }
       function buildReviewPacketText(entries) {
+        const best = bestOutputEntry();
         const lines = [
           'Packet title',
           'Local Response Review Packet',
           '',
           'Generated in current dashboard session only',
           'This text is held in the current page only until the page reloads.',
+          'It is not persisted, not sent, not copied automatically, uses no connector, and creates no automatic handoff.',
           '',
           'Selected local response-agent outputs',
         ];
         entries.forEach((entry) => {
-          lines.push(`- Entry ${entry.entryNumber}: ${entry.display_name || entry.agent_id || 'Local response agent'} (${entry.output_type || 'unspecified output_type'})`);
+          lines.push(`- Entry ${entry.entryNumber}: ${entry.display_name || entry.agent_id || 'Local response agent'} (${entry.output_type || 'unspecified output_type'})${entry.id === bestOutputEntryId ? ' [CURRENT BEST OUTPUT]' : ''}`);
+          lines.push(`  Tags: ${entry.tags.join(', ') || 'none'}`);
+          lines.push(`  Marks: ${entryMarksText(entry)}`);
         });
+        lines.push('', 'Best-output marker');
+        lines.push(best ? `Entry ${best.entryNumber}: ${best.display_name || best.agent_id}. ${best.summary || best.title || 'No summary returned.'}` : 'No best output selected.');
         lines.push('', 'Key summaries');
         entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entry.summary || entry.title || 'No summary returned.'}`));
         lines.push('', 'Next actions');
         entries.flatMap((entry) => entry.next_actions.length ? entry.next_actions : entry.checklist).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
         lines.push('', 'Limitations and safety notes');
         entries.flatMap((entry) => entry.limitations.concat(entry.safety_notes)).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
-        lines.push('', 'Reviewed source labels and source cautions');
-        entries.flatMap((entry) => entry.citation_labels.concat(entry.source_cautions)).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
+        lines.push('', 'Reviewed source/evidence notes');
+        entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entrySourceText(entry)}`));
+        lines.push('', 'Decision summary');
+        lines.push(latestDecisionSummaryText || decisionSummaryOutput.value || 'No decision summary built yet.');
         lines.push('', 'Prior context notes');
         entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: prior_context_used=${entry.prior_context_used === '' ? 'not returned' : String(entry.prior_context_used)}. ${entry.prior_context_summary || entry.prior_context_limitations.join(' ') || 'No prior context notes returned.'}`));
         lines.push('', 'Suggested next manual step');
@@ -3220,11 +3610,14 @@ def dashboard_html() -> str:
         lines.push('', 'Boundary reminder');
         lines.push('This packet was composed from manually selected session outputs.');
         lines.push('It was not persisted.');
+        lines.push('It was not sent.');
+        lines.push('It was not copied automatically.');
         lines.push('It did not run agents automatically.');
         lines.push('It did not browse automatically.');
         lines.push('It did not use connectors.');
+        lines.push('It did not create an automatic handoff.');
         lines.push('Review before using as prior_agent_context.');
-        return lines.join('\n').slice(0, 4000);
+        return lines.join('\n').slice(0, 6000);
       }
       function buildReviewPacket() {
         const entries = selectedSessionBoardEntries();
@@ -3236,7 +3629,7 @@ def dashboard_html() -> str:
         }
         latestReviewPacketText = buildReviewPacketText(entries);
         reviewPacketOutput.value = latestReviewPacketText;
-        sessionBoardStatus.textContent = 'Review packet built from selected session outputs only. It was not persisted, sent, downloaded, or written to clipboard automatically.';
+        sessionBoardStatus.textContent = 'Review packet built from selected session outputs only. It was not persisted, sent, or copied automatically.';
       }
       function priorContextFromSessionEntry(entry) {
         return {
@@ -3315,7 +3708,12 @@ def dashboard_html() -> str:
       }
       function clearSessionResultBoard() {
         sessionResultBoard = [];
+        bestOutputEntryId = '';
+        sessionBoardFilter = { type: 'all', value: '' };
         latestReviewPacketText = '';
+        latestDecisionSummaryText = '';
+        decisionSummaryOutput.value = 'No decision summary yet.';
+        decisionSummaryStatus.textContent = 'No decision summary built yet.';
         reviewPacketOutput.value = 'No review packet yet.';
         resultComparisonBody.className = 'muted';
         resultComparisonBody.textContent = 'Select at least two board entries, then build comparison.';
@@ -3638,6 +4036,21 @@ def dashboard_html() -> str:
       sessionBoardInsertEntryButton.onclick = insertSelectedBoardEntryAsPriorContext;
       sessionBoardInsertPacketButton.onclick = insertReviewPacketAsPriorContext;
       sessionBoardClearButton.onclick = clearSessionResultBoard;
+      sessionBoardFilterSelectedButton.onclick = () => {
+        sessionBoardFilter = { type: 'selected', value: '' };
+        renderSessionResultBoard();
+      };
+      sessionBoardFilterBestButton.onclick = () => {
+        sessionBoardFilter = { type: 'best', value: '' };
+        renderSessionResultBoard();
+      };
+      sessionBoardClearFilterButton.onclick = () => {
+        sessionBoardFilter = { type: 'all', value: '' };
+        renderSessionResultBoard();
+      };
+      comparisonScope.onchange = buildSessionComparison;
+      decisionSummaryBuildButton.onclick = buildDecisionSummary;
+      decisionSummaryInsertButton.onclick = insertDecisionSummaryAsPriorContext;
       webResearchValidateButton.onclick = async () => {
         const urls = localResponseWebResearchUrls();
         webResearchStatus.textContent = 'Validating public URLs by manual click. No source content is fetched.';
