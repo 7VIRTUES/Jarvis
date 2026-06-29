@@ -720,6 +720,13 @@ def dashboard_html() -> str:
     .section-toggle { float: right; margin-left: 10px; }
     .dashboard-section.collapsed > :not(h2):not(.section-toggle) { display: none; }
     .section-filter-hidden { display: none; }
+    .notice { border-color: #d6b85d; background: #fff8df; }
+    .compact-list { display: grid; gap: 8px; max-height: 360px; overflow: auto; }
+    .two-column { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .checklist { display: grid; gap: 6px; }
+    .check-ok { color: #226b38; }
+    .check-warn { color: #9a5b00; }
+    .button-link { display: inline-flex; align-items: center; justify-content: center; }
   </style>
 </head>
 <body>
@@ -1094,6 +1101,44 @@ def dashboard_html() -> str:
           <span class="pill">Non-persistent</span>
         </div>
       </div>
+      <div id="local-response-agents-command-center" class="row stack">
+        <h3>Local Response Agent Command Center</h3>
+        <div class="muted">Session-only finder for the existing 37 local response agents. Quick actions update this page only; no agent is invoked automatically.</div>
+        <div class="two-column">
+          <label>
+            Search existing agents
+            <input id="local-response-agents-command-search" type="search" placeholder="Search id, name, category, tags, endpoint, or capability text">
+          </label>
+          <label>
+            Command Center category
+            <select id="local-response-agents-command-category"></select>
+          </label>
+        </div>
+        <div id="local-response-agents-command-count" class="muted">Showing 0 of 37 agents.</div>
+        <div id="local-response-agents-high-stakes-banner" class="row stack notice" hidden>
+          <strong>High-stakes manual review reminder</strong>
+          <div>Response-only guidance. Manual review is required. Verify important details before acting. No professional, legal, medical, or financial decision automation is provided, and no external actions are taken.</div>
+        </div>
+        <div class="two-column">
+          <div class="row stack">
+            <strong>Visible agents</strong>
+            <div id="local-response-agents-command-list" class="compact-list muted">Agent finder pending.</div>
+          </div>
+          <div class="row stack">
+            <strong>Session pins and recent selections</strong>
+            <div class="muted">Pins and recents live in page memory only and clear when the dashboard reloads.</div>
+            <div id="local-response-agents-pinned-list" class="compact-list muted">No pinned agents in this session.</div>
+            <div id="local-response-agents-recent-list" class="compact-list muted">No recent agents in this session.</div>
+          </div>
+        </div>
+      </div>
+      <div id="local-response-agents-playbooks" class="row stack">
+        <h3>Manual Workflow Presets / Playbooks</h3>
+        <div class="muted">Manual, response-only presets using existing agents only. Selecting a playbook previews a suggested sequence; it does not run, chain, hand off, create tasks, or persist anything.</div>
+        <div id="local-response-agents-playbook-list" class="grid"></div>
+        <div id="local-response-agents-playbook-status" class="muted">Choose a preset to preview a manual sequence.</div>
+        <pre id="local-response-agents-playbook-preview">No playbook selected.</pre>
+      </div>
       <div id="local-response-agents-browser" class="grid">
         <div class="row stack">
           <h3>Categories</h3>
@@ -1142,6 +1187,42 @@ def dashboard_html() -> str:
         </label>
         <pre id="local-response-agents-route-preview-result">No route preview yet.</pre>
       </div>
+      <div id="local-response-agents-manual-workflow-builder" class="row stack">
+        <h3>Manual Multi-Agent Workflow Builder</h3>
+        <div class="muted">Manual workflow only. Steps are suggestions, not execution. Run one selected agent at a time. Prior context is inserted only after user review.</div>
+        <div id="local-response-agents-manual-workflow-boundaries">
+          <span class="pill">Manual workflow only</span>
+          <span class="pill">Steps are suggestions, not execution</span>
+          <span class="pill">Run one selected agent at a time</span>
+          <span class="pill">Prior context is inserted only after user review</span>
+          <span class="pill">No automatic handoff</span>
+          <span class="pill">No persistence</span>
+          <span class="pill">No connectors</span>
+        </div>
+        <label>
+          Manual workflow goal
+          <textarea id="local-response-agents-manual-workflow-goal" spellcheck="false" placeholder="Describe the local goal. Workflow preview uses catalog metadata only."></textarea>
+        </label>
+        <label>
+          Candidate agent IDs, optional
+          <textarea id="local-response-agents-manual-workflow-candidates" spellcheck="false" placeholder="local_planning_agent&#10;local_review_agent"></textarea>
+        </label>
+        <label>
+          <input id="local-response-agents-manual-workflow-include-web-context" type="checkbox">
+          Consider optional reviewed web_context in manual payload notes
+        </label>
+        <div class="actions">
+          <button id="local-response-agents-manual-workflow-preview-button" type="button">Preview manual workflow</button>
+          <button id="local-response-agents-manual-workflow-load-step-button" type="button">Load selected workflow step</button>
+          <button id="local-response-agents-prior-context-copy-button" type="button">Insert latest response as prior context</button>
+        </div>
+        <div id="local-response-agents-manual-workflow-status" class="muted">Manual workflow preview does not invoke agents, create handoffs, or persist workflows.</div>
+        <label>
+          Manual workflow step selector
+          <select id="local-response-agents-manual-workflow-steps"></select>
+        </label>
+        <pre id="local-response-agents-manual-workflow-result">No manual workflow preview yet.</pre>
+      </div>
       <div id="local-response-agents-index-list" class="stack"></div>
       <div id="local-response-agents-examples-heading"><strong>Read-only example request bodies</strong></div>
       <div class="local-response-agent-example muted">Examples render from the local dashboard summary after load.</div>
@@ -1169,7 +1250,33 @@ def dashboard_html() -> str:
             Output type from request-template metadata
             <select id="local-response-agents-output-type-select"></select>
           </label>
-          <div id="local-response-agents-payload-preview-status" class="muted">Editable JSON payload preview is filled from the selected template sample.</div>
+        <div id="local-response-agents-payload-preview-status" class="muted">Editable JSON payload preview is filled from the selected template sample.</div>
+        </div>
+        <div id="local-response-agents-context-kit" class="row stack">
+          <h3>Session-only Context Kit Builder</h3>
+          <div><span class="pill">Session-only / not saved</span> <span class="pill">Manual insertion only</span> <span class="pill">No clipboard write</span></div>
+          <div class="two-column">
+            <label>Goal<textarea id="local-response-agents-context-goal" spellcheck="false"></textarea></label>
+            <label>Situation/background<textarea id="local-response-agents-context-background" spellcheck="false"></textarea></label>
+            <label>Constraints<textarea id="local-response-agents-context-constraints" spellcheck="false"></textarea></label>
+            <label>Preferences<textarea id="local-response-agents-context-preferences" spellcheck="false"></textarea></label>
+            <label>Evidence/source notes<textarea id="local-response-agents-context-evidence" spellcheck="false"></textarea></label>
+            <label>Prior agent output summary<textarea id="local-response-agents-context-prior-summary" spellcheck="false"></textarea></label>
+            <label>Decision criteria<textarea id="local-response-agents-context-decision-criteria" spellcheck="false"></textarea></label>
+            <label>Risks or high-stakes concerns<textarea id="local-response-agents-context-risks" spellcheck="false"></textarea></label>
+          </div>
+          <div class="actions">
+            <button id="local-response-agents-context-insert-request-button" type="button">Insert context kit into request payload</button>
+            <button id="local-response-agents-context-insert-prior-button" type="button">Insert context kit as prior_agent_context</button>
+          </div>
+          <div id="local-response-agents-context-status" class="muted">Context kit stays in current page memory until manually inserted.</div>
+          <pre id="local-response-agents-context-preview">No context kit content yet.</pre>
+        </div>
+        <div id="local-response-agents-quality-coach" class="row stack">
+          <h3>Request Quality Coach</h3>
+          <div class="muted">Advisory only. It does not block existing workbench behavior and does not change endpoint contracts.</div>
+          <div id="local-response-agents-quality-checklist" class="checklist muted">Quality checklist pending.</div>
+          <div id="local-response-agents-quality-warnings" class="stack muted">No readiness warnings yet.</div>
         </div>
         <div id="local-response-agents-web-research" class="row stack">
           <h3>Optional Public Web Research</h3>
@@ -1194,10 +1301,25 @@ def dashboard_html() -> str:
             <button id="local-response-agents-web-research-validate-button" type="button">Validate public URLs</button>
             <button id="local-response-agents-web-research-fetch-button" type="button">Preview source excerpts</button>
             <button id="local-response-agents-web-research-context-button" type="button">Preview agent context</button>
-            <button id="local-response-agents-web-research-add-button" type="button">Add source context to manual payload</button>
+            <button id="local-response-agents-web-research-add-button" type="button">Add source context to payload</button>
           </div>
           <div id="local-response-agents-web-research-status" class="muted">Public web research is optional, public-only, read-only, and never background browsing.</div>
           <pre id="local-response-agents-web-research-result">No public web source preview yet.</pre>
+          <div id="local-response-agents-reviewed-source-context" class="row stack">
+            <strong>Reviewed source context</strong>
+            <div class="muted">web_context is optional, non-persistent, and supplied only from the manual payload. Agents consume provided excerpts; they do not browse automatically.</div>
+            <div class="muted">Source labels are for reference, not proof. Review excerpts before running the selected agent.</div>
+            <div id="local-response-agents-reviewed-source-manager" class="stack">
+              <div id="local-response-agents-reviewed-source-list" class="stack muted">No reviewed sources in payload.</div>
+              <button id="local-response-agents-reviewed-source-clear-button" type="button">Clear reviewed sources</button>
+            </div>
+            <div id="local-response-agents-source-aware-preview" class="row stack">
+              <strong>How selected agent will use reviewed sources</strong>
+              <div class="muted">Sources support context only; they are not proof. Agent will not browse automatically. Verify freshness and authority before acting.</div>
+              <div id="local-response-agents-source-aware-preview-body" class="muted">No reviewed sources in payload.</div>
+            </div>
+            <pre id="local-response-agents-reviewed-web-context-preview">No reviewed source context in payload yet.</pre>
+          </div>
         </div>
         <label>
           Editable JSON payload preview - manual input only
@@ -1214,6 +1336,39 @@ def dashboard_html() -> str:
         </div>
         <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
         <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
+        <div id="local-response-agents-session-result-board" class="row stack">
+          <h3>Session Result Board</h3>
+          <div class="muted">Session-only. Not persisted. Manual review only. No automatic handoff. No connector. No file export. Board clears when the page reloads.</div>
+          <div id="local-response-agents-session-board-boundaries">
+            <span class="pill">Session-only</span>
+            <span class="pill">Not persisted</span>
+            <span class="pill">Manual review only</span>
+            <span class="pill">No automatic handoff</span>
+            <span class="pill">No connector</span>
+            <span class="pill">No file export</span>
+            <span class="pill">Board clears when the page reloads</span>
+          </div>
+          <div class="actions">
+            <button id="local-response-agents-session-board-add-button" type="button">Add latest response to session board</button>
+            <button id="local-response-agents-session-board-compare-button" type="button">Build comparison</button>
+            <button id="local-response-agents-session-board-packet-button" type="button">Build review packet</button>
+            <button id="local-response-agents-session-board-insert-entry-button" type="button">Insert selected entry as prior_agent_context</button>
+            <button id="local-response-agents-session-board-insert-packet-button" type="button">Insert review packet as prior_agent_context</button>
+            <button id="local-response-agents-session-board-clear-button" type="button">Clear session board</button>
+          </div>
+          <div id="local-response-agents-session-board-status" class="muted">No latest response yet. The board uses current dashboard page memory only.</div>
+          <div id="local-response-agents-session-board-entries" class="stack muted">No board entries yet.</div>
+        </div>
+        <div id="local-response-agents-result-comparison-matrix" class="row stack">
+          <h3>Result Comparison Matrix</h3>
+          <div class="muted">Uses selected board entries only. No agent execution, no persistence, and no backend call.</div>
+          <div id="local-response-agents-result-comparison-body" class="muted">Select at least two board entries, then build comparison.</div>
+        </div>
+        <div id="local-response-agents-review-packet-composer" class="row stack">
+          <h3>Review Packet Composer</h3>
+          <div class="muted">Plain text for manual review. The packet is not persisted, not sent, and not written to clipboard automatically.</div>
+          <textarea id="local-response-agents-review-packet-output" spellcheck="false" readonly>No review packet yet.</textarea>
+        </div>
       </div>
       <div id="local-response-agents-index-boundaries" class="row"></div>
       <p><a href="/docs/local-response-agents-index.md">Local Response Agents Index docs</a></p>
@@ -2114,6 +2269,23 @@ def dashboard_html() -> str:
         'limitations',
         'local_only_boundaries',
         'follow_up_questions',
+        'source_evidence',
+        'citation_labels',
+        'source_quality_warnings',
+        'source_recency_notes',
+        'source_context_summary',
+        'sources_used',
+        'web_context_limitations',
+        'source_use_summary',
+        'source_supported_points',
+        'source_cautions',
+        'source_followup_checks',
+        'source_informed_assumptions',
+        'citation_usage_note',
+        'prior_context_used',
+        'prior_context_summary',
+        'prior_context',
+        'prior_context_limitations',
         'output_type',
         'agent_id',
       ];
@@ -2159,6 +2331,15 @@ def dashboard_html() -> str:
       const routePreviewStatus = document.getElementById('local-response-agents-route-preview-status');
       const routePreviewSuggestions = document.getElementById('local-response-agents-route-preview-suggestions');
       const routePreviewResult = document.getElementById('local-response-agents-route-preview-result');
+      const manualWorkflowGoal = document.getElementById('local-response-agents-manual-workflow-goal');
+      const manualWorkflowCandidates = document.getElementById('local-response-agents-manual-workflow-candidates');
+      const manualWorkflowIncludeWebContext = document.getElementById('local-response-agents-manual-workflow-include-web-context');
+      const manualWorkflowPreviewButton = document.getElementById('local-response-agents-manual-workflow-preview-button');
+      const manualWorkflowLoadStepButton = document.getElementById('local-response-agents-manual-workflow-load-step-button');
+      const priorContextCopyButton = document.getElementById('local-response-agents-prior-context-copy-button');
+      const manualWorkflowStatus = document.getElementById('local-response-agents-manual-workflow-status');
+      const manualWorkflowSteps = document.getElementById('local-response-agents-manual-workflow-steps');
+      const manualWorkflowResult = document.getElementById('local-response-agents-manual-workflow-result');
       const endpointDisplay = document.getElementById('local-response-agents-workbench-endpoint');
       const docsLink = document.getElementById('local-response-agents-workbench-docs');
       const outputTypeSelect = document.getElementById('local-response-agents-output-type-select');
@@ -2168,6 +2349,16 @@ def dashboard_html() -> str:
       const status = document.getElementById('local-response-agents-workbench-status');
       const structuredResponse = document.getElementById('local-response-agents-structured-response');
       const responseOutput = document.getElementById('local-response-agents-workbench-response');
+      const sessionBoardAddButton = document.getElementById('local-response-agents-session-board-add-button');
+      const sessionBoardCompareButton = document.getElementById('local-response-agents-session-board-compare-button');
+      const sessionBoardPacketButton = document.getElementById('local-response-agents-session-board-packet-button');
+      const sessionBoardInsertEntryButton = document.getElementById('local-response-agents-session-board-insert-entry-button');
+      const sessionBoardInsertPacketButton = document.getElementById('local-response-agents-session-board-insert-packet-button');
+      const sessionBoardClearButton = document.getElementById('local-response-agents-session-board-clear-button');
+      const sessionBoardStatus = document.getElementById('local-response-agents-session-board-status');
+      const sessionBoardEntries = document.getElementById('local-response-agents-session-board-entries');
+      const resultComparisonBody = document.getElementById('local-response-agents-result-comparison-body');
+      const reviewPacketOutput = document.getElementById('local-response-agents-review-packet-output');
       const webResearchEnabled = document.getElementById('local-response-agents-web-research-enabled');
       const webResearchUrls = document.getElementById('local-response-agents-web-research-urls');
       const webResearchValidateButton = document.getElementById('local-response-agents-web-research-validate-button');
@@ -2176,6 +2367,36 @@ def dashboard_html() -> str:
       const webResearchAddButton = document.getElementById('local-response-agents-web-research-add-button');
       const webResearchStatus = document.getElementById('local-response-agents-web-research-status');
       const webResearchResult = document.getElementById('local-response-agents-web-research-result');
+      const reviewedWebContextPreview = document.getElementById('local-response-agents-reviewed-web-context-preview');
+      const reviewedSourceList = document.getElementById('local-response-agents-reviewed-source-list');
+      const reviewedSourceClearButton = document.getElementById('local-response-agents-reviewed-source-clear-button');
+      const sourceAwarePreviewBody = document.getElementById('local-response-agents-source-aware-preview-body');
+      const commandSearch = document.getElementById('local-response-agents-command-search');
+      const commandCategory = document.getElementById('local-response-agents-command-category');
+      const commandCount = document.getElementById('local-response-agents-command-count');
+      const commandList = document.getElementById('local-response-agents-command-list');
+      const pinnedList = document.getElementById('local-response-agents-pinned-list');
+      const recentList = document.getElementById('local-response-agents-recent-list');
+      const highStakesBanner = document.getElementById('local-response-agents-high-stakes-banner');
+      const playbookList = document.getElementById('local-response-agents-playbook-list');
+      const playbookStatus = document.getElementById('local-response-agents-playbook-status');
+      const playbookPreview = document.getElementById('local-response-agents-playbook-preview');
+      const contextFields = {
+        goal: document.getElementById('local-response-agents-context-goal'),
+        background: document.getElementById('local-response-agents-context-background'),
+        constraints: document.getElementById('local-response-agents-context-constraints'),
+        preferences: document.getElementById('local-response-agents-context-preferences'),
+        evidence: document.getElementById('local-response-agents-context-evidence'),
+        priorSummary: document.getElementById('local-response-agents-context-prior-summary'),
+        decisionCriteria: document.getElementById('local-response-agents-context-decision-criteria'),
+        risks: document.getElementById('local-response-agents-context-risks'),
+      };
+      const contextInsertRequestButton = document.getElementById('local-response-agents-context-insert-request-button');
+      const contextInsertPriorButton = document.getElementById('local-response-agents-context-insert-prior-button');
+      const contextStatus = document.getElementById('local-response-agents-context-status');
+      const contextPreview = document.getElementById('local-response-agents-context-preview');
+      const qualityChecklist = document.getElementById('local-response-agents-quality-checklist');
+      const qualityWarnings = document.getElementById('local-response-agents-quality-warnings');
       const groupedAgents = agents.reduce((groups, agent) => {
         const category = localResponseAgentCategory(agent);
         groups[category] = groups[category] || [];
@@ -2186,11 +2407,23 @@ def dashboard_html() -> str:
       let activeAgents = agents.slice();
       let selectedTemplate = null;
       let latestWebResearchSources = [];
+      let latestManualWorkflowSteps = [];
+      let latestLocalResponseBody = null;
+      let latestLocalResponseAgent = null;
+      let sessionResultBoard = [];
+      let sessionResultBoardSequence = 1;
+      let latestReviewPacketText = '';
+      let pinnedAgentIds = [];
+      let recentAgentIds = [];
+      let selectedPlaybook = null;
 
       categoryCounts.innerHTML = categories.length
         ? categories.map((category) => `<div><strong>${escapeHtml(category)}</strong>: ${escapeHtml(groupedAgents[category].length)} local response agents</div>`).join('')
         : '<div>No category metadata available.</div>';
       categorySelect.innerHTML = ['<option value="__all__">All categories (37)</option>']
+        .concat(categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)} (${escapeHtml(groupedAgents[category].length)})</option>`))
+        .join('');
+      commandCategory.innerHTML = ['<option value="__all__">All categories (37)</option>']
         .concat(categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)} (${escapeHtml(groupedAgents[category].length)})</option>`))
         .join('');
 
@@ -2233,6 +2466,431 @@ def dashboard_html() -> str:
         const index = Number(select.value || 0);
         return activeAgents[index] || null;
       }
+      function localResponseAgentSearchText(agent) {
+        if (!agent) {
+          return '';
+        }
+        return [
+          localResponseAgentId(agent),
+          localResponseAgentName(agent),
+          localResponseAgentCategory(agent),
+          agent.description,
+          agent.endpoint,
+          agent.docsLink || agent.docs_link,
+          agent.useWhen || agent.use_when,
+          agent.recommendedFor || agent.recommended_for,
+          (agent.badges || []).join(' '),
+          (agent.tags || []).join(' '),
+          (agent.outputTypes || agent.output_types || []).join(' '),
+          (agent.safetyNotes || agent.safety_notes || []).join(' '),
+          JSON.stringify(agent.exampleRequestBody || agent.example_request_body || {}),
+        ].join(' ').toLowerCase();
+      }
+      const highStakesTerms = [
+        'health',
+        'fitness',
+        'medical',
+        'legal',
+        'immigration',
+        'finance',
+        'loans',
+        'budget',
+        'emergency',
+        'preparedness',
+        'security',
+        'safety',
+        'career',
+        'job search',
+        'housing',
+        'move',
+        'travel',
+      ];
+      function matchingHighStakesTerms(text) {
+        const haystack = String(text || '').toLowerCase();
+        return highStakesTerms.filter((term) => haystack.includes(term));
+      }
+      function selectedHighStakesTerms() {
+        const agentTerms = matchingHighStakesTerms(localResponseAgentSearchText(selectedAgent()));
+        const playbookTerms = selectedPlaybook ? matchingHighStakesTerms(`${selectedPlaybook.title} ${selectedPlaybook.category} ${selectedPlaybook.goal}`) : [];
+        return Array.from(new Set(agentTerms.concat(playbookTerms)));
+      }
+      function selectAgentById(agentId) {
+        const agentIndex = agents.findIndex((agent) => localResponseAgentId(agent) === agentId);
+        if (agentIndex < 0) {
+          return false;
+        }
+        categorySelect.value = '__all__';
+        renderAgentOptions();
+        select.value = String(agentIndex);
+        return true;
+      }
+      function trackRecentAgent(agent) {
+        const agentId = localResponseAgentId(agent);
+        if (!agentId) {
+          return;
+        }
+        recentAgentIds = [agentId].concat(recentAgentIds.filter((id) => id !== agentId)).slice(0, 6);
+        renderPinnedAndRecentAgents();
+      }
+      function agentById(agentId) {
+        return agents.find((agent) => localResponseAgentId(agent) === agentId) || null;
+      }
+      function renderSessionAgentList(agentIds, emptyText) {
+        const rows = agentIds.map(agentById).filter(Boolean);
+        return rows.length
+          ? rows.map((agent) => `
+            <div class="row stack">
+              <div><strong>${escapeHtml(localResponseAgentName(agent))}</strong></div>
+              <div><code>${escapeHtml(localResponseAgentId(agent))}</code> · ${escapeHtml(localResponseAgentCategory(agent))}</div>
+              <div class="actions">
+                <button type="button" data-command-action="use" data-agent-id="${escapeHtml(localResponseAgentId(agent))}">Use agent</button>
+                <button type="button" data-command-action="pin" data-agent-id="${escapeHtml(localResponseAgentId(agent))}">${pinnedAgentIds.includes(localResponseAgentId(agent)) ? 'Unpin' : 'Pin'}</button>
+              </div>
+            </div>
+          `).join('')
+          : emptyText;
+      }
+      function renderPinnedAndRecentAgents() {
+        pinnedList.className = pinnedAgentIds.length ? 'compact-list' : 'compact-list muted';
+        recentList.className = recentAgentIds.length ? 'compact-list' : 'compact-list muted';
+        pinnedList.innerHTML = renderSessionAgentList(pinnedAgentIds, 'No pinned agents in this session.');
+        recentList.innerHTML = renderSessionAgentList(recentAgentIds, 'No recent agents in this session.');
+        bindCommandButtons(pinnedList);
+        bindCommandButtons(recentList);
+      }
+      function commandCenterVisibleAgents() {
+        const query = (commandSearch.value || '').trim().toLowerCase();
+        const selectedCategory = commandCategory.value || '__all__';
+        return agents.filter((agent) => {
+          const inCategory = selectedCategory === '__all__' || localResponseAgentCategory(agent) === selectedCategory;
+          const text = localResponseAgentSearchText(agent);
+          return inCategory && (!query || text.includes(query));
+        });
+      }
+      function renderCommandCenter() {
+        const visibleAgents = commandCenterVisibleAgents();
+        commandCount.textContent = `Showing ${visibleAgents.length} of 37 agents.`;
+        commandList.className = visibleAgents.length ? 'compact-list' : 'compact-list muted';
+        commandList.innerHTML = visibleAgents.length
+          ? visibleAgents.slice(0, 37).map((agent) => {
+              const agentId = localResponseAgentId(agent);
+              const pinned = pinnedAgentIds.includes(agentId);
+              return `
+                <div class="row stack">
+                  <div><strong>${escapeHtml(localResponseAgentName(agent))}</strong></div>
+                  <div><code>${escapeHtml(agentId)}</code> · ${escapeHtml(localResponseAgentCategory(agent))}</div>
+                  <div class="muted">${escapeHtml(agent.useWhen || agent.use_when || agent.recommendedFor || agent.recommended_for || '')}</div>
+                  <div class="actions">
+                    <button type="button" data-command-action="use" data-agent-id="${escapeHtml(agentId)}">Use agent</button>
+                    <button type="button" data-command-action="sample" data-agent-id="${escapeHtml(agentId)}">Insert template/example</button>
+                    <button type="button" data-command-action="prior" data-agent-id="${escapeHtml(agentId)}">Add with prior_agent_context</button>
+                    <button type="button" data-command-action="pin" data-agent-id="${escapeHtml(agentId)}">${pinned ? 'Unpin' : 'Pin'}</button>
+                    <button type="button" data-command-action="focus" data-agent-id="${escapeHtml(agentId)}">Focus composer</button>
+                  </div>
+                </div>
+              `;
+            }).join('')
+          : 'No existing agents match the current command-center filter.';
+        bindCommandButtons(commandList);
+        renderPinnedAndRecentAgents();
+        updateReadinessUi();
+      }
+      async function handleCommandAction(action, agentId) {
+        const agent = agentById(agentId);
+        if (!agent && action !== 'pin') {
+          return;
+        }
+        if (action === 'pin') {
+          pinnedAgentIds = pinnedAgentIds.includes(agentId)
+            ? pinnedAgentIds.filter((id) => id !== agentId)
+            : [agentId].concat(pinnedAgentIds).slice(0, 8);
+          renderCommandCenter();
+          return;
+        }
+        if (!selectAgentById(agentId)) {
+          return;
+        }
+        trackRecentAgent(agent);
+        await loadSelectedExample();
+        if (action === 'sample') {
+          applySamplePayloadToComposer(selectedTemplate, selectedAgent());
+          payloadPreviewStatus.textContent = 'Template/example inserted by manual Command Center action. No agent was invoked.';
+        }
+        if (action === 'prior') {
+          const inserted = insertContextKitAsPriorContext('prior_agent_context inserted from the session-only context kit. No agent was invoked.');
+          if (!inserted) {
+            contextStatus.textContent = 'Agent selected. Add context kit text before inserting prior_agent_context.';
+            contextFields.priorSummary.focus();
+          }
+        }
+        if (action === 'focus' || action === 'use' || action === 'sample') {
+          bodyInput.focus();
+        }
+        updateReadinessUi();
+      }
+      function bindCommandButtons(container) {
+        container.querySelectorAll('button[data-command-action]').forEach((button) => {
+          button.onclick = async () => {
+            await handleCommandAction(button.getAttribute('data-command-action'), button.getAttribute('data-agent-id'));
+          };
+        });
+      }
+      const responseAgentPlaybooks = [
+        { id: 'school_robotics', title: 'School / robotics planning', category: 'school robotics planning', goal: 'Plan a school or robotics project with review and next-step support.', terms: ['school', 'robotics', 'planning', 'review', 'summarization'] },
+        { id: 'career_package', title: 'Career / job search package', category: 'career job search', goal: 'Draft, review, and compare career material manually.', terms: ['career', 'job', 'drafting', 'review', 'decision'] },
+        { id: 'housing_move_travel', title: 'Housing / move / travel decision', category: 'housing move travel', goal: 'Compare options, constraints, timelines, and reviewed source notes.', terms: ['housing', 'move', 'travel', 'decision', 'planning'] },
+        { id: 'finance_budget', title: 'Finance / loans / budget review', category: 'finance loans budget', goal: 'Organize budget assumptions, risks, and review questions.', terms: ['finance', 'loan', 'budget', 'decision', 'review'] },
+        { id: 'project_portfolio', title: 'Project / portfolio review', category: 'project portfolio review', goal: 'Summarize, review, and polish a project or portfolio package.', terms: ['project', 'portfolio', 'summarization', 'review', 'transformation'] },
+        { id: 'health_fitness', title: 'Health / fitness planning', category: 'health fitness', goal: 'Draft a reviewed fitness or wellness plan with high-stakes cautions.', terms: ['health', 'fitness', 'planning', 'review', 'safety'] },
+        { id: 'emergency_preparedness', title: 'Emergency / preparedness planning', category: 'emergency preparedness safety', goal: 'Build a manual preparedness checklist and risk review.', terms: ['emergency', 'preparedness', 'safety', 'planning', 'extraction'] },
+        { id: 'networking_social', title: 'High-class / networking / social polish', category: 'networking social polish', goal: 'Draft and refine social or networking messages manually.', terms: ['networking', 'social', 'drafting', 'review', 'transformation'] },
+        { id: 'personal_admin', title: 'Personal admin / documents review', category: 'personal admin documents', goal: 'Extract, review, and summarize admin details from user-provided text.', terms: ['personal', 'admin', 'document', 'extraction', 'summarization'] },
+        { id: 'life_dashboard', title: 'Life dashboard / cross-agent synthesis', category: 'life dashboard synthesis', goal: 'Synthesize goals, decisions, risks, and next manual steps across agents.', terms: ['life', 'dashboard', 'synthesis', 'planning', 'decision', 'summarization'] },
+      ];
+      function scoreAgentForTerms(agent, terms) {
+        const text = localResponseAgentSearchText(agent);
+        return terms.reduce((score, term) => score + (text.includes(String(term).toLowerCase()) ? 1 : 0), 0);
+      }
+      function playbookAgents(playbook) {
+        const scored = agents
+          .map((agent) => ({ agent, score: scoreAgentForTerms(agent, playbook.terms) }))
+          .filter((item) => item.score > 0)
+          .sort((left, right) => right.score - left.score || localResponseAgentName(left.agent).localeCompare(localResponseAgentName(right.agent)));
+        const chosen = scored.map((item) => item.agent).slice(0, 4);
+        if (chosen.length) {
+          return chosen;
+        }
+        return agents.slice(0, 4);
+      }
+      function renderPlaybooks() {
+        playbookList.innerHTML = responseAgentPlaybooks.map((playbook) => `
+          <div class="row stack">
+            <strong>${escapeHtml(playbook.title)}</strong>
+            <div class="muted">${escapeHtml(playbook.goal)}</div>
+            <div><span class="pill">Manual</span> <span class="pill">Response-only</span> <span class="pill">Session-only preview</span></div>
+            <div class="actions">
+              <button type="button" data-playbook-id="${escapeHtml(playbook.id)}" data-playbook-action="preview">Preview preset</button>
+              <button type="button" data-playbook-id="${escapeHtml(playbook.id)}" data-playbook-action="load">Load into manual builder</button>
+            </div>
+          </div>
+        `).join('');
+        playbookList.querySelectorAll('button[data-playbook-id]').forEach((button) => {
+          button.onclick = () => handlePlaybookAction(button.getAttribute('data-playbook-id'), button.getAttribute('data-playbook-action'));
+        });
+      }
+      function playbookPreviewText(playbook, chosenAgents) {
+        const lines = [
+          playbook.title,
+          '',
+          'Manual response-only preset. No agent is run, no chain is started, no handoff is created, and nothing is persisted.',
+          '',
+          `Goal: ${playbook.goal}`,
+          '',
+          'Suggested existing-agent sequence:',
+        ];
+        chosenAgents.forEach((agent, index) => {
+          lines.push(`${index + 1}. ${localResponseAgentName(agent)} (${localResponseAgentId(agent)}) - ${localResponseAgentCategory(agent)}`);
+        });
+        lines.push('', 'Context steps:');
+        lines.push('- Fill the session-only Context Kit Builder.');
+        lines.push('- Insert reviewed context into the editable request payload or prior_agent_context.');
+        lines.push('- Run one selected agent manually only when ready.');
+        lines.push('- Review output before using it in another manual step.');
+        return lines.join('\n');
+      }
+      function handlePlaybookAction(playbookId, action) {
+        const playbook = responseAgentPlaybooks.find((item) => item.id === playbookId);
+        if (!playbook) {
+          return;
+        }
+        selectedPlaybook = playbook;
+        const chosenAgents = playbookAgents(playbook);
+        const chosenIds = chosenAgents.map(localResponseAgentId).filter(Boolean);
+        playbookPreview.textContent = playbookPreviewText(playbook, chosenAgents);
+        playbookStatus.textContent = `${playbook.title} preview uses ${chosenIds.length} existing local response agents. Manual only - not executed, not chained, and not persisted.`;
+        manualWorkflowGoal.value = playbook.goal;
+        manualWorkflowCandidates.value = chosenIds.join('\n');
+        if (action === 'load' && chosenIds[0] && selectAgentById(chosenIds[0])) {
+          loadSelectedExample();
+        }
+        updateReadinessUi();
+      }
+      function contextKitText() {
+        const sections = [
+          ['Goal', contextFields.goal.value],
+          ['Situation/background', contextFields.background.value],
+          ['Constraints', contextFields.constraints.value],
+          ['Preferences', contextFields.preferences.value],
+          ['Evidence/source notes', contextFields.evidence.value],
+          ['Prior agent output summary', contextFields.priorSummary.value],
+          ['Decision criteria', contextFields.decisionCriteria.value],
+          ['Risks or high-stakes concerns', contextFields.risks.value],
+        ].map(([label, value]) => [label, String(value || '').trim()]);
+        const lines = ['Session-only context kit', 'Not saved. Review before inserting into a manual request.', ''];
+        sections.forEach(([label, value]) => {
+          if (value) {
+            lines.push(`${label}:`, value, '');
+          }
+        });
+        return lines.join('\n').trim();
+      }
+      function renderContextKitPreview() {
+        const text = contextKitText();
+        contextPreview.textContent = text || 'No context kit content yet.';
+        updateReadinessUi();
+      }
+      function readPayloadObject(statusTarget) {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            statusTarget.textContent = 'Editable payload must be a JSON object before inserting context.';
+            return null;
+          }
+          return parsedBody;
+        } catch (error) {
+          statusTarget.textContent = `Context was not inserted: invalid editable payload JSON (${error.message}).`;
+          return null;
+        }
+      }
+      function insertContextKitIntoRequest() {
+        const text = contextKitText();
+        if (!text) {
+          contextStatus.textContent = 'Add context kit text before inserting it into the request payload.';
+          return;
+        }
+        const parsedBody = readPayloadObject(contextStatus);
+        if (!parsedBody) {
+          return;
+        }
+        const requestField = ['request', 'prompt', 'user_request', 'userRequest', 'text', 'input', 'content', 'instructions']
+          .find((field) => Object.prototype.hasOwnProperty.call(parsedBody, field));
+        if (requestField) {
+          parsedBody[requestField] = [parsedBody[requestField], '', text].map((value) => String(value || '').trim()).filter(Boolean).join('\n\n');
+        } else {
+          parsedBody.request = text;
+        }
+        bodyInput.value = JSON.stringify(parsedBody, null, 2);
+        contextStatus.textContent = 'Context kit inserted into the editable request payload. No agent was invoked.';
+        renderReviewedWebContextPreview();
+        updateReadinessUi();
+      }
+      function contextKitPriorContext() {
+        const text = contextKitText();
+        if (!text) {
+          return null;
+        }
+        return {
+          previous_agent_id: 'session_context_kit',
+          previous_agent_name: 'Session-only Context Kit',
+          previous_output_type: 'manual_context',
+          previous_summary: text.slice(0, 4000),
+          previous_key_points: [
+            contextFields.goal.value,
+            contextFields.decisionCriteria.value,
+            contextFields.evidence.value,
+          ].map((value) => String(value || '').trim()).filter(Boolean).slice(0, 10),
+          previous_next_actions: [],
+          previous_limitations: [
+            'Created manually in the current dashboard page.',
+            'Not persisted.',
+            'Review before using as prior_agent_context.',
+          ],
+          user_notes: text.slice(0, 4000),
+          source_type: 'manual_session_context_kit',
+        };
+      }
+      function insertContextKitAsPriorContext(successText) {
+        const context = contextKitPriorContext();
+        if (!context) {
+          contextStatus.textContent = 'Add context kit text before inserting prior_agent_context.';
+          return false;
+        }
+        const parsedBody = readPayloadObject(contextStatus);
+        if (!parsedBody) {
+          return false;
+        }
+        parsedBody.prior_agent_context = context;
+        bodyInput.value = JSON.stringify(parsedBody, null, 2);
+        contextStatus.textContent = successText || 'Context kit inserted as prior_agent_context. No agent was invoked.';
+        renderReviewedWebContextPreview();
+        updateReadinessUi();
+        return true;
+      }
+      function payloadReadinessSnapshot() {
+        let parsedBody = null;
+        try {
+          parsedBody = JSON.parse(bodyInput.value || '{}');
+        } catch {
+          parsedBody = null;
+        }
+        const payloadText = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
+          ? JSON.stringify(parsedBody).toLowerCase()
+          : String(bodyInput.value || '').toLowerCase();
+        const requestText = [
+          parsedBody && (parsedBody.request || parsedBody.prompt || parsedBody.user_request || parsedBody.userRequest || parsedBody.text || parsedBody.input),
+          contextKitText(),
+        ].map((value) => String(value || '')).join(' ').trim();
+        const hasGoal = /\b(goal|objective|trying to|need to|want to)\b/i.test(requestText) || Boolean(contextFields.goal.value.trim());
+        const hasConstraints = /\b(constraint|must|cannot|avoid|deadline|budget|limit)\b/i.test(requestText) || Boolean(contextFields.constraints.value.trim());
+        const hasPrior = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) && Boolean(parsedBody.prior_agent_context || parsedBody.priorAgentContext);
+        const hasWebContext = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) && Array.isArray(parsedBody.web_context) && parsedBody.web_context.length > 0;
+        return { parsedBody, payloadText, requestText, hasGoal, hasConstraints, hasPrior, hasWebContext };
+      }
+      function updateHighStakesBanner() {
+        const terms = selectedHighStakesTerms();
+        highStakesBanner.hidden = terms.length === 0;
+        if (terms.length) {
+          highStakesBanner.innerHTML = `
+            <strong>High-stakes manual review reminder</strong>
+            <div>Detected category: ${escapeHtml(terms.join(', '))}</div>
+            <div>Response-only guidance. Manual review is required. Verify important details before acting. No professional, legal, medical, or financial decision automation is provided, and no external actions are taken.</div>
+          `;
+        }
+      }
+      function updateReadinessUi() {
+        if (!qualityChecklist || !qualityWarnings) {
+          return;
+        }
+        const snapshot = payloadReadinessSnapshot();
+        const terms = selectedHighStakesTerms();
+        const checks = [
+          ['Agent selected', Boolean(selectedAgent())],
+          ['Manual request/prompt present', snapshot.requestText.length > 0],
+          ['Request has enough detail', snapshot.requestText.length >= 80],
+          ['Goal appears present', snapshot.hasGoal],
+          ['Constraints appear present', snapshot.hasConstraints],
+          ['prior_agent_context empty/included', true, snapshot.hasPrior ? 'included' : 'empty'],
+          ['reviewed web_context/source context none/included', true, snapshot.hasWebContext ? 'included' : 'none'],
+          ['High-stakes category warning status', true, terms.length ? `shown for ${terms.join(', ')}` : 'not detected'],
+          ['Local-only/manual-only reminder', true, 'visible'],
+        ];
+        qualityChecklist.innerHTML = checks.map(([label, ok, detail]) => `
+          <div class="${ok ? 'check-ok' : 'check-warn'}">${ok ? 'OK' : 'Review'} - ${escapeHtml(label)}${detail ? `: ${escapeHtml(detail)}` : ''}</div>
+        `).join('');
+        const warnings = [];
+        if (!snapshot.requestText) {
+          warnings.push('Add a manual request or context kit before using an agent.');
+        } else if (snapshot.requestText.length < 80) {
+          warnings.push('Request may be too short or vague; add situation, desired output, and decision criteria.');
+        }
+        if (!snapshot.hasGoal) {
+          warnings.push('Goal is not obvious; add the outcome you want.');
+        }
+        if (!snapshot.hasConstraints) {
+          warnings.push('Constraints are not obvious; add limits, preferences, budget, deadline, or must-avoid notes.');
+        }
+        if (terms.length && !snapshot.hasWebContext) {
+          warnings.push('High-stakes topic detected; include reviewed source notes or verify details manually before acting.');
+        }
+        if (terms.length) {
+          warnings.push('High-stakes use remains response-only and requires manual review; no professional, legal, medical, financial, or external action automation is provided.');
+        }
+        qualityWarnings.className = warnings.length ? 'stack' : 'stack muted';
+        qualityWarnings.innerHTML = warnings.length
+          ? warnings.map((warning) => `<div class="row notice">${escapeHtml(warning)}</div>`).join('')
+          : 'No readiness warnings yet. Review the payload before any manual use.';
+        updateHighStakesBanner();
+      }
       function selectedEndpointPath(agent) {
         const endpoint = localResponseAgentEndpointParts(agent && agent.endpoint);
         if (endpoint.method !== 'POST' || !endpoint.path.startsWith('/agents/')) {
@@ -2249,24 +2907,36 @@ def dashboard_html() -> str:
       function applySamplePayloadToComposer(template, agent) {
         const samplePayload = (template && (template.sample_payload || template.samplePayload)) || localResponseAgentExample(agent);
         const payload = localResponseAgentPayloadWithSelectedOutputType(samplePayload, outputTypeSelect.value || '');
+        if (!Array.isArray(payload.web_context)) {
+          payload.web_context = [];
+        }
         bodyInput.value = JSON.stringify(payload, null, 2);
         payloadPreviewStatus.textContent = 'Editable JSON payload preview filled from the selected local request template sample.';
         structuredResponse.className = 'row stack muted';
         structuredResponse.textContent = 'No structured local response-agent result yet.';
         responseOutput.textContent = 'No local response-agent result yet.';
+        latestLocalResponseBody = null;
+        latestLocalResponseAgent = null;
+        renderReviewedWebContextPreview();
+        updateReadinessUi();
       }
       function refreshPayloadOutputType() {
         try {
           const parsedBody = JSON.parse(bodyInput.value || '{}');
           if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
             payloadPreviewStatus.textContent = 'Output type not applied: payload preview must be a JSON object.';
+            updateReadinessUi();
             return;
           }
           const payload = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
           bodyInput.value = JSON.stringify(payload, null, 2);
           payloadPreviewStatus.textContent = 'Output type applied to the editable JSON payload preview.';
+          renderReviewedWebContextPreview();
+          updateReadinessUi();
         } catch (error) {
           payloadPreviewStatus.textContent = `Output type not applied: invalid JSON (${error.message}).`;
+          renderReviewedWebContextPreview();
+          updateReadinessUi();
         }
       }
       async function localResponseAgentSelectSuggestedAgent(agentId) {
@@ -2294,6 +2964,364 @@ def dashboard_html() -> str:
           ? '<option value="">Select manually before running a local response</option>' + uniqueSuggestions.map((agentId) => `<option value="${escapeHtml(agentId)}">${escapeHtml(agentId)}</option>`).join('')
           : '<option value="">No suggested agents available</option>';
       }
+      function localResponseManualWorkflowCandidateIds() {
+        return Array.from(new Set((manualWorkflowCandidates.value || '')
+          .split(/[\r\n,]+/)
+          .map((line) => line.trim())
+          .filter(Boolean)))
+          .slice(0, 8);
+      }
+      function localResponseRoutePreviewSuggestionIds() {
+        return Array.from(routePreviewSuggestions.options || [])
+          .map((option) => option.value)
+          .filter(Boolean)
+          .slice(0, 8);
+      }
+      function renderManualWorkflowSteps(result) {
+        latestManualWorkflowSteps = []
+          .concat(Array.isArray(result && result.workflow_steps) ? result.workflow_steps : [])
+          .concat(Array.isArray(result && result.workflowSteps) ? result.workflowSteps : []);
+        const uniqueSteps = [];
+        const seen = new Set();
+        latestManualWorkflowSteps.forEach((step) => {
+          const agentId = step.agent_id || step.agentId || '';
+          const stepNumber = step.step_number || step.stepNumber || uniqueSteps.length + 1;
+          const key = `${stepNumber}:${agentId}`;
+          if (agentId && !seen.has(key)) {
+            seen.add(key);
+            uniqueSteps.push(step);
+          }
+        });
+        latestManualWorkflowSteps = uniqueSteps;
+        manualWorkflowSteps.innerHTML = uniqueSteps.length
+          ? uniqueSteps.map((step, index) => `<option value="${escapeHtml(index)}">Step ${escapeHtml(step.step_number || step.stepNumber || index + 1)} - ${escapeHtml(step.display_name || step.displayName || step.agent_id || step.agentId)}</option>`).join('')
+          : '<option value="">No manual workflow steps available</option>';
+        renderLocalResponseAgentJson(manualWorkflowResult, result, 'No manual workflow preview available.');
+      }
+      function localResponsePriorContextFromLatestResponse() {
+        if (!latestLocalResponseBody || typeof latestLocalResponseBody !== 'object' || Array.isArray(latestLocalResponseBody)) {
+          return null;
+        }
+        const agent = selectedAgent();
+        const asArray = (value) => Array.isArray(value)
+          ? value.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).slice(0, 20)
+          : value
+            ? [typeof value === 'string' ? value : JSON.stringify(value)].slice(0, 20)
+            : [];
+        return {
+          previous_agent_id: localResponseAgentId(agent),
+          previous_agent_name: localResponseAgentName(agent),
+          previous_output_type: latestLocalResponseBody.output_type || latestLocalResponseBody.outputType || outputTypeSelect.value || '',
+          previous_summary: latestLocalResponseBody.summary || latestLocalResponseBody.title || '',
+          previous_key_points: asArray(latestLocalResponseBody.key_points || latestLocalResponseBody.keyPoints || latestLocalResponseBody.assumptions || latestLocalResponseBody.recommended_plan || latestLocalResponseBody.recommendedPlan),
+          previous_next_actions: asArray(latestLocalResponseBody.next_actions || latestLocalResponseBody.nextActions || latestLocalResponseBody.follow_up_questions || latestLocalResponseBody.followUpQuestions),
+          previous_limitations: asArray(latestLocalResponseBody.limitations || latestLocalResponseBody.source_cautions || latestLocalResponseBody.sourceCautions),
+          user_notes: 'Inserted manually from the latest visible structured response after user review.',
+          source_type: 'manual_prior_agent_output',
+        };
+      }
+      function insertLatestResponseAsPriorContext() {
+        const context = localResponsePriorContextFromLatestResponse();
+        if (!context) {
+          manualWorkflowStatus.textContent = 'No latest structured response is available for prior_agent_context. Run one selected agent manually, review the result, then insert context if useful.';
+          return;
+        }
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            manualWorkflowStatus.textContent = 'Prior context was not inserted because the editable payload is not a JSON object.';
+            return;
+          }
+          parsedBody.prior_agent_context = context;
+          bodyInput.value = JSON.stringify(parsedBody, null, 2);
+          renderReviewedWebContextPreview();
+          manualWorkflowStatus.textContent = 'prior_agent_context inserted into the editable payload for manual review. No automatic handoff, no persistence, and no agent invocation occurred.';
+        } catch (error) {
+          manualWorkflowStatus.textContent = `Prior context was not inserted: ${error.message}.`;
+        }
+      }
+      function localResponsePlainText(value, maxLength = 4000) {
+        const text = Array.isArray(value)
+          ? value.map((item) => localResponsePlainText(item, maxLength)).filter(Boolean).join('; ')
+          : value && typeof value === 'object'
+            ? JSON.stringify(value)
+            : String(value || '');
+        return text.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+      }
+      function localResponseList(value, maxItems = 20) {
+        if (value === null || value === undefined || value === '') {
+          return [];
+        }
+        const rawItems = Array.isArray(value) ? value : [value];
+        return rawItems
+          .map((item) => localResponsePlainText(item, 4000))
+          .filter(Boolean)
+          .slice(0, maxItems);
+      }
+      function localResponseFirstValue(responseBody, keys) {
+        for (const key of keys) {
+          const value = localResponseKnownValue(responseBody, key);
+          if (value !== undefined && value !== null && value !== '') {
+            return value;
+          }
+        }
+        return '';
+      }
+      function selectedSessionBoardEntries() {
+        return sessionResultBoard.filter((entry) => entry.selected);
+      }
+      function sessionBoardEntryFromLatestResponse() {
+        if (!latestLocalResponseBody || typeof latestLocalResponseBody !== 'object' || Array.isArray(latestLocalResponseBody)) {
+          return null;
+        }
+        const agent = latestLocalResponseAgent || selectedAgent();
+        const sourceLabels = localResponseList(localResponseFirstValue(latestLocalResponseBody, ['citation_labels', 'citationLabels']));
+        const sourcesUsed = localResponseKnownValue(latestLocalResponseBody, 'sources_used') || localResponseKnownValue(latestLocalResponseBody, 'sourcesUsed') || [];
+        const derivedSourceLabels = Array.isArray(sourcesUsed)
+          ? sourcesUsed.map((source) => source && (source.citation_label || source.citationLabel || source.source_id || source.sourceId)).filter(Boolean)
+          : [];
+        return {
+          id: `session-board-entry-${sessionResultBoardSequence++}`,
+          entryNumber: sessionResultBoard.length + 1,
+          timestamp: new Date().toLocaleString(),
+          selected: true,
+          agent_id: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['agent_id', 'agentId']) || localResponseAgentId(agent)),
+          display_name: localResponsePlainText(localResponseAgentName(agent)),
+          output_type: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['output_type', 'outputType']) || outputTypeSelect.value),
+          title: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['title'])),
+          summary: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['summary'])),
+          recommended_plan: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['recommended_plan', 'recommendedPlan'])),
+          next_actions: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['next_actions', 'nextActions', 'checklist'])),
+          checklist: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['checklist'])),
+          limitations: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['limitations', 'prior_context_limitations', 'priorContextLimitations'])),
+          safety_notes: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['safety_notes', 'safetyNotes'])),
+          source_context_summary: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['source_context_summary', 'sourceContextSummary'])),
+          citation_labels: Array.from(new Set(sourceLabels.concat(localResponseList(derivedSourceLabels)))).slice(0, 20),
+          source_cautions: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_cautions', 'sourceCautions'])),
+          prior_context_used: localResponseKnownValue(latestLocalResponseBody, 'prior_context_used') ?? localResponseKnownValue(latestLocalResponseBody, 'priorContextUsed') ?? '',
+          prior_context_summary: localResponsePlainText(localResponseFirstValue(latestLocalResponseBody, ['prior_context_summary', 'priorContextSummary'])),
+          prior_context_limitations: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['prior_context_limitations', 'priorContextLimitations'])),
+        };
+      }
+      function renderSessionResultBoard() {
+        if (!sessionResultBoard.length) {
+          sessionBoardEntries.className = 'stack muted';
+          sessionBoardEntries.textContent = 'No board entries yet. Add latest response to session board after a structured response returns.';
+          return;
+        }
+        sessionBoardEntries.className = 'stack';
+        sessionBoardEntries.innerHTML = sessionResultBoard.map((entry, index) => {
+          const limitationPreview = entry.limitations.length
+            ? `${entry.limitations.length} limitation item(s): ${entry.limitations.slice(0, 2).join(' ')}`
+            : 'No limitations returned.';
+          const priorContextUsed = entry.prior_context_used === '' ? 'not returned' : String(entry.prior_context_used);
+          return `
+            <div class="row stack">
+              <label><input type="checkbox" data-session-board-select="${escapeHtml(entry.id)}" ${entry.selected ? 'checked' : ''}> Select for packet/comparison</label>
+              <div><strong>Entry ${escapeHtml(entry.entryNumber)}</strong> · ${escapeHtml(entry.timestamp || 'current session')}</div>
+              <div>Agent: <code>${escapeHtml(entry.agent_id || 'unknown_agent')}</code> ${escapeHtml(entry.display_name || '')}</div>
+              <div>Output type: <code>${escapeHtml(entry.output_type || 'unspecified')}</code></div>
+              <div>Title: ${escapeHtml(entry.title || 'No title returned.')}</div>
+              <div>Summary: ${escapeHtml(entry.summary || 'No summary returned.')}</div>
+              <div>Limitations: ${escapeHtml(limitationPreview)}</div>
+              <div>Source labels: ${escapeHtml(entry.citation_labels.join(', ') || 'None returned.')}</div>
+              <div>Prior context used: ${escapeHtml(priorContextUsed)}</div>
+              <button type="button" data-session-board-remove="${escapeHtml(index)}">Remove entry</button>
+            </div>
+          `;
+        }).join('');
+        sessionBoardEntries.querySelectorAll('input[data-session-board-select]').forEach((checkbox) => {
+          checkbox.onchange = () => {
+            const entry = sessionResultBoard.find((item) => item.id === checkbox.getAttribute('data-session-board-select'));
+            if (entry) {
+              entry.selected = checkbox.checked;
+            }
+          };
+        });
+        sessionBoardEntries.querySelectorAll('button[data-session-board-remove]').forEach((button) => {
+          button.onclick = () => {
+            const index = Number(button.getAttribute('data-session-board-remove'));
+            sessionResultBoard.splice(index, 1);
+            sessionResultBoard.forEach((entry, entryIndex) => {
+              entry.entryNumber = entryIndex + 1;
+            });
+            sessionBoardStatus.textContent = 'Board entry removed from current session only. No persistence, no handoff, and no agent execution occurred.';
+            renderSessionResultBoard();
+          };
+        });
+      }
+      function addLatestResponseToSessionBoard() {
+        const entry = sessionBoardEntryFromLatestResponse();
+        if (!entry) {
+          sessionBoardStatus.textContent = 'No latest response yet. Run one selected local response agent manually, review the result, then add it to the session board.';
+          return;
+        }
+        sessionResultBoard.push(entry);
+        sessionBoardStatus.textContent = 'Latest response added to session board. Board entries are not persisted and clear when the page reloads.';
+        renderSessionResultBoard();
+      }
+      function buildSessionComparison() {
+        const entries = selectedSessionBoardEntries();
+        if (!entries.length) {
+          resultComparisonBody.className = 'muted';
+          resultComparisonBody.textContent = 'No selected entries. Select board entries before building a comparison.';
+          return;
+        }
+        if (entries.length < 2) {
+          resultComparisonBody.className = 'muted';
+          resultComparisonBody.textContent = 'Fewer than 2 selected entries for comparison. Select at least two board entries.';
+          return;
+        }
+        resultComparisonBody.className = '';
+        resultComparisonBody.innerHTML = `
+          <table>
+            <thead><tr><th>Field</th>${entries.map((entry) => `<th>Entry ${escapeHtml(entry.entryNumber)}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${[
+                ['agent', (entry) => `${entry.display_name || ''} ${entry.agent_id || ''}`],
+                ['output_type', (entry) => entry.output_type],
+                ['title', (entry) => entry.title],
+                ['summary', (entry) => entry.summary],
+                ['key next actions', (entry) => entry.next_actions.join('; ')],
+                ['limitations', (entry) => entry.limitations.concat(entry.safety_notes).join('; ')],
+                ['source labels', (entry) => entry.citation_labels.join(', ')],
+                ['prior context used', (entry) => String(entry.prior_context_used || '')],
+              ].map(([label, reader]) => `<tr><th>${escapeHtml(label)}</th>${entries.map((entry) => `<td>${escapeHtml(reader(entry) || 'No value returned.')}</td>`).join('')}</tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+        sessionBoardStatus.textContent = 'Comparison built from selected session board entries only. No agent was run and nothing was persisted.';
+      }
+      function buildReviewPacketText(entries) {
+        const lines = [
+          'Packet title',
+          'Local Response Review Packet',
+          '',
+          'Generated in current dashboard session only',
+          'This text is held in the current page only until the page reloads.',
+          '',
+          'Selected local response-agent outputs',
+        ];
+        entries.forEach((entry) => {
+          lines.push(`- Entry ${entry.entryNumber}: ${entry.display_name || entry.agent_id || 'Local response agent'} (${entry.output_type || 'unspecified output_type'})`);
+        });
+        lines.push('', 'Key summaries');
+        entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entry.summary || entry.title || 'No summary returned.'}`));
+        lines.push('', 'Next actions');
+        entries.flatMap((entry) => entry.next_actions.length ? entry.next_actions : entry.checklist).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
+        lines.push('', 'Limitations and safety notes');
+        entries.flatMap((entry) => entry.limitations.concat(entry.safety_notes)).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
+        lines.push('', 'Reviewed source labels and source cautions');
+        entries.flatMap((entry) => entry.citation_labels.concat(entry.source_cautions)).slice(0, 20).forEach((item) => lines.push(`- ${item}`));
+        lines.push('', 'Prior context notes');
+        entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: prior_context_used=${entry.prior_context_used === '' ? 'not returned' : String(entry.prior_context_used)}. ${entry.prior_context_summary || entry.prior_context_limitations.join(' ') || 'No prior context notes returned.'}`));
+        lines.push('', 'Suggested next manual step');
+        lines.push('Review the selected outputs, choose one next local response agent manually, and insert reviewed context only if useful.');
+        lines.push('', 'Boundary reminder');
+        lines.push('This packet was composed from manually selected session outputs.');
+        lines.push('It was not persisted.');
+        lines.push('It did not run agents automatically.');
+        lines.push('It did not browse automatically.');
+        lines.push('It did not use connectors.');
+        lines.push('Review before using as prior_agent_context.');
+        return lines.join('\n').slice(0, 4000);
+      }
+      function buildReviewPacket() {
+        const entries = selectedSessionBoardEntries();
+        if (!entries.length) {
+          reviewPacketOutput.value = 'No selected entries. Select board entries before building a review packet.';
+          sessionBoardStatus.textContent = 'No selected entries for review packet. Nothing was persisted and no agent was run.';
+          latestReviewPacketText = '';
+          return;
+        }
+        latestReviewPacketText = buildReviewPacketText(entries);
+        reviewPacketOutput.value = latestReviewPacketText;
+        sessionBoardStatus.textContent = 'Review packet built from selected session outputs only. It was not persisted, sent, downloaded, or written to clipboard automatically.';
+      }
+      function priorContextFromSessionEntry(entry) {
+        return {
+          previous_agent_id: entry.agent_id || '',
+          previous_agent_name: entry.display_name || '',
+          previous_output_type: entry.output_type || '',
+          previous_summary: (entry.summary || entry.title || '').slice(0, 4000),
+          previous_key_points: entry.recommended_plan.concat(entry.checklist).slice(0, 20),
+          previous_next_actions: entry.next_actions.slice(0, 20),
+          previous_limitations: entry.limitations.concat(entry.safety_notes, entry.source_cautions, entry.prior_context_limitations).slice(0, 20),
+          user_notes: `Inserted manually from Session Result Board entry ${entry.entryNumber}.`.slice(0, 4000),
+          source_type: 'manual_session_board_output',
+        };
+      }
+      function priorContextFromReviewPacket() {
+        const entries = selectedSessionBoardEntries();
+        const packetText = latestReviewPacketText || reviewPacketOutput.value || '';
+        if (!entries.length || !packetText || packetText === 'No review packet yet.') {
+          return null;
+        }
+        return {
+          previous_agent_id: 'multi_agent_review_packet',
+          previous_agent_name: 'Session Review Packet',
+          previous_output_type: 'review_packet',
+          previous_summary: entries.map((entry) => `${entry.display_name || entry.agent_id}: ${entry.summary || entry.title || 'No summary returned.'}`).join(' | ').slice(0, 4000),
+          previous_key_points: packetText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_next_actions: entries.flatMap((entry) => entry.next_actions).slice(0, 20),
+          previous_limitations: [
+            'This packet was composed from manually selected session outputs.',
+            'It was not persisted.',
+            'It did not run agents automatically.',
+            'It did not browse automatically.',
+            'It did not use connectors.',
+            'Review before using as prior_agent_context.',
+          ],
+          user_notes: packetText.slice(0, 4000),
+          source_type: 'manual_session_review_packet',
+        };
+      }
+      function writePriorContextToPayload(context, successText) {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            sessionBoardStatus.textContent = 'Invalid editable payload JSON while inserting prior context. The selected agent was not run.';
+            return;
+          }
+          parsedBody.prior_agent_context = context;
+          bodyInput.value = JSON.stringify(parsedBody, null, 2);
+          renderReviewedWebContextPreview();
+          sessionBoardStatus.textContent = successText;
+        } catch (error) {
+          sessionBoardStatus.textContent = `Invalid editable payload JSON while inserting prior context: ${error.message}. The selected agent was not run.`;
+        }
+      }
+      function insertSelectedBoardEntryAsPriorContext() {
+        const entries = selectedSessionBoardEntries();
+        if (!entries.length) {
+          sessionBoardStatus.textContent = 'No selected entries. Select one board entry before inserting prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          priorContextFromSessionEntry(entries[0]),
+          'prior_agent_context insertion succeeded from selected board entry, but agent was not run. Editable JSON payload updated only.'
+        );
+      }
+      function insertReviewPacketAsPriorContext() {
+        const context = priorContextFromReviewPacket();
+        if (!context) {
+          sessionBoardStatus.textContent = 'No review packet is available. Build review packet from selected entries before inserting prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          context,
+          'prior_agent_context insertion succeeded from review packet, but agent was not run. Editable JSON payload updated only.'
+        );
+      }
+      function clearSessionResultBoard() {
+        sessionResultBoard = [];
+        latestReviewPacketText = '';
+        reviewPacketOutput.value = 'No review packet yet.';
+        resultComparisonBody.className = 'muted';
+        resultComparisonBody.textContent = 'Select at least two board entries, then build comparison.';
+        sessionBoardStatus.textContent = 'Board cleared from current session only. Board clears when the page reloads.';
+        renderSessionResultBoard();
+      }
       function localResponseWebResearchUrls() {
         return Array.from(new Set((webResearchUrls.value || '')
           .split(/\r?\n/)
@@ -2304,39 +3332,137 @@ def dashboard_html() -> str:
       function renderWebResearchResult(value, fallbackText) {
         webResearchResult.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
       }
-      function localResponseWebContextText(sources) {
+      function localResponseWebContextEntries(sources) {
         return sources
           .filter((source) => source && source.fetched && source.excerpt)
-          .map((source, index) => [
-            `Public source ${index + 1}: ${source.title || source.final_url || source.url}`,
-            `URL: ${source.final_url || source.url}`,
-            `Excerpt: ${source.excerpt}`,
-          ].join('\n'))
-          .join('\n\n');
+          .slice(0, 5)
+          .map((source) => ({
+            source_url: source.url || source.source_url || '',
+            final_url: source.final_url || source.finalUrl || '',
+            title: source.title || '',
+            excerpt: String(source.excerpt || '').slice(0, 4000),
+            content_type: source.content_type || source.contentType || '',
+            fetched: true,
+            fetched_at: source.fetched_at || source.fetchedAt || '',
+            source_type: 'public_web_excerpt',
+            limitations: Array.isArray(source.limitations) ? source.limitations.slice(0, 8) : [],
+          }));
       }
-      function localResponsePayloadTextField(payload) {
-        const candidates = [
-          'notes',
-          'userProvidedNotes',
-          'contextNotes',
-          'content',
-          'situation',
-          'businessIdea',
-          'primaryGoal',
-          'profileGoal',
-          'learningGoal',
-          'careerGoal',
-          'housingGoal',
-          'projectGoal',
-          'adminGoal',
-          'lifeQuestion',
-          'relationshipGoal',
-          'reflectionGoal',
-          'problem',
-          'subject',
-          'goal',
-        ];
-        return candidates.find((field) => Object.prototype.hasOwnProperty.call(payload, field) && typeof payload[field] === 'string');
+      function localResponseSourceLabel(index) {
+        return `S${index + 1}`;
+      }
+      function localResponseReviewedSourcesFromPayload() {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          return parsedBody && !Array.isArray(parsedBody) && typeof parsedBody === 'object' && Array.isArray(parsedBody.web_context)
+            ? parsedBody.web_context.slice(0, 5)
+            : [];
+        } catch (error) {
+          return null;
+        }
+      }
+      function localResponseReviewedSourceWarnings(source, label) {
+        const warnings = Array.isArray(source.quality_warnings) ? source.quality_warnings.slice(0, 4) : [];
+        if (!source.title) {
+          warnings.push(`[${label}] Missing source title.`);
+        }
+        if (!source.fetched_at && !source.fetchedAt) {
+          warnings.push(`[${label}] Missing fetched_at; recency is unknown.`);
+        }
+        warnings.push(`[${label}] Excerpt is partial, user-reviewed, and not independently verified.`);
+        return Array.from(new Set(warnings));
+      }
+      function renderReviewedSourceManager(entries) {
+        if (!Array.isArray(entries)) {
+          reviewedSourceList.className = 'stack muted';
+          reviewedSourceList.textContent = 'Reviewed-source manager unavailable while payload JSON is invalid.';
+          return;
+        }
+        if (!entries.length) {
+          reviewedSourceList.className = 'stack muted';
+          reviewedSourceList.textContent = 'No reviewed sources in payload.';
+          return;
+        }
+        reviewedSourceList.className = 'stack';
+        reviewedSourceList.innerHTML = entries.map((source, index) => {
+          const safeSource = source || {};
+          const label = localResponseSourceLabel(index);
+          const warnings = localResponseReviewedSourceWarnings(safeSource, label);
+          const limitations = Array.isArray(safeSource.limitations) ? safeSource.limitations.slice(0, 4) : [];
+          return `
+            <div class="row stack">
+              <div><strong>[${escapeHtml(label)}]</strong> ${escapeHtml(safeSource.title || 'Untitled reviewed source')}</div>
+              <div class="muted">${escapeHtml(safeSource.final_url || safeSource.source_url || 'No public source URL supplied')}</div>
+              <div>${escapeHtml(String(safeSource.excerpt || '').slice(0, 360))}</div>
+              <div class="muted">Warnings: ${escapeHtml(warnings.join(' '))}</div>
+              <div class="muted">Limitations: ${escapeHtml(limitations.join(' ') || 'Source labels are for reference, not proof.')}</div>
+              <button type="button" data-reviewed-source-index="${escapeHtml(index)}">Remove [${escapeHtml(label)}]</button>
+            </div>
+          `;
+        }).join('');
+        reviewedSourceList.querySelectorAll('button[data-reviewed-source-index]').forEach((button) => {
+          button.onclick = () => removeReviewedSource(Number(button.getAttribute('data-reviewed-source-index')));
+        });
+      }
+      function writeReviewedSourcesToPayload(entries, statusText) {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            webResearchStatus.textContent = 'Reviewed sources were not changed because the editable payload is not a JSON object.';
+            return;
+          }
+          parsedBody.web_context = entries.slice(0, 5);
+          bodyInput.value = JSON.stringify(parsedBody, null, 2);
+          webResearchStatus.textContent = statusText;
+          renderReviewedWebContextPreview();
+        } catch (error) {
+          webResearchStatus.textContent = `Reviewed sources were not changed: ${error.message}.`;
+          renderReviewedWebContextPreview();
+        }
+      }
+      function removeReviewedSource(index) {
+        const entries = localResponseReviewedSourcesFromPayload();
+        if (!Array.isArray(entries)) {
+          webResearchStatus.textContent = 'Reviewed source was not removed because the editable payload JSON is invalid.';
+          return;
+        }
+        const label = localResponseSourceLabel(index);
+        writeReviewedSourcesToPayload(entries.filter((_, sourceIndex) => sourceIndex !== index), `Reviewed source [${label}] removed from web_context. The selected agent was not invoked.`);
+      }
+      function clearReviewedSources() {
+        writeReviewedSourcesToPayload([], 'Reviewed sources cleared from web_context. The selected agent was not invoked.');
+      }
+      function renderSourceAwareUsagePreview(entries) {
+        if (!Array.isArray(entries) || !entries.length) {
+          sourceAwarePreviewBody.className = 'muted';
+          sourceAwarePreviewBody.textContent = 'No reviewed sources in payload.';
+          return;
+        }
+        const agent = selectedAgent();
+        const labels = entries.map((_, index) => `[${localResponseSourceLabel(index)}]`).join(', ');
+        sourceAwarePreviewBody.className = '';
+        sourceAwarePreviewBody.innerHTML = `
+          <div>Selected agent: <code>${escapeHtml(localResponseAgentName(agent) || 'Local response agent')}</code></div>
+          <div>Reviewed source labels available: ${escapeHtml(labels)}</div>
+          <div class="muted">The selected agent may use these reviewed excerpts for source-aware response sections only. Citations are labels for reference, not proof or certification.</div>
+          <div class="muted">Verify freshness, authority, and exact details manually before acting. No auto-fetch, no auto-submit, no connector, and no background browsing.</div>
+        `;
+      }
+      function renderReviewedWebContextPreview() {
+        const entries = localResponseReviewedSourcesFromPayload();
+        if (entries === null) {
+          reviewedWebContextPreview.textContent = 'Reviewed source context preview unavailable: invalid JSON.';
+          renderReviewedSourceManager(null);
+          renderSourceAwareUsagePreview(null);
+          updateReadinessUi();
+          return;
+        }
+        reviewedWebContextPreview.textContent = entries.length
+          ? JSON.stringify(entries, null, 2)
+          : 'No reviewed source context in payload yet.';
+        renderReviewedSourceManager(entries);
+        renderSourceAwareUsagePreview(entries);
+        updateReadinessUi();
       }
       async function postWebResearchJson(path, body) {
         const response = await fetch(path, {
@@ -2373,6 +3499,7 @@ def dashboard_html() -> str:
         boundaryFlagsPanel.innerHTML = Object.keys(flags).length
           ? Object.entries(flags).map(([key, value]) => `<div><code>${escapeHtml(key)}</code>: ${escapeHtml(String(value))}</div>`).join('')
           : '<div>No boundary flags available. Treat as manual input only, local only, response only, no connector, and non-persistent.</div>';
+        updateReadinessUi();
       }
       async function loadSelectedTemplate(agent) {
         const templatePath = localResponseAgentTemplatePath(agent);
@@ -2418,6 +3545,7 @@ def dashboard_html() -> str:
           endpointDisplay.textContent = 'No agent selected.';
           bodyInput.value = '{}';
           status.textContent = 'No local response agent is selected.';
+          renderReviewedWebContextPreview();
           renderAgentDetail(null);
           renderWorkbenchError(structuredResponse, 'Missing agent', 'No local response agent is selected.', null);
           await loadSelectedTemplate(null);
@@ -2428,18 +3556,37 @@ def dashboard_html() -> str:
         docsLink.href = agent.docsLink || '/docs/local-response-agents-index.md';
         bodyInput.value = JSON.stringify(agent.exampleRequestBody || {}, null, 2);
         responseOutput.textContent = 'No local response-agent result yet.';
+        latestLocalResponseBody = null;
+        latestLocalResponseAgent = null;
         status.textContent = allowlistedEndpointPaths.has(endpointPath)
           ? 'Ready. This local-only workbench can call only the selected allowlisted endpoint.'
           : 'Endpoint rejection: selected catalog entry is not allowlisted.';
+        renderReviewedWebContextPreview();
         renderAgentDetail(agent);
         await loadSelectedTemplate(agent);
+        updateReadinessUi();
       }
       categorySelect.onchange = async () => {
         renderAgentOptions();
         await loadSelectedExample();
+        trackRecentAgent(selectedAgent());
+        renderCommandCenter();
       };
-      select.onchange = loadSelectedExample;
+      select.onchange = async () => {
+        await loadSelectedExample();
+        trackRecentAgent(selectedAgent());
+        updateReadinessUi();
+      };
       outputTypeSelect.onchange = refreshPayloadOutputType;
+      bodyInput.oninput = renderReviewedWebContextPreview;
+      commandSearch.oninput = renderCommandCenter;
+      commandCategory.onchange = renderCommandCenter;
+      Object.values(contextFields).forEach((field) => {
+        field.oninput = renderContextKitPreview;
+      });
+      contextInsertRequestButton.onclick = insertContextKitIntoRequest;
+      contextInsertPriorButton.onclick = () => insertContextKitAsPriorContext('Context kit inserted as prior_agent_context. No agent was invoked.');
+      reviewedSourceClearButton.onclick = clearReviewedSources;
       useSampleButton.onclick = () => {
         applySamplePayloadToComposer(selectedTemplate, selectedAgent());
       };
@@ -2448,6 +3595,49 @@ def dashboard_html() -> str:
           await localResponseAgentSelectSuggestedAgent(routePreviewSuggestions.value);
         }
       };
+      manualWorkflowPreviewButton.onclick = async () => {
+        manualWorkflowStatus.textContent = 'Manual workflow preview requested. No agent is invoked, no handoff is created, and no workflow is persisted.';
+        manualWorkflowResult.textContent = 'Manual workflow preview pending.';
+        manualWorkflowSteps.innerHTML = '<option value="">No manual workflow steps available</option>';
+        try {
+          const response = await fetch('/agents/local-response-agents/manual-workflow-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userGoal: manualWorkflowGoal.value.trim(),
+              candidateAgentIds: localResponseManualWorkflowCandidateIds(),
+              routePreviewSuggestions: localResponseRoutePreviewSuggestionIds(),
+              maxSteps: 4,
+              includeWebContext: manualWorkflowIncludeWebContext.checked,
+              constraintsOrNotes: 'Manual workflow only. Steps are suggestions, not execution. Run one selected agent at a time.',
+            }),
+          });
+          const result = await response.json();
+          renderManualWorkflowSteps(result);
+          manualWorkflowStatus.textContent = 'Manual workflow preview loaded. Steps are suggestions, not execution. Run one selected agent at a time.';
+        } catch (error) {
+          latestManualWorkflowSteps = [];
+          manualWorkflowStatus.textContent = `Manual workflow preview unavailable: ${error.message}. No agent was invoked.`;
+          manualWorkflowResult.textContent = 'No manual workflow preview available.';
+        }
+      };
+      manualWorkflowLoadStepButton.onclick = async () => {
+        const step = latestManualWorkflowSteps[Number(manualWorkflowSteps.value || 0)];
+        const agentId = step && (step.agent_id || step.agentId);
+        if (!agentId) {
+          manualWorkflowStatus.textContent = 'No manual workflow step is selected. Nothing was loaded or executed.';
+          return;
+        }
+        await localResponseAgentSelectSuggestedAgent(agentId);
+        manualWorkflowStatus.textContent = 'Workflow step loaded into the request composer. Manual step only - not executed, not handed off, and not persisted.';
+      };
+      priorContextCopyButton.onclick = insertLatestResponseAsPriorContext;
+      sessionBoardAddButton.onclick = addLatestResponseToSessionBoard;
+      sessionBoardCompareButton.onclick = buildSessionComparison;
+      sessionBoardPacketButton.onclick = buildReviewPacket;
+      sessionBoardInsertEntryButton.onclick = insertSelectedBoardEntryAsPriorContext;
+      sessionBoardInsertPacketButton.onclick = insertReviewPacketAsPriorContext;
+      sessionBoardClearButton.onclick = clearSessionResultBoard;
       webResearchValidateButton.onclick = async () => {
         const urls = localResponseWebResearchUrls();
         webResearchStatus.textContent = 'Validating public URLs by manual click. No source content is fetched.';
@@ -2529,9 +3719,9 @@ def dashboard_html() -> str:
         }
       };
       webResearchAddButton.onclick = () => {
-        const contextText = localResponseWebContextText(latestWebResearchSources);
-        if (!contextText) {
-          webResearchStatus.textContent = 'No fetched public source excerpts are available to add to the manual payload.';
+        const contextEntries = localResponseWebContextEntries(latestWebResearchSources);
+        if (!contextEntries.length) {
+          webResearchStatus.textContent = 'No fetched public source excerpts are available to add to web_context.';
           return;
         }
         try {
@@ -2540,16 +3730,13 @@ def dashboard_html() -> str:
             webResearchStatus.textContent = 'Source context was not inserted because the editable payload is not a JSON object.';
             return;
           }
-          const targetField = localResponsePayloadTextField(parsedBody);
-          if (!targetField) {
-            webResearchStatus.textContent = 'Source context was not inserted because this selected payload has no compatible text field.';
-            return;
-          }
-          parsedBody[targetField] = `${parsedBody[targetField] || ''}\n\nPublic web source context for manual review only:\n${contextText}`.trim();
+          parsedBody.web_context = contextEntries;
           bodyInput.value = JSON.stringify(parsedBody, null, 2);
-          webResearchStatus.textContent = `Source context inserted into ${targetField} for review. The selected agent was not invoked.`;
+          renderReviewedWebContextPreview();
+          webResearchStatus.textContent = 'Reviewed source context inserted into web_context. The selected agent was not invoked.';
         } catch (error) {
           webResearchStatus.textContent = `Source context was not inserted: ${error.message}.`;
+          renderReviewedWebContextPreview();
         }
       };
       routePreviewButton.onclick = async () => {
@@ -2620,14 +3807,21 @@ def dashboard_html() -> str:
           }
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
           if (response.ok) {
+            latestLocalResponseBody = responseBody;
+            latestLocalResponseAgent = agent;
+            sessionBoardStatus.textContent = 'Latest response is available for manual board capture. Add latest response to session board only after review.';
             renderStructuredLocalResponse(structuredResponse, responseBody);
           } else {
+            latestLocalResponseBody = null;
+            latestLocalResponseAgent = null;
             renderWorkbenchError(structuredResponse, 'Backend error or validation error', `Local request returned HTTP ${response.status}.`, responseBody);
           }
           status.textContent = response.ok
             ? 'Local response-agent result received. Request and response are not persisted by this dashboard workbench.'
             : `Backend error or validation error: local request failed with HTTP ${response.status}. Request and response are not persisted by this dashboard workbench.`;
         } catch (error) {
+          latestLocalResponseBody = null;
+          latestLocalResponseAgent = null;
           status.textContent = `Backend error: ${error.message}`;
           responseOutput.textContent = '';
           renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);
@@ -2636,6 +3830,10 @@ def dashboard_html() -> str:
       renderAgentOptions();
       loadDiscoveryCatalogMetadata();
       loadCategoryMetadata();
+      renderCommandCenter();
+      renderPlaybooks();
+      renderContextKitPreview();
+      renderSessionResultBoard();
       loadSelectedExample();
     }
     async function loadValidationWorkflowSummary(refreshLists) {
