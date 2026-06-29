@@ -1309,9 +1309,24 @@ def dashboard_html() -> str:
             <strong>Reviewed source context</strong>
             <div class="muted">web_context is optional, non-persistent, and supplied only from the manual payload. Agents consume provided excerpts; they do not browse automatically.</div>
             <div class="muted">Source labels are for reference, not proof. Review excerpts before running the selected agent.</div>
+            <div id="local-response-agents-source-warning-summary" class="row stack muted">Source warnings pending.</div>
+            <div id="local-response-agents-source-quality-groups" class="grid"></div>
+            <div id="local-response-agents-source-recency-groups" class="grid"></div>
             <div id="local-response-agents-reviewed-source-manager" class="stack">
               <div id="local-response-agents-reviewed-source-list" class="stack muted">No reviewed sources in payload.</div>
               <button id="local-response-agents-reviewed-source-clear-button" type="button">Clear reviewed sources</button>
+            </div>
+            <div id="local-response-agents-source-review-checklist" class="row stack">
+              <strong>Source Review Checklist</strong>
+              <div class="muted">Session-only checklist. It is not persisted, sent, or used to trigger agent execution.</div>
+              <label><input type="checkbox" data-source-review-check="sourcesAttached"> Reviewed sources attached</label>
+              <label><input type="checkbox" data-source-review-check="labelsClear"> Source labels clear</label>
+              <label><input type="checkbox" data-source-review-check="recencyChecked"> Recency checked</label>
+              <label><input type="checkbox" data-source-review-check="cautionsReviewed"> Source cautions reviewed</label>
+              <label><input type="checkbox" data-source-review-check="highStakesReviewed"> High-stakes warning reviewed</label>
+              <label><input type="checkbox" data-source-review-check="uncertaintyNoted"> Contradictions or uncertainty noted</label>
+              <label><input type="checkbox" data-source-review-check="readyForManualUse"> Ready for manual use</label>
+              <div id="local-response-agents-source-review-checklist-status" class="muted">No source checklist items marked.</div>
             </div>
             <div id="local-response-agents-source-aware-preview" class="row stack">
               <strong>How selected agent will use reviewed sources</strong>
@@ -1319,6 +1334,23 @@ def dashboard_html() -> str:
               <div id="local-response-agents-source-aware-preview-body" class="muted">No reviewed sources in payload.</div>
             </div>
             <pre id="local-response-agents-reviewed-web-context-preview">No reviewed source context in payload yet.</pre>
+            <div id="local-response-agents-evidence-pack-builder" class="row stack">
+              <h3>Session-only Evidence Pack Builder</h3>
+              <div class="muted">Plain-text evidence summary for manual reuse. It is not persisted, not copied automatically, not sent, and not executed.</div>
+              <div class="two-column">
+                <label>Evidence question / claim being reviewed<textarea id="local-response-agents-evidence-question" spellcheck="false"></textarea></label>
+                <label>Source notes<textarea id="local-response-agents-evidence-source-notes" spellcheck="false"></textarea></label>
+                <label>Concerns / contradictions<textarea id="local-response-agents-evidence-concerns" spellcheck="false"></textarea></label>
+                <label>Manual verification needed<textarea id="local-response-agents-evidence-verification" spellcheck="false"></textarea></label>
+                <label>Next source-check step<textarea id="local-response-agents-evidence-next-step" spellcheck="false"></textarea></label>
+              </div>
+              <div class="actions">
+                <button id="local-response-agents-evidence-pack-build-button" type="button">Build evidence pack</button>
+                <button id="local-response-agents-evidence-pack-insert-button" type="button">Insert evidence pack as prior_agent_context</button>
+              </div>
+              <div id="local-response-agents-evidence-pack-status" class="muted">No evidence pack built yet.</div>
+              <textarea id="local-response-agents-evidence-pack-output" spellcheck="false" readonly>No evidence pack yet.</textarea>
+            </div>
           </div>
         </div>
         <label>
@@ -1335,6 +1367,7 @@ def dashboard_html() -> str:
           <span class="pill">Non-persistent</span>
         </div>
         <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
+        <div id="local-response-agents-latest-source-trace" class="row stack muted">No latest source-to-answer trace yet.</div>
         <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
         <div id="local-response-agents-session-result-board" class="row stack">
           <h3>Session Result Board</h3>
@@ -2424,7 +2457,21 @@ def dashboard_html() -> str:
       const reviewedWebContextPreview = document.getElementById('local-response-agents-reviewed-web-context-preview');
       const reviewedSourceList = document.getElementById('local-response-agents-reviewed-source-list');
       const reviewedSourceClearButton = document.getElementById('local-response-agents-reviewed-source-clear-button');
+      const sourceWarningSummary = document.getElementById('local-response-agents-source-warning-summary');
+      const sourceQualityGroups = document.getElementById('local-response-agents-source-quality-groups');
+      const sourceRecencyGroups = document.getElementById('local-response-agents-source-recency-groups');
+      const sourceReviewChecklistStatus = document.getElementById('local-response-agents-source-review-checklist-status');
       const sourceAwarePreviewBody = document.getElementById('local-response-agents-source-aware-preview-body');
+      const latestSourceTrace = document.getElementById('local-response-agents-latest-source-trace');
+      const evidenceQuestion = document.getElementById('local-response-agents-evidence-question');
+      const evidenceSourceNotes = document.getElementById('local-response-agents-evidence-source-notes');
+      const evidenceConcerns = document.getElementById('local-response-agents-evidence-concerns');
+      const evidenceVerification = document.getElementById('local-response-agents-evidence-verification');
+      const evidenceNextStep = document.getElementById('local-response-agents-evidence-next-step');
+      const evidencePackBuildButton = document.getElementById('local-response-agents-evidence-pack-build-button');
+      const evidencePackInsertButton = document.getElementById('local-response-agents-evidence-pack-insert-button');
+      const evidencePackStatus = document.getElementById('local-response-agents-evidence-pack-status');
+      const evidencePackOutput = document.getElementById('local-response-agents-evidence-pack-output');
       const commandSearch = document.getElementById('local-response-agents-command-search');
       const commandCategory = document.getElementById('local-response-agents-command-category');
       const commandCount = document.getElementById('local-response-agents-command-count');
@@ -2468,6 +2515,8 @@ def dashboard_html() -> str:
       let sessionResultBoardSequence = 1;
       let latestReviewPacketText = '';
       let latestDecisionSummaryText = '';
+      let latestEvidencePackText = '';
+      let sourceReviewChecklist = {};
       let bestOutputEntryId = '';
       let sessionBoardFilter = { type: 'all', value: '' };
       let pinnedAgentIds = [];
@@ -2895,11 +2944,14 @@ def dashboard_html() -> str:
       }
       function updateHighStakesBanner() {
         const terms = selectedHighStakesTerms();
-        highStakesBanner.hidden = terms.length === 0;
-        if (terms.length) {
+        const sourceSummary = sourceSummaryFromReviewedPayload();
+        const weakSource = !sourceSummary.count || Boolean(sourceSummary.recencyCounts && (sourceSummary.recencyCounts['unknown recency'] || sourceSummary.recencyCounts['older/stale'])) || Boolean(sourceSummary.cautions && sourceSummary.cautions.length);
+        highStakesBanner.hidden = terms.length === 0 && !sourceContextIsHighStakes();
+        if (!highStakesBanner.hidden) {
           highStakesBanner.innerHTML = `
             <strong>High-stakes manual review reminder</strong>
-            <div>Detected category: ${escapeHtml(terms.join(', '))}</div>
+            <div>Detected category: ${escapeHtml(terms.join(', ') || 'source/request context')}</div>
+            ${weakSource ? '<div>Source reminder: high-stakes content needs reviewed sources with clear labels and usable recency. Missing, cautioned, or unknown-recency sources require extra manual verification.</div>' : '<div>Reviewed sources are attached. Still verify authority, freshness, and exact details manually.</div>'}
             <div>Response-only guidance. Manual review is required. Verify important details before acting. No professional, legal, medical, or financial decision automation is provided, and no external actions are taken.</div>
           `;
         }
@@ -2938,6 +2990,16 @@ def dashboard_html() -> str:
         }
         if (terms.length && !snapshot.hasWebContext) {
           warnings.push('High-stakes topic detected; include reviewed source notes or verify details manually before acting.');
+        }
+        const currentSourceSummary = sourceSummaryFromReviewedPayload();
+        if (!currentSourceSummary.count) {
+          warnings.push('No reviewed source context is attached. This is advisory only and does not block manual use.');
+        }
+        if (currentSourceSummary.recencyCounts && (currentSourceSummary.recencyCounts['unknown recency'] || currentSourceSummary.recencyCounts['older/stale'])) {
+          warnings.push('One or more reviewed sources have unknown or older/stale recency. Check dates manually.');
+        }
+        if (currentSourceSummary.cautions && currentSourceSummary.cautions.length && currentSourceSummary.count) {
+          warnings.push('Reviewed source cautions are present. Review source warnings before using the response.');
         }
         if (terms.length) {
           warnings.push('High-stakes use remains response-only and requires manual review; no professional, legal, medical, financial, or external action automation is provided.');
@@ -3150,18 +3212,132 @@ def dashboard_html() -> str:
           entry.tags.join(' '),
         ].join(' ')).length > 0 || entry.tags.includes('high-stakes');
       }
+      function sourceDateText(source) {
+        const safeSource = source || {};
+        return String(
+          safeSource.fetched_at ||
+          safeSource.fetchedAt ||
+          safeSource.published_at ||
+          safeSource.publishedAt ||
+          safeSource.date ||
+          safeSource.updated_at ||
+          safeSource.updatedAt ||
+          ''
+        ).trim();
+      }
+      function sourceRecencyLabel(source) {
+        const rawDate = sourceDateText(source);
+        if (!rawDate) {
+          return 'unknown recency';
+        }
+        const parsed = Date.parse(rawDate);
+        if (!Number.isFinite(parsed)) {
+          return 'dated';
+        }
+        const ageDays = Math.floor((Date.now() - parsed) / 86400000);
+        if (ageDays <= 45) {
+          return 'recent';
+        }
+        if (ageDays >= 365) {
+          return 'older/stale';
+        }
+        return 'dated';
+      }
+      function sourceQualityLabel(source, label) {
+        const safeSource = source || {};
+        const warnings = localResponseReviewedSourceWarnings(safeSource, label);
+        const missingMetadata = !safeSource.title || !sourceDateText(safeSource) || !(safeSource.final_url || safeSource.source_url);
+        if (missingMetadata) {
+          return 'missing metadata';
+        }
+        if (warnings.length > 1 || (warnings[0] && !warnings[0].includes('partial'))) {
+          return 'has caution';
+        }
+        return 'reviewed/usable';
+      }
+      function sourceQualityCounts(entries) {
+        const counts = {
+          'reviewed/usable': 0,
+          'has caution': 0,
+          'missing metadata': 0,
+          'no reviewed sources': entries.length ? 0 : 1,
+        };
+        entries.forEach((source, index) => {
+          counts[sourceQualityLabel(source || {}, localResponseSourceLabel(index))] += 1;
+        });
+        return counts;
+      }
+      function sourceRecencyCounts(entries) {
+        const counts = {
+          recent: 0,
+          dated: 0,
+          'older/stale': 0,
+          'unknown recency': entries.length ? 0 : 1,
+        };
+        entries.forEach((source) => {
+          counts[sourceRecencyLabel(source || {})] += 1;
+        });
+        return counts;
+      }
+      function renderSourceGroupMetrics(target, counts) {
+        target.innerHTML = Object.entries(counts)
+          .map(([key, value]) => `<div class="metric"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+          .join('');
+      }
+      function latestResponseSourceTrace() {
+        if (!latestLocalResponseBody || typeof latestLocalResponseBody !== 'object' || Array.isArray(latestLocalResponseBody)) {
+          return {
+            sourceLabelsUsed: [],
+            sourceCautions: [],
+            sourceQualityWarnings: [],
+            sourcesUsed: [],
+            traceUnavailable: true,
+          };
+        }
+        const sourcesUsed = localResponseKnownValue(latestLocalResponseBody, 'sources_used') || localResponseKnownValue(latestLocalResponseBody, 'sourcesUsed') || [];
+        const citationLabels = localResponseList(localResponseFirstValue(latestLocalResponseBody, ['citation_labels', 'citationLabels']));
+        return {
+          sourceLabelsUsed: citationLabels,
+          sourceCautions: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_cautions', 'sourceCautions'])),
+          sourceQualityWarnings: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes'])),
+          sourcesUsed: Array.isArray(sourcesUsed) ? sourcesUsed.slice(0, 10) : [],
+          traceUnavailable: !citationLabels.length && !(Array.isArray(sourcesUsed) && sourcesUsed.length),
+        };
+      }
+      function sourceTraceTextForResponse() {
+        const payloadSources = localResponseReviewedSourcesFromPayload();
+        const trace = latestResponseSourceTrace();
+        const payloadLabels = Array.isArray(payloadSources)
+          ? payloadSources.map((source, index) => source && (source.citation_label || source.citationLabel || source.title || localResponseSourceLabel(index))).filter(Boolean)
+          : [];
+        return [
+          `Reviewed source count in current payload: ${Array.isArray(payloadSources) ? payloadSources.length : 'invalid payload JSON'}`,
+          `Source labels present in payload: ${payloadLabels.join(', ') || 'none'}`,
+          `Source labels used by latest response: ${trace.sourceLabelsUsed.join(', ') || 'none returned'}`,
+          `Response source mapping: ${trace.traceUnavailable ? 'trace unavailable' : JSON.stringify(trace.sourcesUsed).slice(0, 1200)}`,
+          `Source cautions/quality warnings: ${trace.sourceCautions.concat(trace.sourceQualityWarnings).join(' ') || 'none returned'}`,
+        ].join('\n');
+      }
+      function renderLatestSourceTrace() {
+        latestSourceTrace.className = 'row stack';
+        latestSourceTrace.innerHTML = `
+          <strong>Latest source-to-answer trace</strong>
+          <pre>${escapeHtml(sourceTraceTextForResponse())}</pre>
+          <div class="muted">Trace uses only current payload and response metadata. It does not infer unsupported source mapping, fetch sources, validate URLs, or open links.</div>
+        `;
+      }
       function sourceSummaryFromReviewedPayload() {
         const entries = localResponseReviewedSourcesFromPayload();
         if (!Array.isArray(entries) || !entries.length) {
-          return { count: 0, labels: [], cautions: ['No reviewed sources attached.'], recency: [] };
+          return { count: 0, labels: [], cautions: ['No reviewed sources attached.'], recency: [], qualityCounts: sourceQualityCounts([]), recencyCounts: sourceRecencyCounts([]) };
         }
         const labels = entries.map((source, index) => {
           const safeSource = source || {};
           return safeSource.citation_label || safeSource.citationLabel || safeSource.title || safeSource.final_url || safeSource.source_url || localResponseSourceLabel(index);
         }).filter(Boolean).slice(0, 10);
         const cautions = entries.flatMap((source, index) => localResponseReviewedSourceWarnings(source || {}, localResponseSourceLabel(index))).slice(0, 12);
-        const recency = entries.map((source) => source && (source.fetched_at || source.fetchedAt || source.published_at || source.publishedAt)).filter(Boolean).slice(0, 10);
-        return { count: entries.length, labels, cautions, recency };
+        const recency = entries.map((source) => source && `${sourceRecencyLabel(source)}${sourceDateText(source) ? ` (${sourceDateText(source)})` : ''}`).filter(Boolean).slice(0, 10);
+        return { count: entries.length, labels, cautions, recency, qualityCounts: sourceQualityCounts(entries), recencyCounts: sourceRecencyCounts(entries) };
       }
       function sourceSummaryFromResponse(responseBody, payloadSummary) {
         const sourcesUsed = localResponseKnownValue(responseBody, 'sources_used') || localResponseKnownValue(responseBody, 'sourcesUsed') || [];
@@ -3175,6 +3351,8 @@ def dashboard_html() -> str:
           labels: Array.from(new Set((payloadSummary.labels || []).concat(sourceLabels))).slice(0, 20),
           cautions: Array.from(new Set((payloadSummary.cautions || []).concat(sourceCautions))).slice(0, 20),
           recency: Array.from(new Set(payloadSummary.recency || [])).slice(0, 10),
+          qualityCounts: payloadSummary.qualityCounts || sourceQualityCounts([]),
+          recencyCounts: payloadSummary.recencyCounts || sourceRecencyCounts([]),
         };
       }
       function defaultSessionMarks(entry) {
@@ -3250,7 +3428,8 @@ def dashboard_html() -> str:
         }
         const labels = (sourceSummary.labels || []).join(', ') || 'labels unavailable';
         const cautions = (sourceSummary.cautions || []).concat(entry.source_cautions || []).slice(0, 4).join(' ') || 'No source cautions returned.';
-        return `${sourceSummary.count} source item(s): ${labels}. ${cautions}`;
+        const recency = (sourceSummary.recency || []).join(', ') || 'unknown recency';
+        return `${sourceSummary.count} source item(s): ${labels}. Recency: ${recency}. ${cautions}`;
       }
       function refreshDecisionArtifacts() {
         if (latestDecisionSummaryText && latestDecisionSummaryText !== 'No decision summary yet.') {
@@ -3349,6 +3528,8 @@ def dashboard_html() -> str:
               </div>
               <div>Limitations: ${escapeHtml(limitationPreview)}</div>
               <div>Source summary: ${escapeHtml(sourceSummary.count ? `${sourceSummary.count} reviewed/source item(s): ${(sourceSummary.labels || []).join(', ') || 'labels unavailable'}` : 'No reviewed sources attached.')}</div>
+              <div>Source quality: ${escapeHtml(sourceSummary.qualityCounts ? Object.entries(sourceSummary.qualityCounts).map(([key, value]) => `${key}=${value}`).join('; ') : 'No source quality grouping available.')}</div>
+              <div>Source recency: ${escapeHtml(sourceSummary.recencyCounts ? Object.entries(sourceSummary.recencyCounts).map(([key, value]) => `${key}=${value}`).join('; ') : 'unknown recency')}</div>
               <div class="muted">Source/evidence cautions: ${escapeHtml((sourceSummary.cautions || []).concat(entry.source_cautions || []).slice(0, 4).join(' ') || 'No source cautions returned.')}</div>
               ${highStakes ? '<div class="row notice">High-stakes entry: review sources and verify important details manually before acting. No external action is taken.</div>' : ''}
               <div>Prior context used: ${escapeHtml(priorContextUsed)}</div>
@@ -3472,6 +3653,14 @@ def dashboard_html() -> str:
                   return sessionEntryIsHighStakes(entry) ? (sourceSummary.count ? 'High-stakes; reviewed sources attached' : 'High-stakes; needs source review') : (sourceSummary.count ? 'Sources attached' : 'No reviewed sources attached');
                 }],
                 ['reviewed sources', (entry) => entrySourceText(entry)],
+                ['source quality grouping', (entry) => {
+                  const sourceSummary = entry.source_summary || {};
+                  return sourceSummary.qualityCounts ? Object.entries(sourceSummary.qualityCounts).map(([key, value]) => `${key}=${value}`).join('; ') : 'No source quality grouping available.';
+                }],
+                ['source recency grouping', (entry) => {
+                  const sourceSummary = entry.source_summary || {};
+                  return sourceSummary.recencyCounts ? Object.entries(sourceSummary.recencyCounts).map(([key, value]) => `${key}=${value}`).join('; ') : 'unknown recency';
+                }],
                 ['prior context used', (entry) => String(entry.prior_context_used || '')],
                 ['best output', (entry) => entry.id === bestOutputEntryId ? 'Current best output' : ''],
               ].map(([label, reader]) => `<tr><th>${escapeHtml(label)}</th>${entries.map((entry) => `<td>${escapeHtml(reader(entry) || 'No value returned.')}</td>`).join('')}</tr>`).join('')}
@@ -3513,6 +3702,8 @@ def dashboard_html() -> str:
         });
         lines.push('', 'Source/evidence notes');
         entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entrySourceText(entry)}`));
+        lines.push('', 'Evidence pack summary');
+        lines.push(latestEvidencePackText || evidencePackOutput.value || 'No evidence pack built yet.');
         lines.push('', 'Unresolved questions');
         const unresolved = decisionUnresolved.value.trim();
         if (unresolved) {
@@ -3603,6 +3794,8 @@ def dashboard_html() -> str:
         entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entrySourceText(entry)}`));
         lines.push('', 'Decision summary');
         lines.push(latestDecisionSummaryText || decisionSummaryOutput.value || 'No decision summary built yet.');
+        lines.push('', 'Evidence pack');
+        lines.push(latestEvidencePackText || evidencePackOutput.value || 'No evidence pack built yet.');
         lines.push('', 'Prior context notes');
         entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: prior_context_used=${entry.prior_context_used === '' ? 'not returned' : String(entry.prior_context_used)}. ${entry.prior_context_summary || entry.prior_context_limitations.join(' ') || 'No prior context notes returned.'}`));
         lines.push('', 'Suggested next manual step');
@@ -3760,7 +3953,12 @@ def dashboard_html() -> str:
         }
       }
       function localResponseReviewedSourceWarnings(source, label) {
-        const warnings = Array.isArray(source.quality_warnings) ? source.quality_warnings.slice(0, 4) : [];
+        const warnings = []
+          .concat(Array.isArray(source.quality_warnings) ? source.quality_warnings : [])
+          .concat(Array.isArray(source.qualityWarnings) ? source.qualityWarnings : [])
+          .concat(Array.isArray(source.source_cautions) ? source.source_cautions : [])
+          .concat(Array.isArray(source.sourceCautions) ? source.sourceCautions : [])
+          .slice(0, 4);
         if (!source.title) {
           warnings.push(`[${label}] Missing source title.`);
         }
@@ -3787,10 +3985,14 @@ def dashboard_html() -> str:
           const label = localResponseSourceLabel(index);
           const warnings = localResponseReviewedSourceWarnings(safeSource, label);
           const limitations = Array.isArray(safeSource.limitations) ? safeSource.limitations.slice(0, 4) : [];
+          const quality = sourceQualityLabel(safeSource, label);
+          const recency = sourceRecencyLabel(safeSource);
+          const dateText = sourceDateText(safeSource);
           return `
             <div class="row stack">
               <div><strong>[${escapeHtml(label)}]</strong> ${escapeHtml(safeSource.title || 'Untitled reviewed source')}</div>
               <div class="muted">${escapeHtml(safeSource.final_url || safeSource.source_url || 'No public source URL supplied')}</div>
+              <div><span class="pill">${escapeHtml(quality)}</span> <span class="pill">${escapeHtml(recency)}</span>${dateText ? ` <span class="pill">${escapeHtml(dateText)}</span>` : ''}</div>
               <div>${escapeHtml(String(safeSource.excerpt || '').slice(0, 360))}</div>
               <div class="muted">Warnings: ${escapeHtml(warnings.join(' '))}</div>
               <div class="muted">Limitations: ${escapeHtml(limitations.join(' ') || 'Source labels are for reference, not proof.')}</div>
@@ -3846,12 +4048,158 @@ def dashboard_html() -> str:
           <div class="muted">Verify freshness, authority, and exact details manually before acting. No auto-fetch, no auto-submit, no connector, and no background browsing.</div>
         `;
       }
+      function sourceContextIsHighStakes() {
+        const snapshot = payloadReadinessSnapshot();
+        return selectedHighStakesTerms().length > 0 || matchingHighStakesTerms([
+          snapshot.requestText,
+          evidenceQuestion.value,
+          evidenceSourceNotes.value,
+          evidenceConcerns.value,
+          sessionResultBoard.map((entry) => `${entry.tags.join(' ')} ${entry.summary} ${entry.source_cautions.join(' ')}`).join(' '),
+        ].join(' ')).length > 0;
+      }
+      function renderSourceWarningSummary(entries) {
+        const sourceSummary = sourceSummaryFromReviewedPayload();
+        const highStakes = sourceContextIsHighStakes();
+        const warnings = [];
+        if (!Array.isArray(entries)) {
+          warnings.push('Reviewed-source warnings unavailable while editable payload JSON is invalid.');
+        } else if (!entries.length) {
+          warnings.push(highStakes
+            ? 'High-stakes content has no reviewed sources attached. Verify important details manually before acting.'
+            : 'No reviewed sources attached. Add reviewed web_context if source support matters for this request.');
+        }
+        if (sourceSummary.cautions && sourceSummary.cautions.length && sourceSummary.count) {
+          warnings.push(`Source cautions present: ${sourceSummary.cautions.slice(0, 3).join(' ')}`);
+        }
+        if (sourceSummary.recencyCounts && (sourceSummary.recencyCounts['unknown recency'] || sourceSummary.recencyCounts['older/stale'])) {
+          warnings.push('One or more reviewed sources have unknown or older/stale recency. Check dates manually.');
+        }
+        if (highStakes) {
+          warnings.push('High-stakes reminder: response-only support, manual review required, no professional/legal/medical/financial decision automation, and no external action is taken.');
+        }
+        sourceWarningSummary.className = warnings.length ? 'row stack notice' : 'row stack muted';
+        sourceWarningSummary.innerHTML = warnings.length
+          ? `<strong>Source advisory warnings</strong>${warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join('')}`
+          : '<strong>Source advisory warnings</strong><div>No missing-source warnings for the current payload.</div>';
+      }
+      function renderSourceReviewChecklist() {
+        const marked = Object.entries(sourceReviewChecklist).filter(([, value]) => value).map(([key]) => key);
+        sourceReviewChecklistStatus.textContent = marked.length
+          ? `${marked.length} checklist item(s) marked in this page session only.`
+          : 'No source checklist items marked.';
+      }
+      function reviewedSourcesForEvidencePack() {
+        const entries = localResponseReviewedSourcesFromPayload();
+        return Array.isArray(entries) ? entries : [];
+      }
+      function buildEvidencePackText() {
+        const reviewedSources = reviewedSourcesForEvidencePack();
+        const sourceSummary = sourceSummaryFromReviewedPayload();
+        const selectedEntries = selectedSessionBoardEntries();
+        const entries = selectedEntries.length ? selectedEntries : filteredSessionBoardEntries();
+        const best = bestOutputEntry();
+        const checklistItems = Object.entries(sourceReviewChecklist)
+          .filter(([, value]) => value)
+          .map(([key]) => key.replace(/([A-Z])/g, ' $1').toLowerCase());
+        const lines = [
+          'Evidence Pack',
+          '',
+          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no source fetch, no browsing, no handoff.',
+          '',
+          `Evidence question / claim: ${evidenceQuestion.value.trim() || 'Not provided.'}`,
+          `Source notes: ${evidenceSourceNotes.value.trim() || 'Not provided.'}`,
+          `Concerns / contradictions: ${evidenceConcerns.value.trim() || 'Not provided.'}`,
+          `Manual verification needed: ${evidenceVerification.value.trim() || 'Not provided.'}`,
+          `Next source-check step: ${evidenceNextStep.value.trim() || 'Not provided.'}`,
+          '',
+          'Reviewed sources currently in payload',
+        ];
+        if (reviewedSources.length) {
+          reviewedSources.forEach((source, index) => {
+            const safeSource = source || {};
+            const label = safeSource.citation_label || safeSource.citationLabel || safeSource.title || localResponseSourceLabel(index);
+            lines.push(`- [${localResponseSourceLabel(index)}] ${label}: quality=${sourceQualityLabel(safeSource, localResponseSourceLabel(index))}; recency=${sourceRecencyLabel(safeSource)}; date=${sourceDateText(safeSource) || 'unknown'}; url=${safeSource.final_url || safeSource.source_url || 'not supplied'}`);
+          });
+        } else {
+          lines.push('- No reviewed sources attached.');
+        }
+        lines.push('', 'Latest response source-to-answer trace');
+        lines.push(sourceTraceTextForResponse());
+        lines.push('', 'Selected/filtered board source notes');
+        if (entries.length) {
+          entries.forEach((entry) => lines.push(`- Entry ${entry.entryNumber}: ${entrySourceText(entry)}`));
+        } else {
+          lines.push('- No board entries selected or filtered.');
+        }
+        lines.push('', 'Best-output source note');
+        lines.push(best ? `Entry ${best.entryNumber}: ${entrySourceText(best)}` : 'No best output selected.');
+        lines.push('', 'Source quality counts');
+        Object.entries(sourceSummary.qualityCounts || {}).forEach(([key, value]) => lines.push(`- ${key}: ${value}`));
+        lines.push('', 'Source recency counts');
+        Object.entries(sourceSummary.recencyCounts || {}).forEach(([key, value]) => lines.push(`- ${key}: ${value}`));
+        lines.push('', 'Source cautions');
+        (sourceSummary.cautions || ['No source cautions returned.']).slice(0, 12).forEach((item) => lines.push(`- ${item}`));
+        lines.push('', 'Source review checklist');
+        lines.push(checklistItems.length ? checklistItems.map((item) => `- ${item}`).join('\n') : '- No checklist items marked.');
+        if (sourceContextIsHighStakes()) {
+          lines.push('', 'High-stakes reminder');
+          lines.push('Response-only support. Manual review is required. Verify important details before acting. No professional/legal/medical/financial decision automation and no external action are provided.');
+        }
+        return lines.join('\n').slice(0, 7000);
+      }
+      function buildEvidencePack() {
+        latestEvidencePackText = buildEvidencePackText();
+        evidencePackOutput.value = latestEvidencePackText;
+        evidencePackStatus.textContent = 'Evidence pack built from current page state only. No source fetch, browsing, persistence, connector, handoff, or agent execution occurred.';
+        refreshDecisionArtifacts();
+      }
+      function priorContextFromEvidencePack() {
+        const text = latestEvidencePackText || evidencePackOutput.value || '';
+        if (!text || text === 'No evidence pack yet.') {
+          return null;
+        }
+        return {
+          previous_agent_id: 'manual_evidence_pack',
+          previous_agent_name: 'Session Evidence Pack',
+          previous_output_type: 'evidence_pack',
+          previous_summary: text.slice(0, 4000),
+          previous_key_points: text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_next_actions: [evidenceNextStep.value.trim() || 'Review sources manually before using as prior context.'],
+          previous_limitations: [
+            'Created manually from current dashboard source metadata.',
+            'Not persisted.',
+            'Not sent.',
+            'No connector.',
+            'No automatic source fetching.',
+            'No automatic handoff.',
+          ],
+          user_notes: text.slice(0, 4000),
+          source_type: 'manual_evidence_pack',
+        };
+      }
+      function insertEvidencePackAsPriorContext() {
+        const context = priorContextFromEvidencePack();
+        if (!context) {
+          evidencePackStatus.textContent = 'Build an evidence pack before inserting prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          context,
+          'prior_agent_context insertion succeeded from the evidence pack, but agent was not run. Editable JSON payload updated only.'
+        );
+        evidencePackStatus.textContent = 'Evidence pack inserted as prior_agent_context by manual click. No handoff or agent execution occurred.';
+      }
       function renderReviewedWebContextPreview() {
         const entries = localResponseReviewedSourcesFromPayload();
         if (entries === null) {
           reviewedWebContextPreview.textContent = 'Reviewed source context preview unavailable: invalid JSON.';
           renderReviewedSourceManager(null);
           renderSourceAwareUsagePreview(null);
+          renderSourceWarningSummary(null);
+          renderSourceGroupMetrics(sourceQualityGroups, sourceQualityCounts([]));
+          renderSourceGroupMetrics(sourceRecencyGroups, sourceRecencyCounts([]));
+          renderLatestSourceTrace();
           updateReadinessUi();
           return;
         }
@@ -3860,6 +4208,10 @@ def dashboard_html() -> str:
           : 'No reviewed source context in payload yet.';
         renderReviewedSourceManager(entries);
         renderSourceAwareUsagePreview(entries);
+        renderSourceWarningSummary(entries);
+        renderSourceGroupMetrics(sourceQualityGroups, sourceQualityCounts(entries));
+        renderSourceGroupMetrics(sourceRecencyGroups, sourceRecencyCounts(entries));
+        renderLatestSourceTrace();
         updateReadinessUi();
       }
       async function postWebResearchJson(path, body) {
@@ -3984,6 +4336,17 @@ def dashboard_html() -> str:
       });
       contextInsertRequestButton.onclick = insertContextKitIntoRequest;
       contextInsertPriorButton.onclick = () => insertContextKitAsPriorContext('Context kit inserted as prior_agent_context. No agent was invoked.');
+      document.querySelectorAll('input[data-source-review-check]').forEach((checkbox) => {
+        checkbox.onchange = () => {
+          sourceReviewChecklist[checkbox.getAttribute('data-source-review-check') || ''] = checkbox.checked;
+          renderSourceReviewChecklist();
+          if (latestEvidencePackText) {
+            buildEvidencePack();
+          }
+        };
+      });
+      evidencePackBuildButton.onclick = buildEvidencePack;
+      evidencePackInsertButton.onclick = insertEvidencePackAsPriorContext;
       reviewedSourceClearButton.onclick = clearReviewedSources;
       useSampleButton.onclick = () => {
         applySamplePayloadToComposer(selectedTemplate, selectedAgent());
@@ -4246,6 +4609,7 @@ def dashboard_html() -> str:
       renderCommandCenter();
       renderPlaybooks();
       renderContextKitPreview();
+      renderSourceReviewChecklist();
       renderSessionResultBoard();
       loadSelectedExample();
     }
