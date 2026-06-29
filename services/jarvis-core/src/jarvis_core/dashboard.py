@@ -1221,6 +1221,48 @@ def dashboard_html() -> str:
           Manual workflow step selector
           <select id="local-response-agents-manual-workflow-steps"></select>
         </label>
+        <div id="local-response-agents-manual-workflow-playbook-label" class="muted">No playbook has populated the workflow in this page session.</div>
+        <div id="local-response-agents-manual-workflow-sequence-preview" class="row stack">No workflow sequence selected yet.</div>
+        <div id="local-response-agents-manual-workflow-step-cards" class="grid"></div>
+        <div id="local-response-agents-manual-workflow-context-helper" class="row stack">
+          <h4>Workflow Step Context Assembly</h4>
+          <div class="muted">Manual-click assembly for the selected step. It uses current page state only and does not invoke agents, browse, call connectors, or persist workflow state.</div>
+          <div class="grid">
+            <label><input type="checkbox" data-workflow-context-source="contextKit" checked> Include Context Kit</label>
+            <label><input type="checkbox" data-workflow-context-source="latestResponse" checked> Include latest response</label>
+            <label><input type="checkbox" data-workflow-context-source="selectedBoardEntry" checked> Include selected board entry</label>
+            <label><input type="checkbox" data-workflow-context-source="bestOutput" checked> Include best output</label>
+            <label><input type="checkbox" data-workflow-context-source="decisionSummary" checked> Include decision summary</label>
+            <label><input type="checkbox" data-workflow-context-source="evidencePack" checked> Include evidence pack</label>
+            <label><input type="checkbox" data-workflow-context-source="sourceWarnings" checked> Include source warnings</label>
+            <label><input type="checkbox" data-workflow-context-source="highStakes" checked> Include high-stakes reminder</label>
+            <label><input type="checkbox" data-workflow-context-source="scratchpad" checked> Include scratchpad notes</label>
+          </div>
+          <div class="actions">
+            <button id="local-response-agents-manual-workflow-context-refresh-button" type="button">Refresh context preview</button>
+            <button id="local-response-agents-manual-workflow-context-insert-button" type="button">Insert selected step context into prior_agent_context</button>
+          </div>
+          <pre id="local-response-agents-manual-workflow-context-preview">No selected-step context preview yet.</pre>
+        </div>
+        <div id="local-response-agents-manual-workflow-scratchpad" class="row stack">
+          <h4>Workflow Scratchpad and Packet Composer</h4>
+          <div class="two-column">
+            <label>Current decision/question<textarea id="local-response-agents-manual-workflow-decision" spellcheck="false"></textarea></label>
+            <label>Assumptions<textarea id="local-response-agents-manual-workflow-assumptions" spellcheck="false"></textarea></label>
+            <label>Constraints<textarea id="local-response-agents-manual-workflow-constraints" spellcheck="false"></textarea></label>
+            <label>Unresolved questions<textarea id="local-response-agents-manual-workflow-unresolved" spellcheck="false"></textarea></label>
+            <label>Source/evidence notes<textarea id="local-response-agents-manual-workflow-source-notes" spellcheck="false"></textarea></label>
+            <label>Handoff notes<textarea id="local-response-agents-manual-workflow-handoff-notes" spellcheck="false"></textarea></label>
+            <label>Final synthesis notes<textarea id="local-response-agents-manual-workflow-synthesis-notes" spellcheck="false"></textarea></label>
+            <label>Next manual action<textarea id="local-response-agents-manual-workflow-next-action" spellcheck="false"></textarea></label>
+          </div>
+          <div class="actions">
+            <button id="local-response-agents-manual-workflow-packet-build-button" type="button">Build workflow packet</button>
+            <button id="local-response-agents-manual-workflow-packet-insert-button" type="button">Insert workflow packet into prior_agent_context</button>
+          </div>
+          <div id="local-response-agents-manual-workflow-packet-status" class="muted">No workflow packet built yet.</div>
+          <textarea id="local-response-agents-manual-workflow-packet-output" spellcheck="false" readonly>No workflow packet yet.</textarea>
+        </div>
         <pre id="local-response-agents-manual-workflow-result">No manual workflow preview yet.</pre>
       </div>
       <div id="local-response-agents-index-list" class="stack"></div>
@@ -2412,6 +2454,26 @@ def dashboard_html() -> str:
       const manualWorkflowStatus = document.getElementById('local-response-agents-manual-workflow-status');
       const manualWorkflowSteps = document.getElementById('local-response-agents-manual-workflow-steps');
       const manualWorkflowResult = document.getElementById('local-response-agents-manual-workflow-result');
+      const manualWorkflowPlaybookLabel = document.getElementById('local-response-agents-manual-workflow-playbook-label');
+      const manualWorkflowSequencePreview = document.getElementById('local-response-agents-manual-workflow-sequence-preview');
+      const manualWorkflowStepCards = document.getElementById('local-response-agents-manual-workflow-step-cards');
+      const manualWorkflowContextPreview = document.getElementById('local-response-agents-manual-workflow-context-preview');
+      const manualWorkflowContextRefreshButton = document.getElementById('local-response-agents-manual-workflow-context-refresh-button');
+      const manualWorkflowContextInsertButton = document.getElementById('local-response-agents-manual-workflow-context-insert-button');
+      const manualWorkflowPacketBuildButton = document.getElementById('local-response-agents-manual-workflow-packet-build-button');
+      const manualWorkflowPacketInsertButton = document.getElementById('local-response-agents-manual-workflow-packet-insert-button');
+      const manualWorkflowPacketStatus = document.getElementById('local-response-agents-manual-workflow-packet-status');
+      const manualWorkflowPacketOutput = document.getElementById('local-response-agents-manual-workflow-packet-output');
+      const manualWorkflowScratchFields = {
+        decision: document.getElementById('local-response-agents-manual-workflow-decision'),
+        assumptions: document.getElementById('local-response-agents-manual-workflow-assumptions'),
+        constraints: document.getElementById('local-response-agents-manual-workflow-constraints'),
+        unresolved: document.getElementById('local-response-agents-manual-workflow-unresolved'),
+        sourceNotes: document.getElementById('local-response-agents-manual-workflow-source-notes'),
+        handoffNotes: document.getElementById('local-response-agents-manual-workflow-handoff-notes'),
+        synthesisNotes: document.getElementById('local-response-agents-manual-workflow-synthesis-notes'),
+        nextAction: document.getElementById('local-response-agents-manual-workflow-next-action'),
+      };
       const endpointDisplay = document.getElementById('local-response-agents-workbench-endpoint');
       const docsLink = document.getElementById('local-response-agents-workbench-docs');
       const outputTypeSelect = document.getElementById('local-response-agents-output-type-select');
@@ -2516,6 +2578,8 @@ def dashboard_html() -> str:
       let latestReviewPacketText = '';
       let latestDecisionSummaryText = '';
       let latestEvidencePackText = '';
+      let latestWorkflowPacketText = '';
+      let workflowStepContextText = '';
       let sourceReviewChecklist = {};
       let bestOutputEntryId = '';
       let sessionBoardFilter = { type: 'all', value: '' };
@@ -2650,6 +2714,7 @@ def dashboard_html() -> str:
               <div><code>${escapeHtml(localResponseAgentId(agent))}</code> · ${escapeHtml(localResponseAgentCategory(agent))}</div>
               <div class="actions">
                 <button type="button" data-command-action="use" data-agent-id="${escapeHtml(localResponseAgentId(agent))}">Use agent</button>
+                <button type="button" data-command-action="workflow" data-agent-id="${escapeHtml(localResponseAgentId(agent))}">Add to workflow</button>
                 <button type="button" data-command-action="pin" data-agent-id="${escapeHtml(localResponseAgentId(agent))}">${pinnedAgentIds.includes(localResponseAgentId(agent)) ? 'Unpin' : 'Pin'}</button>
               </div>
             </div>
@@ -2688,6 +2753,7 @@ def dashboard_html() -> str:
                   <div class="muted">${escapeHtml(agent.useWhen || agent.use_when || agent.recommendedFor || agent.recommended_for || '')}</div>
                   <div class="actions">
                     <button type="button" data-command-action="use" data-agent-id="${escapeHtml(agentId)}">Use agent</button>
+                    <button type="button" data-command-action="workflow" data-agent-id="${escapeHtml(agentId)}">Add to workflow</button>
                     <button type="button" data-command-action="sample" data-agent-id="${escapeHtml(agentId)}">Insert template/example</button>
                     <button type="button" data-command-action="prior" data-agent-id="${escapeHtml(agentId)}">Add with prior_agent_context</button>
                     <button type="button" data-command-action="pin" data-agent-id="${escapeHtml(agentId)}">${pinned ? 'Unpin' : 'Pin'}</button>
@@ -2718,6 +2784,9 @@ def dashboard_html() -> str:
         }
         trackRecentAgent(agent);
         await loadSelectedExample();
+        if (action === 'workflow') {
+          addAgentToManualWorkflow(agentId);
+        }
         if (action === 'sample') {
           applySamplePayloadToComposer(selectedTemplate, selectedAgent());
           payloadPreviewStatus.textContent = 'Template/example inserted by manual Command Center action. No agent was invoked.';
@@ -2816,6 +2885,7 @@ def dashboard_html() -> str:
         playbookStatus.textContent = `${playbook.title} preview uses ${chosenIds.length} existing local response agents. Manual only - not executed, not chained, and not persisted.`;
         manualWorkflowGoal.value = playbook.goal;
         manualWorkflowCandidates.value = chosenIds.join('\n');
+        loadPlaybookIntoManualWorkflow(playbook, chosenAgents);
         if (action === 'load' && chosenIds[0] && selectAgentById(chosenIds[0])) {
           loadSelectedExample();
         }
@@ -2962,6 +3032,8 @@ def dashboard_html() -> str:
         }
         const snapshot = payloadReadinessSnapshot();
         const terms = selectedHighStakesTerms();
+        const workflowStep = selectedWorkflowStep();
+        const workflowStepChecks = workflowStep ? workflowStepReadiness(workflowStep).join('; ') : 'no workflow step selected';
         const checks = [
           ['Agent selected', Boolean(selectedAgent())],
           ['Manual request/prompt present', snapshot.requestText.length > 0],
@@ -2971,6 +3043,7 @@ def dashboard_html() -> str:
           ['prior_agent_context empty/included', true, snapshot.hasPrior ? 'included' : 'empty'],
           ['reviewed web_context/source context none/included', true, snapshot.hasWebContext ? 'included' : 'none'],
           ['High-stakes category warning status', true, terms.length ? `shown for ${terms.join(', ')}` : 'not detected'],
+          ['Selected workflow step readiness', true, workflowStepChecks],
           ['Local-only/manual-only reminder', true, 'visible'],
         ];
         qualityChecklist.innerHTML = checks.map(([label, ok, detail]) => `
@@ -3000,6 +3073,9 @@ def dashboard_html() -> str:
         }
         if (currentSourceSummary.cautions && currentSourceSummary.cautions.length && currentSourceSummary.count) {
           warnings.push('Reviewed source cautions are present. Review source warnings before using the response.');
+        }
+        if (workflowStep && workflowStepReadiness(workflowStep).some((item) => item.includes('missing') || item.includes('not yet'))) {
+          warnings.push('Selected workflow step has advisory readiness gaps. Review its step card before manual use.');
         }
         if (terms.length) {
           warnings.push('High-stakes use remains response-only and requires manual review; no professional, legal, medical, financial, or external action automation is provided.');
@@ -3096,26 +3172,380 @@ def dashboard_html() -> str:
           .filter(Boolean)
           .slice(0, 8);
       }
-      function renderManualWorkflowSteps(result) {
-        latestManualWorkflowSteps = []
-          .concat(Array.isArray(result && result.workflow_steps) ? result.workflow_steps : [])
-          .concat(Array.isArray(result && result.workflowSteps) ? result.workflowSteps : []);
+      function manualWorkflowStepAgentId(step) {
+        return String(step && (step.agent_id || step.agentId || step.id || '') || '').trim();
+      }
+      function manualWorkflowStepAgent(step) {
+        return agentById(manualWorkflowStepAgentId(step));
+      }
+      function manualWorkflowStepName(step) {
+        const agent = manualWorkflowStepAgent(step);
+        return step.display_name || step.displayName || (agent && localResponseAgentName(agent)) || manualWorkflowStepAgentId(step) || 'Suggested agent';
+      }
+      function manualWorkflowStepPurpose(step) {
+        return step.purpose || step.step_purpose || step.stepPurpose || step.goal || step.reason || 'Manual response step for the workflow goal.';
+      }
+      function manualWorkflowStepPrompt(step) {
+        return step.suggested_prompt || step.suggestedPrompt || step.request_focus || step.requestFocus || step.prompt || step.focus || manualWorkflowGoal.value.trim() || 'Use the workflow goal and reviewed context to produce the expected output.';
+      }
+      function manualWorkflowStepInput(step) {
+        return step.expected_input || step.expectedInput || step.input_context || step.inputContext || step.context || 'Workflow goal, selected prior_agent_context, and any reviewed source/evidence notes.';
+      }
+      function manualWorkflowStepOutput(step) {
+        return step.expected_output || step.expectedOutput || step.output || step.output_type || step.outputType || 'Reviewed local response for the next manual decision.';
+      }
+      function normalizeManualWorkflowStep(step, index, sourceLabel) {
+        const agentId = manualWorkflowStepAgentId(step);
+        const agent = agentById(agentId);
+        return {
+          step_number: index + 1,
+          agent_id: agentId,
+          display_name: manualWorkflowStepName(step),
+          category: (agent && localResponseAgentCategory(agent)) || step.category || 'suggested',
+          purpose: manualWorkflowStepPurpose(step),
+          suggested_prompt: manualWorkflowStepPrompt(step),
+          expected_input: manualWorkflowStepInput(step),
+          expected_output: manualWorkflowStepOutput(step),
+          source: sourceLabel || step.source || 'manual workflow',
+        };
+      }
+      function agentWorkflowStep(agent, index, sourceLabel, purposeText) {
+        return normalizeManualWorkflowStep({
+          agent_id: localResponseAgentId(agent),
+          display_name: localResponseAgentName(agent),
+          category: localResponseAgentCategory(agent),
+          purpose: purposeText || (agent.useWhen || agent.use_when || agent.recommendedFor || agent.recommended_for || 'Suggested from local response-agent metadata.'),
+          suggested_prompt: manualWorkflowGoal.value.trim() || 'Use the workflow goal and selected context to produce the next response.',
+          expected_input: 'Workflow goal, scratchpad notes, prior_agent_context, and reviewed source/evidence notes if included.',
+          expected_output: `${localResponseAgentName(agent)} response for manual review.`,
+        }, index, sourceLabel);
+      }
+      function setManualWorkflowSteps(steps, sourceLabel, resultForPreview) {
         const uniqueSteps = [];
         const seen = new Set();
-        latestManualWorkflowSteps.forEach((step) => {
-          const agentId = step.agent_id || step.agentId || '';
-          const stepNumber = step.step_number || step.stepNumber || uniqueSteps.length + 1;
-          const key = `${stepNumber}:${agentId}`;
-          if (agentId && !seen.has(key)) {
+        steps.forEach((step, index) => {
+          const normalized = normalizeManualWorkflowStep(step, index, sourceLabel);
+          const key = `${normalized.step_number}:${normalized.agent_id}:${normalized.display_name}`;
+          if (normalized.agent_id && !seen.has(key)) {
             seen.add(key);
-            uniqueSteps.push(step);
+            uniqueSteps.push(normalized);
           }
         });
         latestManualWorkflowSteps = uniqueSteps;
         manualWorkflowSteps.innerHTML = uniqueSteps.length
-          ? uniqueSteps.map((step, index) => `<option value="${escapeHtml(index)}">Step ${escapeHtml(step.step_number || step.stepNumber || index + 1)} - ${escapeHtml(step.display_name || step.displayName || step.agent_id || step.agentId)}</option>`).join('')
+          ? uniqueSteps.map((step, index) => `<option value="${escapeHtml(index)}">Step ${escapeHtml(index + 1)} - ${escapeHtml(step.display_name || step.agent_id)}</option>`).join('')
           : '<option value="">No manual workflow steps available</option>';
-        renderLocalResponseAgentJson(manualWorkflowResult, result, 'No manual workflow preview available.');
+        if (uniqueSteps.length) {
+          manualWorkflowSteps.value = manualWorkflowSteps.value || '0';
+        }
+        renderManualWorkflowWorkspace(resultForPreview || { workflow_steps: uniqueSteps });
+      }
+      function loadPlaybookIntoManualWorkflow(playbook, chosenAgents) {
+        manualWorkflowPlaybookLabel.textContent = `Workflow populated from playbook: ${playbook.title}. Suggested matches use existing metadata only.`;
+        const steps = chosenAgents.map((agent, index) => agentWorkflowStep(agent, index, `playbook: ${playbook.title}`, `${playbook.goal} Step ${index + 1}: ${agent.useWhen || agent.use_when || localResponseAgentCategory(agent)}.`));
+        setManualWorkflowSteps(steps, `playbook: ${playbook.title}`, {
+          playbook: playbook.title,
+          goal: playbook.goal,
+          workflow_steps: steps,
+          manual_only: true,
+        });
+        refreshWorkflowContextPreview();
+      }
+      function addAgentToManualWorkflow(agentId) {
+        const agent = agentById(agentId);
+        if (!agent) {
+          return;
+        }
+        const existing = latestManualWorkflowSteps.slice();
+        existing.push(agentWorkflowStep(agent, existing.length, 'Command Center manual add'));
+        manualWorkflowCandidates.value = Array.from(new Set(localResponseManualWorkflowCandidateIds().concat([agentId]))).join('\n');
+        setManualWorkflowSteps(existing, 'Command Center manual add', { workflow_steps: existing, manual_only: true });
+        manualWorkflowStatus.textContent = 'Agent added to the workflow sequence in this page session only. No agent was invoked and no handoff occurred.';
+      }
+      function workflowSelectedStepIndex() {
+        const index = Number(manualWorkflowSteps.value || 0);
+        return Number.isFinite(index) && index >= 0 ? index : 0;
+      }
+      function selectedWorkflowStep() {
+        return latestManualWorkflowSteps[workflowSelectedStepIndex()] || null;
+      }
+      function manualWorkflowScratchpadText() {
+        return [
+          ['Current decision/question', manualWorkflowScratchFields.decision.value],
+          ['Assumptions', manualWorkflowScratchFields.assumptions.value],
+          ['Constraints', manualWorkflowScratchFields.constraints.value],
+          ['Unresolved questions', manualWorkflowScratchFields.unresolved.value],
+          ['Source/evidence notes', manualWorkflowScratchFields.sourceNotes.value],
+          ['Handoff notes', manualWorkflowScratchFields.handoffNotes.value],
+          ['Final synthesis notes', manualWorkflowScratchFields.synthesisNotes.value],
+          ['Next manual action', manualWorkflowScratchFields.nextAction.value],
+        ]
+          .filter(([, value]) => String(value || '').trim())
+          .map(([label, value]) => `${label}: ${String(value).trim()}`)
+          .join('\n');
+      }
+      function workflowContextSourceEnabled(key) {
+        const checkbox = document.querySelector(`input[data-workflow-context-source="${key}"]`);
+        return !!checkbox && checkbox.checked;
+      }
+      function workflowBoardEntryText(entry) {
+        if (!entry) {
+          return '';
+        }
+        return [
+          `Entry ${entry.entryNumber || '?'}: ${entry.display_name || entry.agent_id}`,
+          `Summary: ${entry.summary || entry.title || 'No summary returned.'}`,
+          `Marks: ${entryMarksText(entry)}`,
+          `Sources: ${entrySourceText(entry)}`,
+        ].join('\n');
+      }
+      function latestResponseWorkflowText() {
+        if (!latestLocalResponseBody) {
+          return '';
+        }
+        return localResponsePlainText(latestLocalResponseBody, 2500);
+      }
+      function workflowSourceWarningsText() {
+        return sourceTraceTextForResponse();
+      }
+      function workflowHighStakesText() {
+        const terms = selectedHighStakesTerms();
+        const step = selectedWorkflowStep();
+        const stepTerms = matchingHighStakesTerms([
+          manualWorkflowStepName(step || {}),
+          manualWorkflowStepPurpose(step || {}),
+          manualWorkflowStepPrompt(step || {}),
+          manualWorkflowStepInput(step || {}),
+          manualWorkflowStepOutput(step || {}),
+        ].join(' '));
+        const allTerms = Array.from(new Set(terms.concat(stepTerms)));
+        return allTerms.length
+          ? `High-stakes reminder: ${allTerms.join(', ')}. Review sources and decisions manually before using this step.`
+          : 'No high-stakes terms detected for the selected step.';
+      }
+      function workflowContextSections() {
+        const selectedEntry = selectedSessionBoardEntries()[0] || null;
+        const bestEntry = bestOutputEntry();
+        const sections = [];
+        const step = selectedWorkflowStep();
+        if (step) {
+          sections.push(['Selected workflow step', [
+            `Step: ${workflowSelectedStepIndex() + 1}`,
+            `Agent: ${manualWorkflowStepName(step)} (${manualWorkflowStepAgentId(step) || 'suggested'})`,
+            `Purpose: ${manualWorkflowStepPurpose(step)}`,
+            `Suggested request focus: ${manualWorkflowStepPrompt(step)}`,
+            `Expected input/context: ${manualWorkflowStepInput(step)}`,
+            `Expected output: ${manualWorkflowStepOutput(step)}`,
+          ].join('\n')]);
+        }
+        if (workflowContextSourceEnabled('contextKit')) {
+          sections.push(['Context Kit', contextKitText() || 'No Context Kit text entered.']);
+        }
+        if (workflowContextSourceEnabled('latestResponse')) {
+          sections.push(['Latest response', latestResponseWorkflowText() || 'No latest response in page memory.']);
+        }
+        if (workflowContextSourceEnabled('selectedBoardEntry')) {
+          sections.push(['Selected board entry', workflowBoardEntryText(selectedEntry) || 'No selected board entry.']);
+        }
+        if (workflowContextSourceEnabled('bestOutput')) {
+          sections.push(['Best output', workflowBoardEntryText(bestEntry) || 'No best output marked.']);
+        }
+        if (workflowContextSourceEnabled('decisionSummary')) {
+          sections.push(['Decision summary', latestDecisionSummaryText || decisionSummaryOutput.value || 'No decision summary built yet.']);
+        }
+        if (workflowContextSourceEnabled('evidencePack')) {
+          sections.push(['Evidence pack', latestEvidencePackText || evidencePackOutput.value || 'No evidence pack built yet.']);
+        }
+        if (workflowContextSourceEnabled('sourceWarnings')) {
+          sections.push(['Source/evidence warnings', workflowSourceWarningsText()]);
+        }
+        if (workflowContextSourceEnabled('highStakes')) {
+          sections.push(['High-stakes checkpoint', workflowHighStakesText()]);
+        }
+        if (workflowContextSourceEnabled('scratchpad')) {
+          sections.push(['Workflow scratchpad', manualWorkflowScratchpadText() || 'No workflow scratchpad notes entered.']);
+        }
+        return sections;
+      }
+      function buildWorkflowContextText() {
+        return workflowContextSections()
+          .map(([label, text]) => `${label}\n${text}`)
+          .join('\n\n')
+          .slice(0, 7000);
+      }
+      function refreshWorkflowContextPreview() {
+        workflowStepContextText = buildWorkflowContextText();
+        manualWorkflowContextPreview.textContent = workflowStepContextText || 'No selected-step context preview yet.';
+        return workflowStepContextText;
+      }
+      function priorContextFromWorkflowText(text, sourceType, displayName) {
+        const step = selectedWorkflowStep();
+        return {
+          previous_agent_id: manualWorkflowStepAgentId(step) || sourceType,
+          previous_agent_name: displayName || manualWorkflowStepName(step || {}) || 'Manual Workflow Context',
+          previous_output_type: sourceType,
+          previous_summary: String(text || '').slice(0, 4000),
+          previous_key_points: String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_next_actions: [manualWorkflowScratchFields.nextAction.value.trim() || 'Review the selected workflow step manually before invoking an agent.'],
+          previous_limitations: [
+            'Composed from current dashboard page state only.',
+            'Not persisted.',
+            'No connector was called.',
+            'No agent was invoked automatically.',
+            'No handoff occurred automatically.',
+          ],
+          user_notes: String(text || '').slice(0, 4000),
+          source_type: sourceType,
+        };
+      }
+      function insertWorkflowContextAsPriorContext() {
+        const text = refreshWorkflowContextPreview();
+        if (!text) {
+          manualWorkflowStatus.textContent = 'No workflow step context is available for prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          priorContextFromWorkflowText(text, 'manual_workflow_step_context', 'Manual Workflow Step Context'),
+          'prior_agent_context insertion succeeded from selected workflow step context, but agent was not run. Editable JSON payload updated only.'
+        );
+        manualWorkflowStatus.textContent = 'Selected workflow step context inserted into prior_agent_context by manual click. No agent was invoked and no handoff occurred.';
+      }
+      function workflowStepReadiness(step) {
+        const hasAgent = !!manualWorkflowStepAgentId(step);
+        const hasPrompt = !!manualWorkflowStepPrompt(step);
+        const hasPrior = /prior_agent_context/.test(bodyInput.value || '') || !!workflowStepContextText;
+        const sourceSummary = sourceSummaryFromReviewedPayload();
+        const highStakes = matchingHighStakesTerms([
+          manualWorkflowStepName(step || {}),
+          manualWorkflowStepPurpose(step || {}),
+          manualWorkflowStepPrompt(step || {}),
+          manualWorkflowGoal.value,
+          manualWorkflowScratchpadText(),
+        ].join(' ')).length > 0 || sourceContextIsHighStakes();
+        return [
+          hasAgent ? 'agent selected' : 'agent missing',
+          hasPrompt ? 'request focus present' : 'request focus missing',
+          hasPrior ? 'prior context available' : 'prior context not yet assembled',
+          sourceSummary.count ? `${sourceSummary.count} reviewed source item(s)` : 'reviewed sources missing',
+          highStakes ? 'high-stakes/source review advised' : 'standard manual review',
+          'manual-only advisory',
+        ];
+      }
+      function renderWorkflowSequencePreview() {
+        manualWorkflowPlaybookLabel.textContent = selectedPlaybook
+          ? `Workflow populated from playbook: ${selectedPlaybook.title}. Suggested agent matches are metadata-based.`
+          : manualWorkflowPlaybookLabel.textContent;
+        manualWorkflowSequencePreview.innerHTML = latestManualWorkflowSteps.length
+          ? `<strong>Selected sequence preview</strong><ol>${latestManualWorkflowSteps.map((step, index) => `<li><strong>${escapeHtml(index + 1)}. ${escapeHtml(manualWorkflowStepName(step))}</strong> <code>${escapeHtml(manualWorkflowStepAgentId(step))}</code><div class="muted">${escapeHtml(manualWorkflowStepPurpose(step))}</div></li>`).join('')}</ol>`
+          : 'No workflow sequence selected yet. Preview a workflow, load a playbook, or add agents from the Command Center.';
+      }
+      function renderManualWorkflowStepCards() {
+        manualWorkflowStepCards.className = latestManualWorkflowSteps.length ? 'grid' : 'grid muted';
+        manualWorkflowStepCards.innerHTML = latestManualWorkflowSteps.length
+          ? latestManualWorkflowSteps.map((step, index) => {
+              const readiness = workflowStepReadiness(step);
+              return `
+                <div class="row stack">
+                  <div><strong>Step ${escapeHtml(index + 1)}: ${escapeHtml(manualWorkflowStepName(step))}</strong></div>
+                  <div><code>${escapeHtml(manualWorkflowStepAgentId(step) || 'suggested')}</code> · ${escapeHtml(step.category || 'suggested')} · ${escapeHtml(step.source || 'manual workflow')}</div>
+                  <div><strong>Purpose</strong><div>${escapeHtml(manualWorkflowStepPurpose(step))}</div></div>
+                  <div><strong>Suggested request focus</strong><div>${escapeHtml(manualWorkflowStepPrompt(step))}</div></div>
+                  <div><strong>Expected input/context</strong><div>${escapeHtml(manualWorkflowStepInput(step))}</div></div>
+                  <div><strong>Expected output</strong><div>${escapeHtml(manualWorkflowStepOutput(step))}</div></div>
+                  <div><strong>Readiness checkpoints</strong><div>${readiness.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join(' ')}</div></div>
+                  <div class="actions">
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="select">Select this step's agent</button>
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="prompt">Insert suggested request</button>
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="context">Preview step context</button>
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="up">Move up</button>
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="down">Move down</button>
+                    <button type="button" data-workflow-step-index="${escapeHtml(index)}" data-workflow-step-action="remove">Remove</button>
+                  </div>
+                </div>
+              `;
+            }).join('')
+          : 'No workflow step cards yet.';
+        manualWorkflowStepCards.querySelectorAll('button[data-workflow-step-action]').forEach((button) => {
+          button.onclick = async () => {
+            await handleWorkflowStepAction(Number(button.getAttribute('data-workflow-step-index') || 0), button.getAttribute('data-workflow-step-action'));
+          };
+        });
+      }
+      function renderManualWorkflowWorkspace(resultForPreview) {
+        renderWorkflowSequencePreview();
+        renderManualWorkflowStepCards();
+        refreshWorkflowContextPreview();
+        if (resultForPreview) {
+          renderLocalResponseAgentJson(manualWorkflowResult, resultForPreview, 'No manual workflow preview available.');
+        }
+      }
+      function insertWorkflowStepPrompt(step) {
+        try {
+          const parsedBody = JSON.parse(bodyInput.value || '{}');
+          if (!parsedBody || Array.isArray(parsedBody) || typeof parsedBody !== 'object') {
+            manualWorkflowStatus.textContent = 'Suggested request was not inserted because the editable payload is not a JSON object.';
+            return;
+          }
+          const promptText = manualWorkflowStepPrompt(step);
+          if ('user_request' in parsedBody) {
+            parsedBody.user_request = promptText;
+          } else if ('request' in parsedBody) {
+            parsedBody.request = promptText;
+          } else if ('query' in parsedBody) {
+            parsedBody.query = promptText;
+          } else if ('message' in parsedBody) {
+            parsedBody.message = promptText;
+          } else {
+            parsedBody.user_request = promptText;
+          }
+          bodyInput.value = JSON.stringify(parsedBody, null, 2);
+          renderReviewedWebContextPreview();
+          manualWorkflowStatus.textContent = 'Suggested request inserted into the editable payload by manual click. No agent was invoked.';
+        } catch (error) {
+          manualWorkflowStatus.textContent = `Suggested request was not inserted: ${error.message}.`;
+        }
+      }
+      async function handleWorkflowStepAction(index, action) {
+        const step = latestManualWorkflowSteps[index];
+        if (!step) {
+          manualWorkflowStatus.textContent = 'Workflow step unavailable. Nothing changed.';
+          return;
+        }
+        manualWorkflowSteps.value = String(index);
+        if (action === 'select') {
+          const agentId = manualWorkflowStepAgentId(step);
+          if (agentId) {
+            await localResponseAgentSelectSuggestedAgent(agentId);
+            manualWorkflowStatus.textContent = 'Step agent selected in the request composer by manual click. No agent was invoked.';
+          }
+        } else if (action === 'prompt') {
+          insertWorkflowStepPrompt(step);
+        } else if (action === 'context') {
+          refreshWorkflowContextPreview();
+          manualWorkflowStatus.textContent = 'Selected step context preview refreshed from current page state only.';
+        } else if (action === 'up' && index > 0) {
+          const steps = latestManualWorkflowSteps.slice();
+          [steps[index - 1], steps[index]] = [steps[index], steps[index - 1]];
+          setManualWorkflowSteps(steps, 'manual reorder', { workflow_steps: steps, manual_only: true });
+          manualWorkflowSteps.value = String(index - 1);
+          manualWorkflowStatus.textContent = 'Workflow step moved up in this page session only.';
+        } else if (action === 'down' && index < latestManualWorkflowSteps.length - 1) {
+          const steps = latestManualWorkflowSteps.slice();
+          [steps[index], steps[index + 1]] = [steps[index + 1], steps[index]];
+          setManualWorkflowSteps(steps, 'manual reorder', { workflow_steps: steps, manual_only: true });
+          manualWorkflowSteps.value = String(index + 1);
+          manualWorkflowStatus.textContent = 'Workflow step moved down in this page session only.';
+        } else if (action === 'remove') {
+          const steps = latestManualWorkflowSteps.filter((_, stepIndex) => stepIndex !== index);
+          setManualWorkflowSteps(steps, 'manual removal', { workflow_steps: steps, manual_only: true });
+          manualWorkflowStatus.textContent = 'Workflow step removed from this page session only.';
+        }
+      }
+      function renderManualWorkflowSteps(result) {
+        const rawSteps = []
+          .concat(Array.isArray(result && result.workflow_steps) ? result.workflow_steps : [])
+          .concat(Array.isArray(result && result.workflowSteps) ? result.workflowSteps : []);
+        setManualWorkflowSteps(rawSteps, selectedPlaybook ? `playbook: ${selectedPlaybook.title}` : 'manual preview', result);
       }
       function localResponsePriorContextFromLatestResponse() {
         if (!latestLocalResponseBody || typeof latestLocalResponseBody !== 'object' || Array.isArray(latestLocalResponseBody)) {
@@ -3158,6 +3588,80 @@ def dashboard_html() -> str:
         } catch (error) {
           manualWorkflowStatus.textContent = `Prior context was not inserted: ${error.message}.`;
         }
+      }
+      function buildWorkflowPacketText() {
+        const sourceSummary = sourceSummaryFromReviewedPayload();
+        const selectedEntry = selectedSessionBoardEntries()[0] || null;
+        const bestEntry = bestOutputEntry();
+        const lines = [
+          'Manual Workflow Packet',
+          '',
+          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no automatic handoff, no automatic agent execution.',
+          '',
+          `Workflow goal: ${manualWorkflowGoal.value.trim() || 'Not provided.'}`,
+          `Populated from: ${selectedPlaybook ? selectedPlaybook.title : 'Manual selection or current page state.'}`,
+          `Current decision/question: ${manualWorkflowScratchFields.decision.value.trim() || 'Not provided.'}`,
+          '',
+          'Selected sequence',
+        ];
+        if (latestManualWorkflowSteps.length) {
+          latestManualWorkflowSteps.forEach((step, index) => {
+            lines.push(`${index + 1}. ${manualWorkflowStepName(step)} (${manualWorkflowStepAgentId(step) || 'suggested'})`);
+            lines.push(`   Purpose: ${manualWorkflowStepPurpose(step)}`);
+            lines.push(`   Request focus: ${manualWorkflowStepPrompt(step)}`);
+            lines.push(`   Expected input/context: ${manualWorkflowStepInput(step)}`);
+            lines.push(`   Expected output: ${manualWorkflowStepOutput(step)}`);
+            lines.push(`   Readiness: ${workflowStepReadiness(step).join('; ')}`);
+          });
+        } else {
+          lines.push('No workflow steps selected.');
+        }
+        lines.push('', 'Included context sources');
+        workflowContextSections().forEach(([label]) => lines.push(`- ${label}`));
+        lines.push('', 'Latest/best result references');
+        lines.push(`Selected board entry: ${selectedEntry ? workflowBoardEntryText(selectedEntry) : 'None selected.'}`);
+        lines.push(`Best output: ${bestEntry ? workflowBoardEntryText(bestEntry) : 'None marked.'}`);
+        lines.push('', 'Evidence/source warnings');
+        lines.push(`Reviewed source count: ${sourceSummary.count}`);
+        lines.push(`Source labels: ${(sourceSummary.labels || []).join(', ') || 'none'}`);
+        lines.push(`Cautions: ${(sourceSummary.cautions || []).join(' ') || 'none returned'}`);
+        lines.push('', 'Decision summary');
+        lines.push(latestDecisionSummaryText || decisionSummaryOutput.value || 'No decision summary built yet.');
+        lines.push('', 'Scratchpad');
+        lines.push(manualWorkflowScratchpadText() || 'No scratchpad notes entered.');
+        lines.push('', 'Unresolved questions');
+        lines.push(manualWorkflowScratchFields.unresolved.value.trim() || 'Not provided.');
+        lines.push('', 'Next manual action');
+        lines.push(manualWorkflowScratchFields.nextAction.value.trim() || 'Select one workflow step, review context, then manually invoke one selected agent if ready.');
+        return lines.join('\n').slice(0, 9000);
+      }
+      function buildWorkflowPacket() {
+        latestWorkflowPacketText = buildWorkflowPacketText();
+        manualWorkflowPacketOutput.value = latestWorkflowPacketText;
+        manualWorkflowPacketStatus.textContent = 'Workflow packet built from current page state only. No agent invocation, connector, persistence, handoff, or background action occurred.';
+        refreshWorkflowContextPreview();
+      }
+      function priorContextFromWorkflowPacket() {
+        const text = latestWorkflowPacketText || manualWorkflowPacketOutput.value || '';
+        if (!text || text === 'No workflow packet yet.') {
+          return null;
+        }
+        return priorContextFromWorkflowText(text, 'manual_workflow_packet', 'Manual Workflow Packet');
+      }
+      function insertWorkflowPacketAsPriorContext() {
+        if (!latestWorkflowPacketText) {
+          buildWorkflowPacket();
+        }
+        const context = priorContextFromWorkflowPacket();
+        if (!context) {
+          manualWorkflowPacketStatus.textContent = 'No workflow packet is available for prior_agent_context.';
+          return;
+        }
+        writePriorContextToPayload(
+          context,
+          'prior_agent_context insertion succeeded from workflow packet, but agent was not run. Editable JSON payload updated only.'
+        );
+        manualWorkflowPacketStatus.textContent = 'Workflow packet inserted into prior_agent_context by manual click. No agent was invoked and no handoff occurred.';
       }
       function localResponsePlainText(value, maxLength = 4000) {
         const text = Array.isArray(value)
@@ -3437,6 +3941,10 @@ def dashboard_html() -> str:
         }
         if (latestReviewPacketText) {
           buildReviewPacket();
+        }
+        refreshWorkflowContextPreview();
+        if (latestWorkflowPacketText) {
+          buildWorkflowPacket();
         }
       }
       function sessionBoardEntryFromLatestResponse() {
@@ -4360,6 +4868,7 @@ def dashboard_html() -> str:
         manualWorkflowStatus.textContent = 'Manual workflow preview requested. No agent is invoked, no handoff is created, and no workflow is persisted.';
         manualWorkflowResult.textContent = 'Manual workflow preview pending.';
         manualWorkflowSteps.innerHTML = '<option value="">No manual workflow steps available</option>';
+        manualWorkflowStepCards.innerHTML = 'Workflow step cards refresh after preview.';
         try {
           const response = await fetch('/agents/local-response-agents/manual-workflow-preview', {
             method: 'POST',
@@ -4392,6 +4901,27 @@ def dashboard_html() -> str:
         await localResponseAgentSelectSuggestedAgent(agentId);
         manualWorkflowStatus.textContent = 'Workflow step loaded into the request composer. Manual step only - not executed, not handed off, and not persisted.';
       };
+      manualWorkflowSteps.onchange = refreshWorkflowContextPreview;
+      manualWorkflowContextRefreshButton.onclick = refreshWorkflowContextPreview;
+      manualWorkflowContextInsertButton.onclick = insertWorkflowContextAsPriorContext;
+      manualWorkflowPacketBuildButton.onclick = buildWorkflowPacket;
+      manualWorkflowPacketInsertButton.onclick = insertWorkflowPacketAsPriorContext;
+      document.querySelectorAll('input[data-workflow-context-source]').forEach((checkbox) => {
+        checkbox.onchange = () => {
+          refreshWorkflowContextPreview();
+          if (latestWorkflowPacketText) {
+            buildWorkflowPacket();
+          }
+        };
+      });
+      Object.values(manualWorkflowScratchFields).forEach((field) => {
+        field.oninput = () => {
+          refreshWorkflowContextPreview();
+          if (latestWorkflowPacketText) {
+            buildWorkflowPacket();
+          }
+        };
+      });
       priorContextCopyButton.onclick = insertLatestResponseAsPriorContext;
       sessionBoardAddButton.onclick = addLatestResponseToSessionBoard;
       sessionBoardCompareButton.onclick = buildSessionComparison;
@@ -4610,6 +5140,7 @@ def dashboard_html() -> str:
       renderPlaybooks();
       renderContextKitPreview();
       renderSourceReviewChecklist();
+      renderManualWorkflowWorkspace({ workflow_steps: latestManualWorkflowSteps, manual_only: true });
       renderSessionResultBoard();
       loadSelectedExample();
     }
