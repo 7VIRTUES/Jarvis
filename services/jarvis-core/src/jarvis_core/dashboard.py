@@ -2345,10 +2345,76 @@ def dashboard_html() -> str:
       const agentId = localResponseAgentId(agent);
       return agentId ? `/agents/local-response-agents/${encodeURIComponent(agentId)}/request-template` : '';
     }
+    function dashboardElement(id) {
+      return document.getElementById(id);
+    }
+    function bindDashboardEvent(target, eventName, handler) {
+      if (!target) {
+        return false;
+      }
+      target.addEventListener(eventName, handler);
+      return true;
+    }
+    function bindDashboardClick(target, handler) {
+      return bindDashboardEvent(target, 'click', handler);
+    }
+    function bindDashboardChange(target, handler) {
+      return bindDashboardEvent(target, 'change', handler);
+    }
+    function bindDashboardInput(target, handler) {
+      return bindDashboardEvent(target, 'input', handler);
+    }
+    function dashboardQueryAll(container, selector) {
+      return container ? Array.from(container.querySelectorAll(selector)) : [];
+    }
+    function dashboardMetadataValue(value, fallbackText = 'metadata unavailable') {
+      if (value === null || value === undefined || value === '') {
+        return fallbackText;
+      }
+      if (Array.isArray(value)) {
+        return value.length ? value.map((item) => dashboardMetadataValue(item, fallbackText)).join(', ') : fallbackText;
+      }
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return fallbackText;
+        }
+      }
+      return String(value);
+    }
+    function localResponseFirstField(source, names, fallbackValue) {
+      if (!source || typeof source !== 'object') {
+        return fallbackValue;
+      }
+      const foundName = names.find((name) => Object.prototype.hasOwnProperty.call(source, name));
+      return foundName ? source[foundName] : fallbackValue;
+    }
+    function localResponseFieldList(source, names) {
+      return localResponseList(localResponseFirstField(source, names, []));
+    }
+    function sourceCitationLabel(source, index) {
+      return dashboardMetadataValue(
+        localResponseFirstField(source || {}, ['citation_label', 'citationLabel', 'source_id', 'sourceId', 'title', 'final_url', 'finalUrl', 'source_url', 'sourceUrl'], localResponseSourceLabel(index)),
+        localResponseSourceLabel(index)
+      );
+    }
+    function sourceFetchedAt(source) {
+      return localResponseFirstField(source || {}, ['fetched_at', 'fetchedAt'], '');
+    }
+    function sourcePublishedAt(source) {
+      return localResponseFirstField(source || {}, ['published_at', 'publishedAt'], '');
+    }
+    function sourceCautionList(source) {
+      return localResponseFieldList(source || {}, ['quality_warnings', 'qualityWarnings', 'source_cautions', 'sourceCautions', 'source_quality_warnings', 'sourceQualityWarnings']);
+    }
     function emptyStateHtml(text) {
       return `<div class="empty-state">${escapeHtml(text)}</div>`;
     }
     function renderLocalResponseAgentJson(target, value, fallbackText) {
+      if (!target) {
+        return;
+      }
       try {
         target.textContent = value ? JSON.stringify(value, null, 2) : fallbackText;
       } catch (error) {
@@ -2420,6 +2486,9 @@ def dashboard_html() -> str:
           : undefined;
     }
     function renderStructuredLocalResponse(target, responseBody) {
+      if (!target) {
+        return;
+      }
       const fields = [
         'title',
         'summary',
@@ -2472,6 +2541,9 @@ def dashboard_html() -> str:
         : '<div class="muted">Local response returned no common display fields. Raw JSON remains visible below.</div>' + additionalRows;
     }
     function renderWorkbenchError(target, title, message, details) {
+      if (!target) {
+        return;
+      }
       target.className = 'row stack';
       let detailText = '';
       if (details) {
@@ -2488,6 +2560,7 @@ def dashboard_html() -> str:
       `;
     }
     const localResponseSafetyCopy = 'Response-only support. Manual review is required. Verify important details before acting. No connector call, external action, automatic handoff, or professional/legal/medical/financial decision automation occurs.';
+    const localResponseSessionOnlyCopy = 'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no automatic handoff, no automatic agent execution.';
     const collapsedWorkbenchPanels = new Set([
       'local-response-agents-playbooks',
       'local-response-agents-browser',
@@ -2560,40 +2633,40 @@ def dashboard_html() -> str:
     function initializeLocalResponseAgentsWorkbench(index) {
       const agents = Array.isArray(index && index.agents) ? index.agents : [];
       const allowlistedEndpointPaths = localResponseAgentAllowlist(agents);
-      const select = document.getElementById('local-response-agents-workbench-select');
-      const categorySelect = document.getElementById('local-response-agents-category-select');
-      const categoryCounts = document.getElementById('local-response-agents-category-counts');
-      const discoveryStatus = document.getElementById('local-response-agents-discovery-status');
-      const detailPanel = document.getElementById('local-response-agents-detail-panel');
-      const boundaryFlagsPanel = document.getElementById('local-response-agents-boundary-flags');
-      const templateStatus = document.getElementById('local-response-agents-template-status');
-      const templateOutput = document.getElementById('local-response-agents-request-template');
-      const samplePayloadOutput = document.getElementById('local-response-agents-sample-payload');
-      const useSampleButton = document.getElementById('local-response-agents-use-sample-button');
-      const routePreviewInput = document.getElementById('local-response-agents-route-preview-input');
-      const routePreviewButton = document.getElementById('local-response-agents-route-preview-button');
-      const routePreviewStatus = document.getElementById('local-response-agents-route-preview-status');
-      const routePreviewSuggestions = document.getElementById('local-response-agents-route-preview-suggestions');
-      const routePreviewResult = document.getElementById('local-response-agents-route-preview-result');
-      const manualWorkflowGoal = document.getElementById('local-response-agents-manual-workflow-goal');
-      const manualWorkflowCandidates = document.getElementById('local-response-agents-manual-workflow-candidates');
-      const manualWorkflowIncludeWebContext = document.getElementById('local-response-agents-manual-workflow-include-web-context');
-      const manualWorkflowPreviewButton = document.getElementById('local-response-agents-manual-workflow-preview-button');
-      const manualWorkflowLoadStepButton = document.getElementById('local-response-agents-manual-workflow-load-step-button');
-      const priorContextCopyButton = document.getElementById('local-response-agents-prior-context-copy-button');
-      const manualWorkflowStatus = document.getElementById('local-response-agents-manual-workflow-status');
-      const manualWorkflowSteps = document.getElementById('local-response-agents-manual-workflow-steps');
-      const manualWorkflowResult = document.getElementById('local-response-agents-manual-workflow-result');
-      const manualWorkflowPlaybookLabel = document.getElementById('local-response-agents-manual-workflow-playbook-label');
-      const manualWorkflowSequencePreview = document.getElementById('local-response-agents-manual-workflow-sequence-preview');
-      const manualWorkflowStepCards = document.getElementById('local-response-agents-manual-workflow-step-cards');
-      const manualWorkflowContextPreview = document.getElementById('local-response-agents-manual-workflow-context-preview');
-      const manualWorkflowContextRefreshButton = document.getElementById('local-response-agents-manual-workflow-context-refresh-button');
-      const manualWorkflowContextInsertButton = document.getElementById('local-response-agents-manual-workflow-context-insert-button');
-      const manualWorkflowPacketBuildButton = document.getElementById('local-response-agents-manual-workflow-packet-build-button');
-      const manualWorkflowPacketInsertButton = document.getElementById('local-response-agents-manual-workflow-packet-insert-button');
-      const manualWorkflowPacketStatus = document.getElementById('local-response-agents-manual-workflow-packet-status');
-      const manualWorkflowPacketOutput = document.getElementById('local-response-agents-manual-workflow-packet-output');
+      const select = dashboardElement('local-response-agents-workbench-select');
+      const categorySelect = dashboardElement('local-response-agents-category-select');
+      const categoryCounts = dashboardElement('local-response-agents-category-counts');
+      const discoveryStatus = dashboardElement('local-response-agents-discovery-status');
+      const detailPanel = dashboardElement('local-response-agents-detail-panel');
+      const boundaryFlagsPanel = dashboardElement('local-response-agents-boundary-flags');
+      const templateStatus = dashboardElement('local-response-agents-template-status');
+      const templateOutput = dashboardElement('local-response-agents-request-template');
+      const samplePayloadOutput = dashboardElement('local-response-agents-sample-payload');
+      const useSampleButton = dashboardElement('local-response-agents-use-sample-button');
+      const routePreviewInput = dashboardElement('local-response-agents-route-preview-input');
+      const routePreviewButton = dashboardElement('local-response-agents-route-preview-button');
+      const routePreviewStatus = dashboardElement('local-response-agents-route-preview-status');
+      const routePreviewSuggestions = dashboardElement('local-response-agents-route-preview-suggestions');
+      const routePreviewResult = dashboardElement('local-response-agents-route-preview-result');
+      const manualWorkflowGoal = dashboardElement('local-response-agents-manual-workflow-goal');
+      const manualWorkflowCandidates = dashboardElement('local-response-agents-manual-workflow-candidates');
+      const manualWorkflowIncludeWebContext = dashboardElement('local-response-agents-manual-workflow-include-web-context');
+      const manualWorkflowPreviewButton = dashboardElement('local-response-agents-manual-workflow-preview-button');
+      const manualWorkflowLoadStepButton = dashboardElement('local-response-agents-manual-workflow-load-step-button');
+      const priorContextCopyButton = dashboardElement('local-response-agents-prior-context-copy-button');
+      const manualWorkflowStatus = dashboardElement('local-response-agents-manual-workflow-status');
+      const manualWorkflowSteps = dashboardElement('local-response-agents-manual-workflow-steps');
+      const manualWorkflowResult = dashboardElement('local-response-agents-manual-workflow-result');
+      const manualWorkflowPlaybookLabel = dashboardElement('local-response-agents-manual-workflow-playbook-label');
+      const manualWorkflowSequencePreview = dashboardElement('local-response-agents-manual-workflow-sequence-preview');
+      const manualWorkflowStepCards = dashboardElement('local-response-agents-manual-workflow-step-cards');
+      const manualWorkflowContextPreview = dashboardElement('local-response-agents-manual-workflow-context-preview');
+      const manualWorkflowContextRefreshButton = dashboardElement('local-response-agents-manual-workflow-context-refresh-button');
+      const manualWorkflowContextInsertButton = dashboardElement('local-response-agents-manual-workflow-context-insert-button');
+      const manualWorkflowPacketBuildButton = dashboardElement('local-response-agents-manual-workflow-packet-build-button');
+      const manualWorkflowPacketInsertButton = dashboardElement('local-response-agents-manual-workflow-packet-insert-button');
+      const manualWorkflowPacketStatus = dashboardElement('local-response-agents-manual-workflow-packet-status');
+      const manualWorkflowPacketOutput = dashboardElement('local-response-agents-manual-workflow-packet-output');
       const manualWorkflowScratchFields = {
         decision: document.getElementById('local-response-agents-manual-workflow-decision'),
         assumptions: document.getElementById('local-response-agents-manual-workflow-assumptions'),
@@ -2716,6 +2789,122 @@ def dashboard_html() -> str:
       let pinnedAgentIds = [];
       let recentAgentIds = [];
       let selectedPlaybook = null;
+      const requiredWorkbenchElements = [
+        select,
+        categorySelect,
+        categoryCounts,
+        discoveryStatus,
+        detailPanel,
+        boundaryFlagsPanel,
+        templateStatus,
+        templateOutput,
+        samplePayloadOutput,
+        useSampleButton,
+        routePreviewInput,
+        routePreviewButton,
+        routePreviewStatus,
+        routePreviewSuggestions,
+        routePreviewResult,
+        manualWorkflowGoal,
+        manualWorkflowCandidates,
+        manualWorkflowIncludeWebContext,
+        manualWorkflowPreviewButton,
+        manualWorkflowLoadStepButton,
+        priorContextCopyButton,
+        manualWorkflowStatus,
+        manualWorkflowSteps,
+        manualWorkflowResult,
+        manualWorkflowPlaybookLabel,
+        manualWorkflowSequencePreview,
+        manualWorkflowStepCards,
+        manualWorkflowContextPreview,
+        manualWorkflowContextRefreshButton,
+        manualWorkflowContextInsertButton,
+        manualWorkflowPacketBuildButton,
+        manualWorkflowPacketInsertButton,
+        manualWorkflowPacketStatus,
+        manualWorkflowPacketOutput,
+        endpointDisplay,
+        docsLink,
+        outputTypeSelect,
+        payloadPreviewStatus,
+        bodyInput,
+        runButton,
+        status,
+        structuredResponse,
+        responseOutput,
+        sessionBoardAddButton,
+        sessionBoardCompareButton,
+        sessionBoardPacketButton,
+        sessionBoardInsertEntryButton,
+        sessionBoardInsertPacketButton,
+        sessionBoardClearButton,
+        sessionBoardStatus,
+        sessionBoardEntries,
+        sessionBoardTagFilters,
+        sessionBoardFilterSelectedButton,
+        sessionBoardFilterBestButton,
+        sessionBoardClearFilterButton,
+        sessionBoardFilterStatus,
+        comparisonScope,
+        resultComparisonBody,
+        decisionQuestion,
+        decisionCriteria,
+        decisionRiskNotes,
+        decisionUnresolved,
+        decisionNextAction,
+        decisionSummaryBuildButton,
+        decisionSummaryInsertButton,
+        decisionSummaryStatus,
+        decisionSummaryOutput,
+        reviewPacketOutput,
+        webResearchEnabled,
+        webResearchUrls,
+        webResearchValidateButton,
+        webResearchFetchButton,
+        webResearchContextButton,
+        webResearchAddButton,
+        webResearchStatus,
+        webResearchResult,
+        reviewedWebContextPreview,
+        reviewedSourceList,
+        reviewedSourceClearButton,
+        sourceWarningSummary,
+        sourceQualityGroups,
+        sourceRecencyGroups,
+        sourceReviewChecklistStatus,
+        sourceAwarePreviewBody,
+        latestSourceTrace,
+        evidenceQuestion,
+        evidenceSourceNotes,
+        evidenceConcerns,
+        evidenceVerification,
+        evidenceNextStep,
+        evidencePackBuildButton,
+        evidencePackInsertButton,
+        evidencePackStatus,
+        evidencePackOutput,
+        commandSearch,
+        commandCategory,
+        commandCount,
+        commandList,
+        pinnedList,
+        recentList,
+        highStakesBanner,
+        playbookList,
+        playbookStatus,
+        playbookPreview,
+        contextInsertRequestButton,
+        contextInsertPriorButton,
+        contextStatus,
+        contextPreview,
+      ];
+      if (!requiredWorkbenchElements.every(Boolean) || !Object.values(contextFields).every(Boolean) || !Object.values(manualWorkflowScratchFields).every(Boolean)) {
+        if (discoveryStatus) {
+          discoveryStatus.textContent = 'Local response-agent workbench unavailable because expected dashboard panels are missing. Other dashboard sections can continue loading.';
+        }
+        return;
+      }
 
       categoryCounts.innerHTML = categories.length
         ? categories.map((category) => `<div><strong>${escapeHtml(category)}</strong>: ${escapeHtml(groupedAgents[category].length)} local response agents</div>`).join('')
@@ -2809,9 +2998,14 @@ def dashboard_html() -> str:
         const haystack = String(text || '').toLowerCase();
         return highStakesTerms.filter((term) => haystack.includes(term));
       }
+      function highStakesTermsFromParts(parts) {
+        return matchingHighStakesTerms((Array.isArray(parts) ? parts : [parts])
+          .map((part) => dashboardMetadataValue(part, ''))
+          .join(' '));
+      }
       function selectedHighStakesTerms() {
-        const agentTerms = matchingHighStakesTerms(localResponseAgentSearchText(selectedAgent()));
-        const playbookTerms = selectedPlaybook ? matchingHighStakesTerms(`${selectedPlaybook.title} ${selectedPlaybook.category} ${selectedPlaybook.goal}`) : [];
+        const agentTerms = highStakesTermsFromParts(localResponseAgentSearchText(selectedAgent()));
+        const playbookTerms = selectedPlaybook ? highStakesTermsFromParts([selectedPlaybook.title, selectedPlaybook.category, selectedPlaybook.goal]) : [];
         return Array.from(new Set(agentTerms.concat(playbookTerms)));
       }
       function selectAgentById(agentId) {
@@ -3441,13 +3635,13 @@ def dashboard_html() -> str:
       function workflowHighStakesText() {
         const terms = selectedHighStakesTerms();
         const step = selectedWorkflowStep();
-        const stepTerms = matchingHighStakesTerms([
+        const stepTerms = highStakesTermsFromParts([
           manualWorkflowStepName(step || {}),
           manualWorkflowStepPurpose(step || {}),
           manualWorkflowStepPrompt(step || {}),
           manualWorkflowStepInput(step || {}),
           manualWorkflowStepOutput(step || {}),
-        ].join(' '));
+        ]);
         const allTerms = Array.from(new Set(terms.concat(stepTerms)));
         return allTerms.length
           ? `High-stakes reminder: ${allTerms.join(', ')}. Review sources and decisions manually before using this step.`
@@ -3726,7 +3920,7 @@ def dashboard_html() -> str:
         const lines = [
           'Manual Workflow Packet',
           '',
-          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no automatic handoff, no automatic agent execution.',
+          localResponseSessionOnlyCopy,
           '',
           `Workflow goal: ${manualWorkflowGoal.value.trim() || 'Not provided.'}`,
           `Populated from: ${selectedPlaybook ? selectedPlaybook.title : 'Manual selection or current page state.'}`,
@@ -3836,7 +4030,7 @@ def dashboard_html() -> str:
       const sessionRiskOptions = ['not marked', 'low', 'medium', 'high'];
       const sessionReadinessOptions = ['not marked', 'not ready', 'review first', 'ready for manual use'];
       function sessionEntryIsHighStakes(entry) {
-        return matchingHighStakesTerms([
+        return highStakesTermsFromParts([
           entry.agent_id,
           entry.display_name,
           entry.output_type,
@@ -3844,20 +4038,14 @@ def dashboard_html() -> str:
           entry.summary,
           entry.safety_notes.join(' '),
           entry.tags.join(' '),
-        ].join(' ')).length > 0 || entry.tags.includes('high-stakes');
+        ]).length > 0 || entry.tags.includes('high-stakes');
       }
       function sourceDateText(source) {
-        const safeSource = source || {};
-        return String(
-          safeSource.fetched_at ||
-          safeSource.fetchedAt ||
-          safeSource.published_at ||
-          safeSource.publishedAt ||
-          safeSource.date ||
-          safeSource.updated_at ||
-          safeSource.updatedAt ||
-          ''
-        ).trim();
+        return String(sourceFetchedAt(source) || sourcePublishedAt(source) || localResponseFirstField(source || {}, [
+          'date',
+          'updated_at',
+          'updatedAt',
+        ], '') || '').trim();
       }
       function sourceRecencyLabel(source) {
         const rawDate = sourceDateText(source);
@@ -3880,7 +4068,7 @@ def dashboard_html() -> str:
       function sourceQualityLabel(source, label) {
         const safeSource = source || {};
         const warnings = localResponseReviewedSourceWarnings(safeSource, label);
-        const missingMetadata = !safeSource.title || !sourceDateText(safeSource) || !(safeSource.final_url || safeSource.source_url);
+        const missingMetadata = !safeSource.title || !sourceDateText(safeSource) || !localResponseFirstField(safeSource, ['final_url', 'finalUrl', 'source_url', 'sourceUrl'], '');
         if (missingMetadata) {
           return 'missing metadata';
         }
@@ -3928,12 +4116,12 @@ def dashboard_html() -> str:
             traceUnavailable: true,
           };
         }
-        const sourcesUsed = localResponseKnownValue(latestLocalResponseBody, 'sources_used') || localResponseKnownValue(latestLocalResponseBody, 'sourcesUsed') || [];
-        const citationLabels = localResponseList(localResponseFirstValue(latestLocalResponseBody, ['citation_labels', 'citationLabels']));
+        const sourcesUsed = localResponseFirstField(latestLocalResponseBody, ['sources_used', 'sourcesUsed'], []);
+        const citationLabels = localResponseFieldList(latestLocalResponseBody, ['citation_labels', 'citationLabels']);
         return {
           sourceLabelsUsed: citationLabels,
-          sourceCautions: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_cautions', 'sourceCautions'])),
-          sourceQualityWarnings: localResponseList(localResponseFirstValue(latestLocalResponseBody, ['source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes'])),
+          sourceCautions: localResponseFieldList(latestLocalResponseBody, ['source_cautions', 'sourceCautions']),
+          sourceQualityWarnings: localResponseFieldList(latestLocalResponseBody, ['source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes']),
           sourcesUsed: Array.isArray(sourcesUsed) ? sourcesUsed.slice(0, 10) : [],
           traceUnavailable: !citationLabels.length && !(Array.isArray(sourcesUsed) && sourcesUsed.length),
         };
@@ -3942,7 +4130,7 @@ def dashboard_html() -> str:
         const payloadSources = localResponseReviewedSourcesFromPayload();
         const trace = latestResponseSourceTrace();
         const payloadLabels = Array.isArray(payloadSources)
-          ? payloadSources.map((source, index) => source && (source.citation_label || source.citationLabel || source.title || localResponseSourceLabel(index))).filter(Boolean)
+          ? payloadSources.map((source, index) => sourceCitationLabel(source, index)).filter(Boolean)
           : [];
         return [
           `Reviewed source count in current payload: ${Array.isArray(payloadSources) ? payloadSources.length : 'invalid payload JSON'}`,
@@ -3965,21 +4153,18 @@ def dashboard_html() -> str:
         if (!Array.isArray(entries) || !entries.length) {
           return { count: 0, labels: [], cautions: ['No reviewed sources attached.'], recency: [], qualityCounts: sourceQualityCounts([]), recencyCounts: sourceRecencyCounts([]) };
         }
-        const labels = entries.map((source, index) => {
-          const safeSource = source || {};
-          return safeSource.citation_label || safeSource.citationLabel || safeSource.title || safeSource.final_url || safeSource.source_url || localResponseSourceLabel(index);
-        }).filter(Boolean).slice(0, 10);
+        const labels = entries.map((source, index) => sourceCitationLabel(source, index)).filter(Boolean).slice(0, 10);
         const cautions = entries.flatMap((source, index) => localResponseReviewedSourceWarnings(source || {}, localResponseSourceLabel(index))).slice(0, 12);
         const recency = entries.map((source) => source && `${sourceRecencyLabel(source)}${sourceDateText(source) ? ` (${sourceDateText(source)})` : ''}`).filter(Boolean).slice(0, 10);
         return { count: entries.length, labels, cautions, recency, qualityCounts: sourceQualityCounts(entries), recencyCounts: sourceRecencyCounts(entries) };
       }
       function sourceSummaryFromResponse(responseBody, payloadSummary) {
-        const sourcesUsed = localResponseKnownValue(responseBody, 'sources_used') || localResponseKnownValue(responseBody, 'sourcesUsed') || [];
+        const sourcesUsed = localResponseFirstField(responseBody, ['sources_used', 'sourcesUsed'], []);
         const labelsFromResponse = Array.isArray(sourcesUsed)
-          ? sourcesUsed.map((source) => source && (source.citation_label || source.citationLabel || source.source_id || source.sourceId || source.title)).filter(Boolean)
+          ? sourcesUsed.map((source, index) => sourceCitationLabel(source, index)).filter(Boolean)
           : [];
-        const sourceLabels = localResponseList(localResponseFirstValue(responseBody, ['citation_labels', 'citationLabels'])).concat(labelsFromResponse);
-        const sourceCautions = localResponseList(localResponseFirstValue(responseBody, ['source_cautions', 'sourceCautions', 'source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes']));
+        const sourceLabels = localResponseFieldList(responseBody, ['citation_labels', 'citationLabels']).concat(labelsFromResponse);
+        const sourceCautions = localResponseFieldList(responseBody, ['source_cautions', 'sourceCautions', 'source_quality_warnings', 'sourceQualityWarnings', 'source_recency_notes', 'sourceRecencyNotes']);
         return {
           count: Math.max(payloadSummary.count || 0, sourceLabels.length, Array.isArray(sourcesUsed) ? sourcesUsed.length : 0),
           labels: Array.from(new Set((payloadSummary.labels || []).concat(sourceLabels))).slice(0, 20),
@@ -4316,7 +4501,7 @@ def dashboard_html() -> str:
         const lines = [
           'Decision Summary',
           '',
-          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no automatic handoff.',
+          localResponseSessionOnlyCopy,
           '',
           `Decision question or goal: ${decisionQuestion.value.trim() || 'Not provided.'}`,
           `Decision criteria: ${decisionCriteria.value.trim() || 'Not provided.'}`,
@@ -4566,13 +4751,13 @@ def dashboard_html() -> str:
           .filter((source) => source && source.fetched && source.excerpt)
           .slice(0, 5)
           .map((source) => ({
-            source_url: source.url || source.source_url || '',
-            final_url: source.final_url || source.finalUrl || '',
-            title: source.title || '',
+            source_url: localResponseFirstField(source, ['url', 'source_url', 'sourceUrl'], ''),
+            final_url: localResponseFirstField(source, ['final_url', 'finalUrl'], ''),
+            title: dashboardMetadataValue(source.title, ''),
             excerpt: String(source.excerpt || '').slice(0, 4000),
             content_type: source.content_type || source.contentType || '',
             fetched: true,
-            fetched_at: source.fetched_at || source.fetchedAt || '',
+            fetched_at: sourceFetchedAt(source),
             source_type: 'public_web_excerpt',
             limitations: Array.isArray(source.limitations) ? source.limitations.slice(0, 8) : [],
           }));
@@ -4591,16 +4776,11 @@ def dashboard_html() -> str:
         }
       }
       function localResponseReviewedSourceWarnings(source, label) {
-        const warnings = []
-          .concat(Array.isArray(source.quality_warnings) ? source.quality_warnings : [])
-          .concat(Array.isArray(source.qualityWarnings) ? source.qualityWarnings : [])
-          .concat(Array.isArray(source.source_cautions) ? source.source_cautions : [])
-          .concat(Array.isArray(source.sourceCautions) ? source.sourceCautions : [])
-          .slice(0, 4);
+        const warnings = sourceCautionList(source).slice(0, 4);
         if (!source.title) {
           warnings.push(`[${label}] Missing source title.`);
         }
-        if (!source.fetched_at && !source.fetchedAt) {
+        if (!sourceFetchedAt(source)) {
           warnings.push(`[${label}] Missing fetched_at; recency is unknown.`);
         }
         warnings.push(`[${label}] Excerpt is partial, user-reviewed, and not independently verified.`);
@@ -4629,7 +4809,7 @@ def dashboard_html() -> str:
           return `
             <div class="row stack">
               <div><strong>[${escapeHtml(label)}]</strong> ${escapeHtml(safeSource.title || 'Untitled reviewed source')}</div>
-              <div class="muted">${escapeHtml(safeSource.final_url || safeSource.source_url || 'No public source URL supplied')}</div>
+              <div class="muted">${escapeHtml(localResponseFirstField(safeSource, ['final_url', 'finalUrl', 'source_url', 'sourceUrl'], 'No public source URL supplied'))}</div>
               <div><span class="pill">${escapeHtml(quality)}</span> <span class="pill">${escapeHtml(recency)}</span>${dateText ? ` <span class="pill">${escapeHtml(dateText)}</span>` : ''}</div>
               <div>${escapeHtml(String(safeSource.excerpt || '').slice(0, 360))}</div>
               <div class="muted">Warnings: ${escapeHtml(warnings.join(' '))}</div>
@@ -4688,13 +4868,13 @@ def dashboard_html() -> str:
       }
       function sourceContextIsHighStakes() {
         const snapshot = payloadReadinessSnapshot();
-        return selectedHighStakesTerms().length > 0 || matchingHighStakesTerms([
+        return selectedHighStakesTerms().length > 0 || highStakesTermsFromParts([
           snapshot.requestText,
           evidenceQuestion.value,
           evidenceSourceNotes.value,
           evidenceConcerns.value,
           sessionResultBoard.map((entry) => `${entry.tags.join(' ')} ${entry.summary} ${entry.source_cautions.join(' ')}`).join(' '),
-        ].join(' ')).length > 0;
+        ]).length > 0;
       }
       function renderSourceWarningSummary(entries) {
         const sourceSummary = sourceSummaryFromReviewedPayload();
@@ -4714,7 +4894,7 @@ def dashboard_html() -> str:
           warnings.push('One or more reviewed sources have unknown or older/stale recency. Check dates manually.');
         }
         if (highStakes) {
-          warnings.push('High-stakes reminder: response-only support, manual review required, no professional/legal/medical/financial decision automation, and no external action is taken.');
+          warnings.push(`High-stakes reminder: ${localResponseSafetyCopy}`);
         }
         sourceWarningSummary.className = warnings.length ? 'row stack notice' : 'row stack muted';
         sourceWarningSummary.innerHTML = warnings.length
@@ -4743,7 +4923,7 @@ def dashboard_html() -> str:
         const lines = [
           'Evidence Pack',
           '',
-          'Session-only plain text. Not persisted, not sent, not copied automatically, no connector, no source fetch, no browsing, no handoff.',
+          `${localResponseSessionOnlyCopy} No source fetch or browsing.`,
           '',
           `Evidence question / claim: ${evidenceQuestion.value.trim() || 'Not provided.'}`,
           `Source notes: ${evidenceSourceNotes.value.trim() || 'Not provided.'}`,
@@ -4954,47 +5134,47 @@ def dashboard_html() -> str:
         await loadSelectedTemplate(agent);
         updateReadinessUi();
       }
-      categorySelect.onchange = async () => {
+      bindDashboardChange(categorySelect, async () => {
         renderAgentOptions();
         await loadSelectedExample();
         trackRecentAgent(selectedAgent());
         renderCommandCenter();
-      };
-      select.onchange = async () => {
+      });
+      bindDashboardChange(select, async () => {
         await loadSelectedExample();
         trackRecentAgent(selectedAgent());
         updateReadinessUi();
-      };
-      outputTypeSelect.onchange = refreshPayloadOutputType;
-      bodyInput.oninput = renderReviewedWebContextPreview;
-      commandSearch.oninput = renderCommandCenter;
-      commandCategory.onchange = renderCommandCenter;
-      Object.values(contextFields).forEach((field) => {
-        field.oninput = renderContextKitPreview;
       });
-      contextInsertRequestButton.onclick = insertContextKitIntoRequest;
-      contextInsertPriorButton.onclick = () => insertContextKitAsPriorContext('Context kit inserted as prior_agent_context. No agent was invoked.');
-      document.querySelectorAll('input[data-source-review-check]').forEach((checkbox) => {
-        checkbox.onchange = () => {
+      bindDashboardChange(outputTypeSelect, refreshPayloadOutputType);
+      bindDashboardInput(bodyInput, renderReviewedWebContextPreview);
+      bindDashboardInput(commandSearch, renderCommandCenter);
+      bindDashboardChange(commandCategory, renderCommandCenter);
+      Object.values(contextFields).forEach((field) => {
+        bindDashboardInput(field, renderContextKitPreview);
+      });
+      bindDashboardClick(contextInsertRequestButton, insertContextKitIntoRequest);
+      bindDashboardClick(contextInsertPriorButton, () => insertContextKitAsPriorContext('Context kit inserted as prior_agent_context. No agent was invoked.'));
+      dashboardQueryAll(document, 'input[data-source-review-check]').forEach((checkbox) => {
+        bindDashboardChange(checkbox, () => {
           sourceReviewChecklist[checkbox.getAttribute('data-source-review-check') || ''] = checkbox.checked;
           renderSourceReviewChecklist();
           if (latestEvidencePackText) {
             buildEvidencePack();
           }
-        };
+        });
       });
-      evidencePackBuildButton.onclick = buildEvidencePack;
-      evidencePackInsertButton.onclick = insertEvidencePackAsPriorContext;
-      reviewedSourceClearButton.onclick = clearReviewedSources;
-      useSampleButton.onclick = () => {
+      bindDashboardClick(evidencePackBuildButton, buildEvidencePack);
+      bindDashboardClick(evidencePackInsertButton, insertEvidencePackAsPriorContext);
+      bindDashboardClick(reviewedSourceClearButton, clearReviewedSources);
+      bindDashboardClick(useSampleButton, () => {
         applySamplePayloadToComposer(selectedTemplate, selectedAgent());
-      };
-      routePreviewSuggestions.onchange = async () => {
+      });
+      bindDashboardChange(routePreviewSuggestions, async () => {
         if (routePreviewSuggestions.value) {
           await localResponseAgentSelectSuggestedAgent(routePreviewSuggestions.value);
         }
-      };
-      manualWorkflowPreviewButton.onclick = async () => {
+      });
+      bindDashboardClick(manualWorkflowPreviewButton, async () => {
         manualWorkflowStatus.textContent = 'Manual workflow preview requested. No agent is invoked, no handoff is created, and no workflow is persisted.';
         manualWorkflowResult.textContent = 'Manual workflow preview pending.';
         manualWorkflowSteps.innerHTML = '<option value="">No manual workflow steps available</option>';
@@ -5020,8 +5200,8 @@ def dashboard_html() -> str:
           manualWorkflowStatus.textContent = `Manual workflow preview unavailable: ${error.message}. No agent was invoked.`;
           manualWorkflowResult.textContent = 'No manual workflow preview available.';
         }
-      };
-      manualWorkflowLoadStepButton.onclick = async () => {
+      });
+      bindDashboardClick(manualWorkflowLoadStepButton, async () => {
         const step = latestManualWorkflowSteps[Number(manualWorkflowSteps.value || 0)];
         const agentId = step && (step.agent_id || step.agentId);
         if (!agentId) {
@@ -5030,50 +5210,50 @@ def dashboard_html() -> str:
         }
         await localResponseAgentSelectSuggestedAgent(agentId);
         manualWorkflowStatus.textContent = 'Workflow step loaded into the request composer. Manual step only - not executed, not handed off, and not persisted.';
-      };
-      manualWorkflowSteps.onchange = refreshWorkflowContextPreview;
-      manualWorkflowContextRefreshButton.onclick = refreshWorkflowContextPreview;
-      manualWorkflowContextInsertButton.onclick = insertWorkflowContextAsPriorContext;
-      manualWorkflowPacketBuildButton.onclick = buildWorkflowPacket;
-      manualWorkflowPacketInsertButton.onclick = insertWorkflowPacketAsPriorContext;
-      document.querySelectorAll('input[data-workflow-context-source]').forEach((checkbox) => {
-        checkbox.onchange = () => {
+      });
+      bindDashboardChange(manualWorkflowSteps, refreshWorkflowContextPreview);
+      bindDashboardClick(manualWorkflowContextRefreshButton, refreshWorkflowContextPreview);
+      bindDashboardClick(manualWorkflowContextInsertButton, insertWorkflowContextAsPriorContext);
+      bindDashboardClick(manualWorkflowPacketBuildButton, buildWorkflowPacket);
+      bindDashboardClick(manualWorkflowPacketInsertButton, insertWorkflowPacketAsPriorContext);
+      dashboardQueryAll(document, 'input[data-workflow-context-source]').forEach((checkbox) => {
+        bindDashboardChange(checkbox, () => {
           refreshWorkflowContextPreview();
           if (latestWorkflowPacketText) {
             buildWorkflowPacket();
           }
-        };
+        });
       });
       Object.values(manualWorkflowScratchFields).forEach((field) => {
-        field.oninput = () => {
+        bindDashboardInput(field, () => {
           refreshWorkflowContextPreview();
           if (latestWorkflowPacketText) {
             buildWorkflowPacket();
           }
-        };
+        });
       });
-      priorContextCopyButton.onclick = insertLatestResponseAsPriorContext;
-      sessionBoardAddButton.onclick = addLatestResponseToSessionBoard;
-      sessionBoardCompareButton.onclick = buildSessionComparison;
-      sessionBoardPacketButton.onclick = buildReviewPacket;
-      sessionBoardInsertEntryButton.onclick = insertSelectedBoardEntryAsPriorContext;
-      sessionBoardInsertPacketButton.onclick = insertReviewPacketAsPriorContext;
-      sessionBoardClearButton.onclick = clearSessionResultBoard;
-      sessionBoardFilterSelectedButton.onclick = () => {
+      bindDashboardClick(priorContextCopyButton, insertLatestResponseAsPriorContext);
+      bindDashboardClick(sessionBoardAddButton, addLatestResponseToSessionBoard);
+      bindDashboardClick(sessionBoardCompareButton, buildSessionComparison);
+      bindDashboardClick(sessionBoardPacketButton, buildReviewPacket);
+      bindDashboardClick(sessionBoardInsertEntryButton, insertSelectedBoardEntryAsPriorContext);
+      bindDashboardClick(sessionBoardInsertPacketButton, insertReviewPacketAsPriorContext);
+      bindDashboardClick(sessionBoardClearButton, clearSessionResultBoard);
+      bindDashboardClick(sessionBoardFilterSelectedButton, () => {
         sessionBoardFilter = { type: 'selected', value: '' };
         renderSessionResultBoard();
-      };
-      sessionBoardFilterBestButton.onclick = () => {
+      });
+      bindDashboardClick(sessionBoardFilterBestButton, () => {
         sessionBoardFilter = { type: 'best', value: '' };
         renderSessionResultBoard();
-      };
-      sessionBoardClearFilterButton.onclick = () => {
+      });
+      bindDashboardClick(sessionBoardClearFilterButton, () => {
         sessionBoardFilter = { type: 'all', value: '' };
         renderSessionResultBoard();
-      };
-      comparisonScope.onchange = buildSessionComparison;
-      decisionSummaryBuildButton.onclick = buildDecisionSummary;
-      decisionSummaryInsertButton.onclick = insertDecisionSummaryAsPriorContext;
+      });
+      bindDashboardChange(comparisonScope, buildSessionComparison);
+      bindDashboardClick(decisionSummaryBuildButton, buildDecisionSummary);
+      bindDashboardClick(decisionSummaryInsertButton, insertDecisionSummaryAsPriorContext);
       webResearchValidateButton.onclick = async () => {
         const urls = localResponseWebResearchUrls();
         webResearchStatus.textContent = 'Validating public URLs by manual click. No source content is fetched.';
