@@ -76,6 +76,24 @@ REQUIRED_FIELDS = {
     "webResearchIsOptional",
     "web_research_limitations",
     "webResearchLimitations",
+    "web_context_supported",
+    "webContextSupported",
+    "web_context_is_optional",
+    "webContextIsOptional",
+    "web_context_is_non_persistent",
+    "webContextIsNonPersistent",
+    "web_research_requires_manual_fetch",
+    "webResearchRequiresManualFetch",
+    "agents_do_not_auto_browse",
+    "agentsDoNotAutoBrowse",
+    "source_evidence_supported",
+    "sourceEvidenceSupported",
+    "citation_labels_supported",
+    "citationLabelsSupported",
+    "source_recency_flags_supported",
+    "sourceRecencyFlagsSupported",
+    "source_aware_response_supported",
+    "sourceAwareResponseSupported",
 }
 
 EXPECTED_CATEGORIES = {
@@ -138,6 +156,24 @@ def test_catalog_exposes_exactly_37_agents_with_required_fields():
         assert agent["webResearchIsOptional"] is True
         assert "accounts" in " ".join(agent["web_research_limitations"])
         assert "No private networks" in " ".join(agent["webResearchLimitations"])
+        assert agent["web_context_supported"] is True
+        assert agent["webContextSupported"] is True
+        assert agent["web_context_is_optional"] is True
+        assert agent["webContextIsOptional"] is True
+        assert agent["web_context_is_non_persistent"] is True
+        assert agent["webContextIsNonPersistent"] is True
+        assert agent["web_research_requires_manual_fetch"] is True
+        assert agent["webResearchRequiresManualFetch"] is True
+        assert agent["agents_do_not_auto_browse"] is True
+        assert agent["agentsDoNotAutoBrowse"] is True
+        assert agent["source_evidence_supported"] is True
+        assert agent["sourceEvidenceSupported"] is True
+        assert agent["citation_labels_supported"] is True
+        assert agent["citationLabelsSupported"] is True
+        assert agent["source_recency_flags_supported"] is True
+        assert agent["sourceRecencyFlagsSupported"] is True
+        assert agent["source_aware_response_supported"] is True
+        assert agent["sourceAwareResponseSupported"] is True
 
 
 def test_catalog_includes_all_expected_endpoints_once():
@@ -234,6 +270,11 @@ def test_catalog_global_boundaries_cover_required_safety_limits():
     assert "no email sending, posting, or purchases" in boundaries_text
     assert "no task persistence for response-only agents" in boundaries_text
     assert "optional read-only public url source context" in boundaries_text
+    assert "reviewed web_context source excerpts" in boundaries_text
+    assert "agents do not auto-browse" in boundaries_text
+    assert "source labels are for reference, not proof" in boundaries_text
+    assert "source-aware response sections use reviewed excerpts only" in boundaries_text
+    assert "independent fact-checking" in boundaries_text
     assert "no background browsing" in boundaries_text
     assert "certification" in boundaries_text
 
@@ -298,6 +339,25 @@ def test_catalog_summary_preserves_dashboard_index_shape():
     assert summary["webResearchIsOptional"] is True
     assert summary["web_research_is_optional"] is True
     assert "No downloads or scripts" in " ".join(summary["webResearchLimitations"])
+    assert summary["webContextSupported"] is True
+    assert summary["web_context_supported"] is True
+    assert summary["webContextIsOptional"] is True
+    assert summary["web_context_is_optional"] is True
+    assert summary["webContextIsNonPersistent"] is True
+    assert summary["web_context_is_non_persistent"] is True
+    assert summary["webResearchRequiresManualFetch"] is True
+    assert summary["web_research_requires_manual_fetch"] is True
+    assert summary["agentsDoNotAutoBrowse"] is True
+    assert summary["agents_do_not_auto_browse"] is True
+    assert summary["sourceEvidenceSupported"] is True
+    assert summary["source_evidence_supported"] is True
+    assert summary["citationLabelsSupported"] is True
+    assert summary["citation_labels_supported"] is True
+    assert summary["sourceRecencyFlagsSupported"] is True
+    assert summary["source_recency_flags_supported"] is True
+    assert summary["sourceAwareResponseSupported"] is True
+    assert summary["source_aware_response_supported"] is True
+    assert "do not browse" in " ".join(summary["webContextLimitations"])
     assert summary["certificationClaims"] is False
 
 

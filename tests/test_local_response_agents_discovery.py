@@ -5,6 +5,7 @@ import jarvis_core.app as app_module
 from jarvis_core.lan_security import require_dashboard_lan_access
 from jarvis_core.local_response_agents_catalog import (
     local_response_agent_categories,
+    local_response_agent_manual_workflow_preview,
     local_response_agent_metadata,
     local_response_agent_request_template,
     local_response_agent_route_preview,
@@ -19,6 +20,7 @@ DISCOVERY_ROUTES = [
     ("GET", "/agents/local-response-agents/{agent_id}"),
     ("GET", "/agents/local-response-agents/{agent_id}/request-template"),
     ("POST", "/agents/local-response-agents/route-preview"),
+    ("POST", "/agents/local-response-agents/manual-workflow-preview"),
 ]
 
 
@@ -40,6 +42,24 @@ def test_discovery_catalog_exposes_37_local_response_agents_without_connectors()
     assert catalog["webResearchRequiresUserEnabled"] is True
     assert catalog["web_research_is_optional"] is True
     assert catalog["webResearchIsOptional"] is True
+    assert catalog["web_context_supported"] is True
+    assert catalog["webContextSupported"] is True
+    assert catalog["web_context_is_optional"] is True
+    assert catalog["webContextIsOptional"] is True
+    assert catalog["web_context_is_non_persistent"] is True
+    assert catalog["webContextIsNonPersistent"] is True
+    assert catalog["web_research_requires_manual_fetch"] is True
+    assert catalog["webResearchRequiresManualFetch"] is True
+    assert catalog["agents_do_not_auto_browse"] is True
+    assert catalog["agentsDoNotAutoBrowse"] is True
+    assert catalog["source_evidence_supported"] is True
+    assert catalog["sourceEvidenceSupported"] is True
+    assert catalog["citation_labels_supported"] is True
+    assert catalog["citationLabelsSupported"] is True
+    assert catalog["source_recency_flags_supported"] is True
+    assert catalog["sourceRecencyFlagsSupported"] is True
+    assert catalog["source_aware_response_supported"] is True
+    assert catalog["sourceAwareResponseSupported"] is True
     assert catalog["consistency"]["valid"] is True
     assert len(catalog["agents"]) == 37
 
@@ -80,6 +100,24 @@ def test_discovery_catalog_exposes_37_local_response_agents_without_connectors()
         assert agent["web_research_is_optional"] is True
         assert agent["webResearchIsOptional"] is True
         assert "No logins" in " ".join(agent["web_research_limitations"])
+        assert agent["web_context_supported"] is True
+        assert agent["webContextSupported"] is True
+        assert agent["web_context_is_optional"] is True
+        assert agent["webContextIsOptional"] is True
+        assert agent["web_context_is_non_persistent"] is True
+        assert agent["webContextIsNonPersistent"] is True
+        assert agent["web_research_requires_manual_fetch"] is True
+        assert agent["webResearchRequiresManualFetch"] is True
+        assert agent["agents_do_not_auto_browse"] is True
+        assert agent["agentsDoNotAutoBrowse"] is True
+        assert agent["source_evidence_supported"] is True
+        assert agent["sourceEvidenceSupported"] is True
+        assert agent["citation_labels_supported"] is True
+        assert agent["citationLabelsSupported"] is True
+        assert agent["source_recency_flags_supported"] is True
+        assert agent["sourceRecencyFlagsSupported"] is True
+        assert agent["source_aware_response_supported"] is True
+        assert agent["sourceAwareResponseSupported"] is True
         assert agent["examples"]
         assert agent["boundaryFlags"]["connectorBehavior"] is False
         assert agent["boundaryFlags"]["persistence"] is False
@@ -126,14 +164,83 @@ def test_single_agent_metadata_and_template_have_safe_fallbacks():
     assert template["default_output_type"] == "budget_grocery_plan"
     assert template["supported_output_types"] == ["budget_grocery_plan"]
     assert template["sample_payload"]
+    assert template["sample_payload"]["web_context"] == []
+    assert template["sample_payload"]["prior_agent_context"] is None
+    assert "web_context" in template["recommended_request_fields"]
+    assert "prior_agent_context" in template["recommended_request_fields"]
     assert "manual input only" in template["boundary_reminder"].lower()
     assert "no connectors" in template["boundary_reminder"].lower()
+    assert "agents do not auto-browse" in template["boundary_reminder"].lower()
     assert template["web_research_available"] is True
     assert template["web_research_mode"] == "read_only_public_url_context"
     assert template["web_research_requires_user_enabled"] is True
     assert template["web_research_is_optional"] is True
     assert "No browser automation" in " ".join(template["web_research_limitations"])
+    assert template["web_context_supported"] is True
+    assert template["webContextSupported"] is True
+    assert template["web_context_is_optional"] is True
+    assert template["webContextIsOptional"] is True
+    assert template["web_context_is_non_persistent"] is True
+    assert template["webContextIsNonPersistent"] is True
+    assert template["web_research_requires_manual_fetch"] is True
+    assert template["webResearchRequiresManualFetch"] is True
+    assert template["agents_do_not_auto_browse"] is True
+    assert template["agentsDoNotAutoBrowse"] is True
+    assert template["source_evidence_supported"] is True
+    assert template["sourceEvidenceSupported"] is True
+    assert template["citation_labels_supported"] is True
+    assert template["citationLabelsSupported"] is True
+    assert template["source_recency_flags_supported"] is True
+    assert template["sourceRecencyFlagsSupported"] is True
+    assert template["source_aware_response_supported"] is True
+    assert template["sourceAwareResponseSupported"] is True
+    assert template["web_context_template_sample"][0]["source_type"] == "public_web_excerpt"
+    assert template["web_context_template_sample"][0]["user_notes"]
+    assert template["prior_agent_context_supported"] is True
+    assert template["priorAgentContextSupported"] is True
+    assert template["prior_agent_context_is_optional"] is True
+    assert template["priorAgentContextIsOptional"] is True
+    assert template["prior_agent_context_is_non_persistent"] is True
+    assert template["priorAgentContextIsNonPersistent"] is True
+    assert template["prior_agent_context_template_sample"]["source_type"] == "manual_prior_agent_output"
+    assert "previous_summary" in template["prior_agent_context_fields"]
+    assert "Optional manual context from a prior local response-agent result." in template["prior_agent_context_guidance"]
+    assert "Not loaded automatically." in template["prior_agent_context_guidance"]
+    assert "Not persisted." in template["prior_agent_context_guidance"]
+    assert "Use only after the user reviews and inserts it manually." in template["prior_agent_context_guidance"]
+    assert "Does not trigger multi-agent execution." in template["prior_agent_context_guidance"]
+    assert "prior_context_used" in template["prior_agent_context_response_fields"]
+    assert "source_evidence" in template["web_context_response_fields"]
+    assert "citation_labels" in template["web_context_response_fields"]
+    assert "source_quality_warnings" in template["web_context_response_fields"]
+    assert "source_recency_notes" in template["web_context_response_fields"]
+    assert "source_context_summary" in template["web_context_response_fields"]
+    assert "sources_used" in template["web_context_response_fields"]
+    assert "web_context_limitations" in template["web_context_response_fields"]
+    assert "source_use_summary" in template["web_context_response_fields"]
+    assert "source_supported_points" in template["web_context_response_fields"]
+    assert "source_cautions" in template["web_context_response_fields"]
+    assert "source_followup_checks" in template["web_context_response_fields"]
+    assert "source_informed_assumptions" in template["web_context_response_fields"]
+    assert "citation_usage_note" in template["web_context_response_fields"]
+    assert template["source_aware_response_fields"] == [
+        "source_use_summary",
+        "source_supported_points",
+        "source_cautions",
+        "source_followup_checks",
+        "source_informed_assumptions",
+        "citation_usage_note",
+    ]
+    assert "citation_label" in template["web_context_evidence_fields"]
+    assert template["citation_reminder"] == "Sources are labeled for reference, not certified."
+    assert "do not auto-browse" in " ".join(template["web_context_supported_behavior"])
+    assert "source-aware response sections" in " ".join(template["web_context_supported_behavior"])
+    assert "Source freshness and authority" in " ".join(template["web_context_supported_behavior"])
+    assert "not certified" in " ".join(template["web_context_supported_behavior"])
+    assert "No login" in " ".join(template["web_context_not_supported"])
+    assert "not persisted" in " ".join(template["web_context_limitations"])
     assert "No source context is submitted automatically." in template["web_research_context_fields"]
+    assert "source-aware response sections" in " ".join(template["web_research_context_fields"])
     assert "food-safety certification" in " ".join(template["high_stakes_limitations"])
 
     unknown_metadata = local_response_agent_metadata("missing-agent")
@@ -180,6 +287,51 @@ def test_route_preview_uses_coordinator_first_for_ambiguous_requests():
     assert preview["suggested_agents"][0]["handoff_created"] is False
 
 
+def test_manual_workflow_preview_is_catalog_only_and_manual():
+    preview = local_response_agent_manual_workflow_preview(
+        user_goal="Create a local review workflow for planning then drafting.",
+        candidate_agent_ids=["local_planning_agent", "local_drafting_agent"],
+        route_preview_suggestions=[],
+        max_steps=4,
+        include_web_context=True,
+        constraints_or_notes="Manual only.",
+    )
+
+    assert preview["title"] == "Manual Multi-Agent Workflow Preview"
+    assert preview["workflow_steps"]
+    assert preview["workflow_steps"][0]["agent_id"] == "local_planning_agent"
+    assert "No agent was invoked" in preview["summary"]
+    assert "suggestions only" in preview["not_executed_notice"]
+    assert "Manual workflow only." in preview["manual_only_boundaries"]
+    assert "Steps are suggestions, not execution." in preview["manual_only_boundaries"]
+    assert "Run one selected agent at a time." in preview["manual_only_boundaries"]
+    assert "Prior context is inserted only after user review." in preview["manual_only_boundaries"]
+    assert "No automatic handoff." in preview["manual_only_boundaries"]
+    assert "No persistence." in preview["manual_only_boundaries"]
+    assert "No connectors." in preview["manual_only_boundaries"]
+    for step in preview["workflow_steps"]:
+        assert step["suggested_only"] is True
+        assert step["invoked"] is False
+        assert step["handoff_created"] is False
+        assert step["endpoint"].startswith("POST /agents/")
+        assert "prior_agent_context" in " ".join(step["suggested_manual_payload_notes"])
+
+
+def test_manual_workflow_preview_uses_coordinator_first_for_ambiguous_requests():
+    preview = local_response_agent_manual_workflow_preview(
+        user_goal="Help with a broad local request.",
+        candidate_agent_ids=[],
+        route_preview_suggestions=[],
+        max_steps=4,
+        include_web_context=False,
+        constraints_or_notes="",
+    )
+
+    assert preview["workflow_steps"][0]["agent_id"] == "local_life_dashboard_cross_agent_coordinator"
+    assert preview["workflow_steps"][0]["invoked"] is False
+    assert preview["workflow_steps"][0]["handoff_created"] is False
+
+
 def test_app_route_preview_payload_accepts_aliases_and_rejects_extra_fields():
     payload = app_module.LocalResponseAgentRoutePreviewInput(
         promptText="Plan a local weekly dashboard for school and workouts.",
@@ -196,6 +348,28 @@ def test_app_route_preview_payload_accepts_aliases_and_rejects_extra_fields():
         app_module.LocalResponseAgentRoutePreviewInput.model_validate(
             {
                 "request": "Preview a route.",
+                "oauthToken": "not allowed",
+            }
+        )
+
+
+def test_app_manual_workflow_preview_payload_accepts_aliases_and_rejects_extra_fields():
+    payload = app_module.LocalResponseAgentManualWorkflowPreviewInput(
+        userGoal="Manual local workflow",
+        candidateAgentIds=["local_planning_agent"],
+        routePreviewSuggestions=[{"agentId": "local_review_agent"}],
+        maxSteps=3,
+        includeWebContext=True,
+        constraintsOrNotes="No handoff.",
+    )
+
+    preview = app_module.preview_local_response_agent_manual_workflow(payload)
+    assert preview["workflow_steps"][0]["agent_id"] == "local_planning_agent"
+
+    with pytest.raises(ValidationError):
+        app_module.LocalResponseAgentManualWorkflowPreviewInput.model_validate(
+            {
+                "userGoal": "Preview a workflow.",
                 "oauthToken": "not allowed",
             }
         )

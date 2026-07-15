@@ -81,6 +81,14 @@ def test_dashboard_html_includes_local_response_agents_workbench_controls(tmp_pa
     assert "Suggested only — not executed" in section
     assert "Route preview does not invoke agents" in section
     assert "Select manually before running a local response" in section
+    assert "Manual Multi-Agent Workflow Builder" in section
+    assert "Manual workflow only" in section
+    assert "Steps are suggestions, not execution" in section
+    assert "Run one selected agent at a time" in section
+    assert "Prior context is inserted only after user review" in section
+    assert "No automatic handoff" in section
+    assert "No persistence" in section
+    assert "No connectors" in section
     assert "Local Response Agents Workbench" in section
     assert "Request Composer" in section
     assert "Optional Public Web Research" in section
@@ -91,6 +99,28 @@ def test_dashboard_html_includes_local_response_agents_workbench_controls(tmp_pa
     assert "No downloads or scripts" in section
     assert "Manual click required" in section
     assert "Source context is inserted for review, not executed automatically" in section
+    assert "Reviewed source context" in section
+    assert "web_context is optional, non-persistent, and supplied only from the manual payload" in section
+    assert "Agents consume provided excerpts; they do not browse automatically" in section
+    assert "Source labels are for reference, not proof" in section
+    assert "Review excerpts before running the selected agent" in section
+    assert "How selected agent will use reviewed sources" in section
+    assert "Sources support context only; they are not proof" in section
+    assert "Agent will not browse automatically" in section
+    assert "Verify freshness and authority before acting" in section
+    assert "Session Result Board" in section
+    assert "Review Packet Composer" in section
+    assert "Result Comparison Matrix" in section
+    assert "Add latest response to session board" in section
+    assert "Insert selected entry as prior_agent_context" in section
+    assert "Insert review packet as prior_agent_context" in section
+    assert "Session-only" in section
+    assert "Not persisted" in section
+    assert "Manual review only" in section
+    assert "No automatic handoff" in section
+    assert "No connector" in section
+    assert "No file export" in section
+    assert "Board clears when the page reloads" in section
     assert 'id="local-response-agents-discovery-status"' in section
     assert 'id="local-response-agents-category-select"' in section
     assert 'id="local-response-agents-detail-panel"' in section
@@ -102,6 +132,17 @@ def test_dashboard_html_includes_local_response_agents_workbench_controls(tmp_pa
     assert 'id="local-response-agents-route-preview-button"' in section
     assert 'id="local-response-agents-route-preview-suggestions"' in section
     assert 'id="local-response-agents-route-preview-result"' in section
+    assert 'id="local-response-agents-manual-workflow-builder"' in section
+    assert 'id="local-response-agents-manual-workflow-boundaries"' in section
+    assert 'id="local-response-agents-manual-workflow-goal"' in section
+    assert 'id="local-response-agents-manual-workflow-candidates"' in section
+    assert 'id="local-response-agents-manual-workflow-include-web-context"' in section
+    assert 'id="local-response-agents-manual-workflow-preview-button"' in section
+    assert 'id="local-response-agents-manual-workflow-load-step-button"' in section
+    assert 'id="local-response-agents-prior-context-copy-button"' in section
+    assert 'id="local-response-agents-manual-workflow-status"' in section
+    assert 'id="local-response-agents-manual-workflow-steps"' in section
+    assert 'id="local-response-agents-manual-workflow-result"' in section
     assert 'id="local-response-agents-composer"' in section
     assert 'id="local-response-agents-composer-boundaries"' in section
     assert 'id="local-response-agents-output-type-select"' in section
@@ -115,6 +156,13 @@ def test_dashboard_html_includes_local_response_agents_workbench_controls(tmp_pa
     assert 'id="local-response-agents-web-research-add-button"' in section
     assert 'id="local-response-agents-web-research-status"' in section
     assert 'id="local-response-agents-web-research-result"' in section
+    assert 'id="local-response-agents-reviewed-source-context"' in section
+    assert 'id="local-response-agents-reviewed-source-manager"' in section
+    assert 'id="local-response-agents-reviewed-source-list"' in section
+    assert 'id="local-response-agents-reviewed-source-clear-button"' in section
+    assert 'id="local-response-agents-source-aware-preview"' in section
+    assert 'id="local-response-agents-source-aware-preview-body"' in section
+    assert 'id="local-response-agents-reviewed-web-context-preview"' in section
     assert 'id="local-response-agents-workbench-select"' in section
     assert 'id="local-response-agents-workbench-endpoint"' in section
     assert 'id="local-response-agents-workbench-body"' in section
@@ -124,6 +172,18 @@ def test_dashboard_html_includes_local_response_agents_workbench_controls(tmp_pa
     assert 'id="local-response-agents-response-boundaries"' in section
     assert 'id="local-response-agents-structured-response"' in section
     assert 'id="local-response-agents-workbench-response"' in section
+    assert 'id="local-response-agents-session-result-board"' in section
+    assert 'id="local-response-agents-session-board-add-button"' in section
+    assert 'id="local-response-agents-session-board-compare-button"' in section
+    assert 'id="local-response-agents-session-board-packet-button"' in section
+    assert 'id="local-response-agents-session-board-insert-entry-button"' in section
+    assert 'id="local-response-agents-session-board-insert-packet-button"' in section
+    assert 'id="local-response-agents-session-board-clear-button"' in section
+    assert 'id="local-response-agents-session-board-entries"' in section
+    assert 'id="local-response-agents-result-comparison-matrix"' in section
+    assert 'id="local-response-agents-result-comparison-body"' in section
+    assert 'id="local-response-agents-review-packet-composer"' in section
+    assert 'id="local-response-agents-review-packet-output"' in section
 
 
 def test_dashboard_workbench_states_local_allowlisted_non_runner_boundaries(tmp_path, monkeypatch):
@@ -141,6 +201,13 @@ def test_dashboard_workbench_states_local_allowlisted_non_runner_boundaries(tmp_
     assert "suggested only — not executed" in section
     assert "route preview does not invoke agents" in section
     assert "select manually before running a local response" in section
+    assert "manual workflow only" in section
+    assert "steps are suggestions, not execution" in section
+    assert "run one selected agent at a time" in section
+    assert "prior context is inserted only after user review" in section
+    assert "no automatic handoff" in section
+    assert "no persistence" in section
+    assert "no connectors" in section
     assert "not an arbitrary request runner" in section
     assert "not a connector runner" in section
     assert "not persistent" in section
@@ -151,6 +218,13 @@ def test_dashboard_workbench_states_local_allowlisted_non_runner_boundaries(tmp_
     assert "output type from request-template metadata" in section
     assert "public web research is optional, public-only, read-only, and never background browsing" in section
     assert "not executed automatically" in section
+    assert "session-only" in section
+    assert "not persisted" in section
+    assert "manual review only" in section
+    assert "no automatic handoff" in section
+    assert "no connector" in section
+    assert "no file export" in section
+    assert "board clears when the page reloads" in section
 
 
 def test_dashboard_workbench_js_builds_allowlist_from_summary_agents(tmp_path, monkeypatch):
@@ -172,12 +246,45 @@ def test_dashboard_workbench_js_builds_allowlist_from_summary_agents(tmp_path, m
     assert "function applySamplePayloadToComposer(template, agent)" in page_text
     assert "function refreshPayloadOutputType()" in page_text
     assert "function localResponseWebResearchUrls()" in page_text
-    assert "function localResponseWebContextText(sources)" in page_text
-    assert "function localResponsePayloadTextField(payload)" in page_text
+    assert "function localResponseWebContextEntries(sources)" in page_text
+    assert "function localResponseSourceLabel(index)" in page_text
+    assert "function localResponseReviewedSourcesFromPayload()" in page_text
+    assert "function localResponseReviewedSourceWarnings(source, label)" in page_text
+    assert "function renderReviewedSourceManager(entries)" in page_text
+    assert "function writeReviewedSourcesToPayload(entries, statusText)" in page_text
+    assert "function removeReviewedSource(index)" in page_text
+    assert "function clearReviewedSources()" in page_text
+    assert "function renderSourceAwareUsagePreview(entries)" in page_text
+    assert "function renderReviewedWebContextPreview()" in page_text
+    assert "function localResponseManualWorkflowCandidateIds()" in page_text
+    assert "function localResponseRoutePreviewSuggestionIds()" in page_text
+    assert "function renderManualWorkflowSteps(result)" in page_text
+    assert "function localResponsePriorContextFromLatestResponse()" in page_text
+    assert "function insertLatestResponseAsPriorContext()" in page_text
+    assert "function sessionBoardEntryFromLatestResponse()" in page_text
+    assert "function renderSessionResultBoard()" in page_text
+    assert "function addLatestResponseToSessionBoard()" in page_text
+    assert "function buildSessionComparison()" in page_text
+    assert "function buildReviewPacket()" in page_text
+    assert "function priorContextFromSessionEntry(entry)" in page_text
+    assert "function priorContextFromReviewPacket()" in page_text
+    assert "function writePriorContextToPayload(context, successText)" in page_text
+    assert "function insertSelectedBoardEntryAsPriorContext()" in page_text
+    assert "function insertReviewPacketAsPriorContext()" in page_text
+    assert "function clearSessionResultBoard()" in page_text
     assert "async function postWebResearchJson(path, body)" in page_text
     assert "outputTypeSelect.onchange = refreshPayloadOutputType" in page_text
     assert "useSampleButton.onclick = () =>" in page_text
     assert "routePreviewSuggestions.onchange = async () =>" in page_text
+    assert "manualWorkflowPreviewButton.onclick = async () =>" in page_text
+    assert "manualWorkflowLoadStepButton.onclick = async () =>" in page_text
+    assert "priorContextCopyButton.onclick = insertLatestResponseAsPriorContext" in page_text
+    assert "sessionBoardAddButton.onclick = addLatestResponseToSessionBoard" in page_text
+    assert "sessionBoardCompareButton.onclick = buildSessionComparison" in page_text
+    assert "sessionBoardPacketButton.onclick = buildReviewPacket" in page_text
+    assert "sessionBoardInsertEntryButton.onclick = insertSelectedBoardEntryAsPriorContext" in page_text
+    assert "sessionBoardInsertPacketButton.onclick = insertReviewPacketAsPriorContext" in page_text
+    assert "sessionBoardClearButton.onclick = clearSessionResultBoard" in page_text
     assert "webResearchValidateButton.onclick = async () =>" in page_text
     assert "webResearchFetchButton.onclick = async () =>" in page_text
     assert "webResearchContextButton.onclick = async () =>" in page_text
@@ -204,6 +311,7 @@ def test_dashboard_workbench_uses_discovery_template_and_route_preview_endpoints
     assert "fetch('/agents/local-response-agents/categories')" in page_text
     assert "fetch(templatePath)" in page_text
     assert "fetch('/agents/local-response-agents/route-preview'" in page_text
+    assert "fetch('/agents/local-response-agents/manual-workflow-preview'" in page_text
     assert "postWebResearchJson('/web-research/validate-url'" in page_text
     assert "postWebResearchJson('/web-research/fetch-public-url'" in page_text
     assert "postWebResearchJson('/web-research/agent-context-preview'" in page_text
@@ -219,6 +327,20 @@ def test_dashboard_workbench_uses_discovery_template_and_route_preview_endpoints
     assert "Select manually before running a local response" in page_text
     assert "renderRoutePreviewSuggestions(result)" in page_text
     assert "No handoff, no automation, no persistence, no connector, and no agent invocation." in page_text
+    assert "Manual workflow preview does not invoke agents, create handoffs, or persist workflows." in page_text
+    assert "Workflow step loaded into the request composer. Manual step only - not executed, not handed off, and not persisted." in page_text
+    assert "prior_agent_context inserted into the editable payload for manual review. No automatic handoff, no persistence, and no agent invocation occurred." in page_text
+    assert "Latest response is available for manual board capture. Add latest response to session board only after review." in page_text
+    assert "No latest response yet. Run one selected local response agent manually, review the result, then add it to the session board." in page_text
+    assert "No board entries yet. Add latest response to session board after a structured response returns." in page_text
+    assert "No selected entries. Select board entries before building a comparison." in page_text
+    assert "Fewer than 2 selected entries for comparison. Select at least two board entries." in page_text
+    assert "Invalid editable payload JSON while inserting prior context" in page_text
+    assert "prior_agent_context insertion succeeded from selected board entry, but agent was not run. Editable JSON payload updated only." in page_text
+    assert "prior_agent_context insertion succeeded from review packet, but agent was not run. Editable JSON payload updated only." in page_text
+    assert "Board cleared from current session only. Board clears when the page reloads." in page_text
+    assert "manual_session_board_output" in page_text
+    assert "manual_session_review_packet" in page_text
 
 
 def test_dashboard_workbench_web_research_is_manual_public_and_not_agent_execution(tmp_path, monkeypatch):
@@ -234,13 +356,26 @@ def test_dashboard_workbench_web_research_is_manual_public_and_not_agent_executi
     assert "No downloads or scripts" in page_text
     assert "Manual click required" in page_text
     assert "Source context is inserted for review, not executed automatically" in page_text
+    assert "Add source context to payload" in page_text
+    assert "Source labels are for reference, not proof" in page_text
+    assert "Sources support context only; they are not proof" in page_text
+    assert "The selected agent may use these reviewed excerpts for source-aware response sections only" in page_text
+    assert "No auto-fetch, no auto-submit, no connector, and no background browsing" in page_text
+    assert "Clear reviewed sources" in page_text
+    assert "web_context" in page_text
     assert "webResearchEnabled.checked" in page_text
     assert "No agent is invoked." in page_text
     assert "No local response agent is invoked." in page_text
     assert "The selected agent was not invoked." in page_text
     assert "No auto-fetch, no auto-submit, no handoff, no persistence." in page_text
-    assert "localResponsePayloadTextField(parsedBody)" in page_text
-    assert "Public web source context for manual review only:" in page_text
+    assert "localResponseWebContextEntries(latestWebResearchSources)" in page_text
+    assert "parsedBody.web_context = contextEntries" in page_text
+    assert "Reviewed source context inserted into web_context. The selected agent was not invoked." in page_text
+    assert "Reviewed source [${label}] removed from web_context. The selected agent was not invoked." in page_text
+    assert "Reviewed sources cleared from web_context. The selected agent was not invoked." in page_text
+    assert "data-reviewed-source-index" in page_text
+    assert "Excerpt is partial, user-reviewed, and not independently verified." in page_text
+    assert "renderReviewedWebContextPreview()" in page_text
 
 
 def test_dashboard_workbench_has_safe_empty_and_unknown_template_states(tmp_path, monkeypatch):
@@ -326,6 +461,23 @@ def test_dashboard_workbench_renders_structured_common_response_fields(tmp_path,
         "limitations",
         "local_only_boundaries",
         "follow_up_questions",
+        "source_evidence",
+        "citation_labels",
+        "source_quality_warnings",
+        "source_recency_notes",
+        "source_context_summary",
+        "sources_used",
+        "web_context_limitations",
+        "source_use_summary",
+        "source_supported_points",
+        "source_cautions",
+        "source_followup_checks",
+        "source_informed_assumptions",
+        "citation_usage_note",
+        "prior_context_used",
+        "prior_context_summary",
+        "prior_context",
+        "prior_context_limitations",
         "output_type",
         "agent_id",
     ]
@@ -364,7 +516,11 @@ def test_dashboard_workbench_does_not_support_arbitrary_url_input_or_browser_sto
     assert "arbitrary url" not in section
     assert "localstorage" not in page_text
     assert "sessionstorage" not in page_text
+    assert "indexeddb" not in page_text
     assert "document.cookie" not in page_text
+    assert "navigator.clipboard" not in page_text
+    assert ".download" not in page_text
+    assert "createobjecturl" not in page_text
 
 
 def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_controls(tmp_path, monkeypatch):
@@ -377,7 +533,6 @@ def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_control
         "email sending",
         "public posting",
         "save",
-        "export",
         "copy to clipboard",
         "schedule",
         "reminder",
@@ -388,7 +543,9 @@ def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_control
     assert all(term not in section for term in forbidden)
     assert "no forms, posts, purchases, or bookings" in section
     assert "no downloads or scripts" in section
-    assert section.count("<button") == 7
+    assert "no file export" in section
+    assert "download file" not in section
+    assert section.count("<button") == 17
 
 
 def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, monkeypatch):
