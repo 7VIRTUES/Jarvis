@@ -54,7 +54,32 @@ Jarvis validates actions before execution. Dangerous commands are blocked, prote
 
 Push, merge, and delete automation is blocked. Meaningful actions are logged so users can see what happened, what was blocked, and what still needs review. Jarvis is meant to be user-controlled and auditable.
 
-## Quick Start for Developers
+## Run Jarvis on Windows
+
+From the repository root, the recommended local launcher is:
+
+```powershell
+.\jarvis
+```
+
+You can also double-click `jarvis.cmd` in Windows File Explorer. On first run, the launcher explains that it will create the repository-local `.venv` and install the committed `requirements.txt`, then waits for an explicit `y` or `yes` confirmation. Later launches reuse the existing environment when its FastAPI and Uvicorn imports are ready.
+
+By default, Jarvis starts only at `http://127.0.0.1:8000/dashboard`, waits for its local health endpoint, and then opens the dashboard in the default browser. Keep the visible console open while Jarvis runs; press `Ctrl+C` there to stop only the instance started by that launcher.
+
+Supported launcher commands:
+
+```powershell
+.\jarvis --no-browser
+.\jarvis --port 8010
+.\jarvis --setup
+.\jarvis --help
+```
+
+If a healthy Jarvis instance is already running on the selected port, the launcher reuses it and opens its dashboard instead of starting another instance. If another application occupies that port, the launcher leaves it alone and asks you to close it or choose an explicit alternate port. The launcher is loopback-only and does not enable LAN access or connectors.
+
+This is a repository-local convenience launcher, not an installer, Windows service, system-tray app, updater, production Tauri app, or public release artifact.
+
+## Manual Developer Workflow
 
 From Windows PowerShell:
 
