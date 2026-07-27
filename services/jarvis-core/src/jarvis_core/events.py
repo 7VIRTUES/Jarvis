@@ -44,6 +44,13 @@ EVENT_TYPES = {
     "codex.checks_completed",
     "codex.repair_started",
     "codex.repair_completed",
+    "memory.proposed",
+    "memory.approved",
+    "memory.rejected",
+    "memory.updated",
+    "memory.disabled",
+    "memory.enabled",
+    "memory.deleted",
 }
 
 

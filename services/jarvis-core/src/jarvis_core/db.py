@@ -167,6 +167,48 @@ create table if not exists validation_step_results (
   unique(run_id, step_id),
   foreign key(run_id) references validation_runs(run_id)
 );
+
+create table if not exists memories (
+  memory_id text primary key,
+  memory_type text not null,
+  content text not null,
+  status text not null,
+  scope_type text not null,
+  scope_value text,
+  source_type text not null,
+  source_agent_id text,
+  source_reference text,
+  proposal_reason text,
+  confidence text not null,
+  sensitivity text not null,
+  expires_at text,
+  created_at text not null,
+  updated_at text not null,
+  approved_at text,
+  approved_by text,
+  last_confirmed_at text,
+  disabled_at text,
+  rejected_at text,
+  rejected_by text,
+  rejection_reason text,
+  content_hash text not null
+);
+
+create table if not exists memory_events (
+  event_id text primary key,
+  memory_id text not null,
+  event_type text not null,
+  actor text not null,
+  metadata text not null,
+  created_at text not null
+);
+
+create index if not exists idx_memories_status on memories(status);
+create index if not exists idx_memories_memory_type on memories(memory_type);
+create index if not exists idx_memories_scope on memories(scope_type, scope_value);
+create index if not exists idx_memories_expiration on memories(expires_at);
+create index if not exists idx_memories_content_hash on memories(content_hash);
+create index if not exists idx_memory_events_memory_date on memory_events(memory_id, created_at);
 """
 
 

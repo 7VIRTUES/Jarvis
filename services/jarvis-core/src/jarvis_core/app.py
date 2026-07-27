@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -60,6 +60,13 @@ from .local_response_agents_catalog import (
     local_response_agent_route_preview,
     local_response_agents_discovery_catalog,
 )
+from .memory import (
+    MemoryConflictError,
+    MemoryNotFoundError,
+    MemorySecretError,
+    MemoryService,
+    MemoryValidationError,
+)
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
@@ -95,6 +102,11 @@ conn = init_db(DATA_ROOT / "jarvis.sqlite")
 logger = JsonlLogger(DATA_ROOT / "logs")
 events = EventBus(conn, logger)
 projects = ProjectRegistry(conn, WORKSPACE_ROOT)
+memory_service = MemoryService(
+    conn,
+    events,
+    agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
+)
 runtime = SafeActionRuntime(logger, conn, events)
 approvals = ApprovalQueue(conn, events)
 tasks = TaskQueue(conn, events, runtime, approvals)
@@ -200,6 +212,76 @@ class TaskInput(BaseModel):
 class ApprovalResolutionInput(BaseModel):
     resolvedBy: str = "local_user"
     resolutionNote: str | None = None
+
+
+class MemoryProposalInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    memoryType: str
+    content: str
+    scopeType: str
+    scopeValue: str | None = None
+    sourceType: str
+    sourceAgentId: str | None = None
+    sourceReference: str | None = None
+    proposalReason: str | None = None
+    confidence: str
+    sensitivity: str
+    expiresAt: str | None = None
+    actor: str = "local_user"
+
+
+class MemoryEditInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    memoryType: str | None = None
+    content: str | None = None
+    scopeType: str | None = None
+    scopeValue: str | None = None
+    sourceType: str | None = None
+    sourceAgentId: str | None = None
+    sourceReference: str | None = None
+    proposalReason: str | None = None
+    confidence: str | None = None
+    sensitivity: str | None = None
+    expiresAt: str | None = None
+    actor: str = "local_user"
+
+
+class MemoryApprovalInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resolution: Literal["approve"]
+    approvedBy: str = "local_user"
+
+
+class MemoryRejectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resolution: Literal["reject"]
+    rejectedBy: str = "local_user"
+    rejectionReason: str | None = None
+
+
+class MemoryActorInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: str = "local_user"
+
+
+_MEMORY_EDIT_FIELD_MAP = {
+    "memoryType": "memory_type",
+    "content": "content",
+    "scopeType": "scope_type",
+    "scopeValue": "scope_value",
+    "sourceType": "source_type",
+    "sourceAgentId": "source_agent_id",
+    "sourceReference": "source_reference",
+    "proposalReason": "proposal_reason",
+    "confidence": "confidence",
+    "sensitivity": "sensitivity",
+    "expiresAt": "expires_at",
+}
 
 
 class ReportValidationInput(BaseModel):
@@ -2270,6 +2352,167 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+
+
+def _raise_memory_http_error(exc: Exception) -> None:
+    if isinstance(exc, MemoryNotFoundError):
+        raise HTTPException(status_code=404, detail="memory not found") from exc
+    if isinstance(exc, MemoryConflictError):
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if isinstance(exc, MemorySecretError):
+        raise HTTPException(
+            status_code=422,
+            detail="memory content rejected: credential_or_secret_material",
+        ) from exc
+    if isinstance(exc, MemoryValidationError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise exc
+
+
+@app.get("/api/memory/summary")
+def memory_summary(
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return memory_service.summary()
+
+
+@app.get("/api/memories")
+def list_memories(
+    status: str | None = None,
+    memoryType: str | None = None,
+    scopeType: str | None = None,
+    scopeValue: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return memory_service.list_memories(
+            status=status,
+            memory_type=memoryType,
+            scope_type=scopeType,
+            scope_value=scopeValue,
+            limit=limit,
+            offset=offset,
+        )
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.get("/api/memories/{memory_id}")
+def get_memory(
+    memory_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.get_memory(memory_id)
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.post("/api/memories/proposals")
+def create_memory_proposal(
+    payload: MemoryProposalInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.create_proposal(
+            memory_type=payload.memoryType,
+            content=payload.content,
+            scope_type=payload.scopeType,
+            scope_value=payload.scopeValue,
+            source_type=payload.sourceType,
+            source_agent_id=payload.sourceAgentId,
+            source_reference=payload.sourceReference,
+            proposal_reason=payload.proposalReason,
+            confidence=payload.confidence,
+            sensitivity=payload.sensitivity,
+            expires_at=payload.expiresAt,
+            actor=payload.actor,
+        )
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.patch("/api/memories/{memory_id}")
+def edit_memory(
+    memory_id: str,
+    payload: MemoryEditInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    raw_updates = payload.model_dump(exclude_unset=True)
+    actor = raw_updates.pop("actor", "local_user")
+    updates = {
+        _MEMORY_EDIT_FIELD_MAP[field]: value
+        for field, value in raw_updates.items()
+    }
+    try:
+        return memory_service.edit(memory_id, updates, actor=actor)
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.post("/api/memories/{memory_id}/approve")
+def approve_memory(
+    memory_id: str,
+    payload: MemoryApprovalInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.approve(memory_id, approved_by=payload.approvedBy)
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.post("/api/memories/{memory_id}/reject")
+def reject_memory(
+    memory_id: str,
+    payload: MemoryRejectionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.reject(
+            memory_id,
+            rejected_by=payload.rejectedBy,
+            rejection_reason=payload.rejectionReason,
+        )
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.post("/api/memories/{memory_id}/disable")
+def disable_memory(
+    memory_id: str,
+    payload: MemoryActorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.disable(memory_id, actor=payload.actor)
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.post("/api/memories/{memory_id}/enable")
+def enable_memory(
+    memory_id: str,
+    payload: MemoryActorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.enable(memory_id, actor=payload.actor)
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.delete("/api/memories/{memory_id}")
+def delete_memory(
+    memory_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_service.delete(memory_id, actor="local_user")
+    except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
+        _raise_memory_http_error(exc)
 @app.get("/projects")
 def list_projects() -> list[dict[str, str]]:
     return projects.list_projects()
