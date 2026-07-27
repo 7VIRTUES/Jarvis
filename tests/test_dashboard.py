@@ -21,7 +21,7 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1C Slice 8"
+    assert summary["phase"]["current"] == "v0.1D Batch 2"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
@@ -46,13 +46,13 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
     settings = app_module.settings_summary()
 
     assert settings["appName"] == "Jarvis PC Local"
-    assert settings["phase"] == "v0.1C"
-    assert settings["currentSlice"] == "private-alpha packaging documentation/readiness foundation"
+    assert settings["phase"] == "v0.1D"
+    assert settings["currentSlice"] == "Memory Center dashboard and private-session UX"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
     assert settings["autonomyMode"] == "supervised_local_only"
-    assert settings["safetyMode"] == "strict_local_read_only_dashboard"
+    assert settings["safetyMode"] == "local_dashboard_with_approval_gated_memory"
 
 
 def test_settings_summary_confirms_paid_ai_and_browser_automation_disabled(tmp_path, monkeypatch):
@@ -260,8 +260,8 @@ def test_unsupported_controls_are_not_exposed_as_working_automation(tmp_path, mo
     assert all(action["available"] is False for action in summary["unsupportedActions"])
     assert 'id="stop-task-button" type="button" disabled' in page_text
     assert "git push" not in page_text
-    assert "save" not in page_text
-    assert "edit" not in page_text
+    assert 'id="proposal-form"' not in page_text
+    assert 'id="memory-edit-form"' not in page_text
     assert "launch desktop" not in page_text
     assert "install tauri" not in page_text
     assert "update app" not in page_text
@@ -317,3 +317,80 @@ def _connector(connector_id: str, provider: str) -> dict[str, object]:
         "dataRetention": "none",
         "notes": "Placeholder only.",
     }
+
+
+def test_dashboard_reports_truthful_memory_capability_metadata(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    summary = app_module.dashboard_summary()
+    settings = app_module.settings_summary()
+
+    assert summary["capabilities"]["dashboard"] == "local_operations_with_explicit_memory_controls"
+    assert summary["capabilities"]["memoryCenter"] == "explicit_user_controlled_persistence"
+    assert settings["memoryCenterStatus"] == "implemented_approval_gated"
+    assert settings["durableMemoryPersistenceImplemented"] is True
+    assert settings["automaticMemorySavingEnabled"] is False
+    assert settings["memoryApprovalRequired"] is True
+    assert settings["memoryAgentRetrievalImplemented"] is False
+    assert settings["privateSessionPersistenceImplemented"] is False
+    assert settings["automaticLearningEnabled"] is False
+    assert settings["memoryCenterEndpoint"] == "/memory"
+    assert settings["settingsEditable"] is False
+    assert settings["externalConnectorsEnabled"] is False
+    assert settings["nonCodingConnectorsImplemented"] is False
+
+
+def test_main_dashboard_has_memory_center_card_and_status_section(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    page_text = app_module.local_dashboard().body.decode("utf-8")
+
+    assert "Local operations dashboard with explicit approval-gated memory controls" in page_text
+    assert '<a href="/memory">Open Memory Center</a>' in page_text
+    assert "Approval-gated local memory management." in page_text
+    assert 'id="memory-center"' in page_text
+    assert 'data-section-title="Memory Center"' in page_text
+    assert 'id="memory-center-status"' in page_text
+    assert 'id="memory-center-metrics"' in page_text
+    assert 'id="memory-center-refresh-button"' in page_text
+    assert "Persistent local feature with explicit user actions only." in page_text
+    assert "New memories remain pending and inactive until approved." in page_text
+    assert "Automatic response-agent retrieval is not yet enabled." in page_text
+    assert "fetch('/api/memory/summary')" in page_text
+    assert "async function loadMemoryCenterSummary()" in page_text
+    assert "function renderMemoryCenterSummary(summary)" in page_text
+
+
+def test_main_dashboard_does_not_expose_memory_mutation_forms(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    page_text = app_module.local_dashboard().body.decode("utf-8")
+
+    forbidden = (
+        "/api/memories/proposals",
+        "/api/memories/{memory_id}",
+        "Approve memory",
+        "Reject memory",
+        "Disable memory",
+        "Enable memory",
+        "Delete permanently",
+        'id="proposal-form"',
+        'id="memory-edit-form"',
+        'id="delete-confirm-input"',
+    )
+    assert all(item not in page_text for item in forbidden)
+    assert "fetch('/api/memory/summary')" in page_text
+
+
+def test_existing_dashboard_boundaries_remain_unchanged_with_memory_center(tmp_path, monkeypatch):
+    dashboard_service(tmp_path, monkeypatch)
+
+    summary = app_module.dashboard_summary()
+
+    assert summary["capabilities"]["settings"] == "read_only_status"
+    assert summary["capabilities"]["connectors"] == "placeholder_summary_only"
+    assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
+    assert summary["capabilities"]["desktopShell"] == "placeholder_only"
+    assert summary["capabilities"]["privateAlphaPackaging"] == "placeholder_only"
+    assert summary["safety"]["connectorExecution"] is False
+    assert summary["safety"]["paidApis"] is False

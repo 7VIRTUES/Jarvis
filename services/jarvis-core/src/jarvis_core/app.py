@@ -65,8 +65,10 @@ from .memory import (
     MemoryNotFoundError,
     MemorySecretError,
     MemoryService,
+    MemoryUseContext,
     MemoryValidationError,
 )
+from .memory_dashboard import memory_dashboard_html
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
@@ -267,6 +269,16 @@ class MemoryActorInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     actor: str = "local_user"
+
+
+class MemoryContextPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    privateSession: bool = False
+    projectName: str | None = Field(default=None, max_length=200)
+    agentId: str | None = Field(default=None, max_length=200)
+    limit: int = Field(default=50, ge=1, le=200)
+
 
 
 _MEMORY_EDIT_FIELD_MAP = {
@@ -1180,6 +1192,12 @@ def health() -> dict[str, str]:
 @app.get("/dashboard", response_class=HTMLResponse)
 def local_dashboard(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
     return HTMLResponse(dashboard_html())
+
+
+
+@app.get("/memory", response_class=HTMLResponse)
+def memory_center_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
+    return HTMLResponse(memory_dashboard_html())
 
 
 @app.get("/setup/lan", response_class=HTMLResponse)
@@ -2376,10 +2394,51 @@ def memory_summary(
     return memory_service.summary()
 
 
+
+
+@app.post("/api/memory/context-preview")
+def preview_memory_context(
+    payload: MemoryContextPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    project_name = payload.projectName.strip() if payload.projectName and payload.projectName.strip() else None
+    agent_id = payload.agentId.strip() if payload.agentId and payload.agentId.strip() else None
+    if agent_id and not local_response_agent_metadata(agent_id).get("found"):
+        raise HTTPException(
+            status_code=422,
+            detail="agentId must reference an existing local response agent",
+        )
+    context = MemoryUseContext(
+        private_session=payload.privateSession,
+        project_name=project_name,
+        agent_id=agent_id,
+    )
+    policy = memory_service.apply_private_session_policy(context)
+    memories = memory_service.list_active_memories(context, limit=payload.limit)
+    return {
+        "context": {
+            "privateSession": context.private_session,
+            "projectName": context.project_name,
+            "agentId": context.agent_id,
+        },
+        "policy": policy,
+        "count": len(memories),
+        "memories": memories,
+        "limitations": [
+            "This is a manual context preview.",
+            "No response agent was invoked.",
+            "No memory was injected into an agent.",
+            "No relevance ranking was performed.",
+            "No automatic proposal or persistence occurred.",
+            "Retrieval integration is deferred to Batch 3.",
+        ],
+    }
+
 @app.get("/api/memories")
 def list_memories(
     status: str | None = None,
     memoryType: str | None = None,
+    query: str | None = None,
     scopeType: str | None = None,
     scopeValue: str | None = None,
     limit: int = 50,
@@ -2390,6 +2449,7 @@ def list_memories(
         return memory_service.list_memories(
             status=status,
             memory_type=memoryType,
+            query=query,
             scope_type=scopeType,
             scope_value=scopeValue,
             limit=limit,
@@ -2409,6 +2469,22 @@ def get_memory(
     except (MemoryValidationError, MemoryConflictError, MemoryNotFoundError) as exc:
         _raise_memory_http_error(exc)
 
+
+
+
+@app.get("/api/memories/{memory_id}/events")
+def get_memory_events(
+    memory_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    events_for_memory = memory_service.list_memory_events(memory_id)
+    if events_for_memory:
+        return events_for_memory
+    try:
+        memory_service.get_memory(memory_id)
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="memory and event history not found") from exc
+    return []
 
 @app.post("/api/memories/proposals")
 def create_memory_proposal(

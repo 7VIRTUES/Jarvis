@@ -230,3 +230,144 @@ def test_all_memory_routes_keep_existing_lan_access_dependency(api_module):
             dependency.call for dependency in route.dependant.dependencies
         }
         assert require_dashboard_lan_access in dependency_calls
+
+
+def test_query_parameter_and_combined_status_filter(api_module):
+    pending = create_proposal(api_module, content="Searchable API memory.")
+    approved = create_proposal(api_module, content="Searchable API approved memory.")
+    api_module.approve_memory(
+        approved["memoryId"],
+        api_module.MemoryApprovalInput(resolution="approve"),
+    )
+
+    queried = api_module.list_memories(query="searchable api", limit=50, offset=0)
+    pending_only = api_module.list_memories(
+        query="searchable api",
+        status="pending",
+        limit=50,
+        offset=0,
+    )
+
+    assert {record["memoryId"] for record in queried} == {pending["memoryId"], approved["memoryId"]}
+    assert [record["memoryId"] for record in pending_only] == [pending["memoryId"]]
+
+
+def test_query_validation_maps_to_422(api_module):
+    with pytest.raises(HTTPException) as exc_info:
+        api_module.list_memories(query="x" * 201, limit=50, offset=0)
+
+    assert exc_info.value.status_code == 422
+
+
+def test_memory_event_endpoint_is_redacted_and_survives_deletion(api_module):
+    content = "Event history must never reproduce this full content."
+    memory_id = create_proposal(api_module, content=content)["memoryId"]
+    api_module.approve_memory(
+        memory_id,
+        api_module.MemoryApprovalInput(resolution="approve"),
+    )
+
+    existing_events = api_module.get_memory_events(memory_id)
+    api_module.delete_memory(memory_id)
+    deleted_events = api_module.get_memory_events(memory_id)
+
+    assert [event["eventType"] for event in existing_events] == ["memory.proposed", "memory.approved"]
+    assert deleted_events[-1]["eventType"] == "memory.deleted"
+    assert content not in str(existing_events)
+    assert content not in str(deleted_events)
+
+
+def test_memory_event_endpoint_returns_404_without_memory_or_history(api_module):
+    with pytest.raises(HTTPException) as exc_info:
+        api_module.get_memory_events("unknown-memory")
+
+    assert exc_info.value.status_code == 404
+
+
+def test_context_preview_private_session_returns_zero_and_keeps_admin_visibility(api_module):
+    memory_id = create_proposal(api_module, content="Private preview global memory.")["memoryId"]
+    api_module.approve_memory(
+        memory_id,
+        api_module.MemoryApprovalInput(resolution="approve"),
+    )
+
+    result = api_module.preview_memory_context(
+        api_module.MemoryContextPreviewInput(privateSession=True)
+    )
+    administrative = api_module.list_memories(limit=50, offset=0)
+
+    assert result["count"] == 0
+    assert result["memories"] == []
+    assert result["policy"]["memoryUseAllowed"] is False
+    assert [record["memoryId"] for record in administrative] == [memory_id]
+    assert "No response agent was invoked." in result["limitations"]
+    assert "No relevance ranking was performed." in result["limitations"]
+
+
+def test_context_preview_project_and_agent_scope(api_module):
+    global_id = create_proposal(api_module, content="Global context API memory.")["memoryId"]
+    project_id = create_proposal(
+        api_module,
+        content="Alpha project context API memory.",
+        scopeType="project",
+        scopeValue="Alpha",
+    )["memoryId"]
+    agent_id = create_proposal(
+        api_module,
+        content="Planning agent context API memory.",
+        scopeType="agent",
+        scopeValue="local_planning_agent",
+    )["memoryId"]
+    for memory_id in (global_id, project_id, agent_id):
+        api_module.approve_memory(
+            memory_id,
+            api_module.MemoryApprovalInput(resolution="approve"),
+        )
+
+    project_result = api_module.preview_memory_context(
+        api_module.MemoryContextPreviewInput(projectName="  Alpha  ")
+    )
+    agent_result = api_module.preview_memory_context(
+        api_module.MemoryContextPreviewInput(agentId="local_planning_agent")
+    )
+
+    assert project_result["context"]["projectName"] == "Alpha"
+    assert {record["memoryId"] for record in project_result["memories"]} == {global_id, project_id}
+    assert {record["memoryId"] for record in agent_result["memories"]} == {global_id, agent_id}
+
+
+def test_context_preview_rejects_unknown_agent_and_unknown_fields(api_module):
+    with pytest.raises(HTTPException) as exc_info:
+        api_module.preview_memory_context(
+            api_module.MemoryContextPreviewInput(agentId="not_an_existing_agent")
+        )
+    assert exc_info.value.status_code == 422
+
+    with pytest.raises(ValidationError):
+        api_module.MemoryContextPreviewInput.model_validate({"unexpected": True})
+
+
+def test_context_preview_limit_validation(api_module):
+    with pytest.raises(ValidationError):
+        api_module.MemoryContextPreviewInput.model_validate({"limit": 0})
+    with pytest.raises(ValidationError):
+        api_module.MemoryContextPreviewInput.model_validate({"limit": 201})
+
+
+def test_new_memory_routes_keep_existing_lan_access_dependency(api_module):
+    protected_methods = {
+        ("POST", "/api/memory/context-preview"),
+        ("GET", "/api/memories/{memory_id}/events"),
+    }
+    matched = set()
+    for route in api_module.app.routes:
+        route_path = getattr(route, "path", None)
+        for method, path in protected_methods:
+            if route_path == path and method in getattr(route, "methods", set()):
+                dependency_calls = {
+                    dependency.call for dependency in route.dependant.dependencies
+                }
+                assert require_dashboard_lan_access in dependency_calls
+                matched.add((method, path))
+
+    assert matched == protected_methods

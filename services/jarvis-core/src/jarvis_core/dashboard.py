@@ -68,9 +68,9 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1C Slice 8", "status": "private-alpha packaging documentation/readiness foundation"},
+            "phase": {"current": "v0.1D Batch 2", "status": "Memory Center dashboard and private-session UX"},
             "capabilities": {
-                "dashboard": "read_only",
+                "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
                 "settings": "read_only_status",
                 "projects": "read_only_summary",
@@ -98,6 +98,7 @@ class DashboardService:
                 "localClassificationAgent": "implemented_local_only",
                 "localTransformationAgent": "implemented_local_only",
                 "localResponseAgentsIndex": "read_only_index",
+                "memoryCenter": "explicit_user_controlled_persistence",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -161,13 +162,21 @@ class DashboardService:
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1C",
-            "currentSlice": "private-alpha packaging documentation/readiness foundation",
+            "phase": "v0.1D",
+            "currentSlice": "Memory Center dashboard and private-session UX",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
             "autonomyMode": "supervised_local_only",
-            "safetyMode": "strict_local_read_only_dashboard",
+            "memoryCenterStatus": "implemented_approval_gated",
+            "durableMemoryPersistenceImplemented": True,
+            "automaticMemorySavingEnabled": False,
+            "memoryApprovalRequired": True,
+            "memoryAgentRetrievalImplemented": False,
+            "privateSessionPersistenceImplemented": False,
+            "automaticLearningEnabled": False,
+            "memoryCenterEndpoint": "/memory",
+            "safetyMode": "local_dashboard_with_approval_gated_memory",
             "paidAiApisEnabled": False,
             "browserAutomationEnabled": False,
             "externalConnectorsEnabled": False,
@@ -756,7 +765,7 @@ def dashboard_html() -> str:
   <a class="skip-link" href="#dashboard-home">Skip to Dashboard Home</a>
   <header>
     <h1>Jarvis PC Local</h1>
-    <div class="muted">Read-only dashboard, report, and settings/status visibility</div>
+    <div class="muted">Local operations dashboard with explicit approval-gated memory controls</div>
   </header>
   <main>
     <section id="dashboard-home" class="stack">
@@ -774,6 +783,7 @@ def dashboard_html() -> str:
       <div id="dashboard-section-filter-status" class="muted">Showing all dashboard sections.</div>
       <div id="dashboard-shortcut-help" class="muted shortcut-help">Keyboard shortcuts: / focuses section search, Escape clears the filter, e expands all sections, c collapses all sections.</div>
       <div class="home-grid" aria-label="Dashboard section navigation">
+        <div class="home-card"><a href="/memory">Open Memory Center</a><span class="muted">Approval-gated local memory management.</span></div>
         <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
         <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
         <div class="home-card"><a href="#security-safety-review">View Security/Safety Reviews</a><span class="muted">Registered project review surface.</span></div>
@@ -807,6 +817,19 @@ def dashboard_html() -> str:
     <section id="dashboard-status" class="dashboard-section" data-section-title="Dashboard Status" data-section-keywords="status metrics counts dashboard home">
       <h2>Status</h2>
       <div id="metrics" class="grid"></div>
+    </section>
+    <section id="memory-center" class="stack dashboard-section" data-section-title="Memory Center" data-section-keywords="memory center local persistent approval pending active inactive explicit user actions">
+      <h2>Memory Center</h2>
+      <div id="memory-center-status" class="muted" aria-live="polite">Loading approval-gated memory status...</div>
+      <div id="memory-center-metrics" class="grid" aria-busy="true"></div>
+      <div class="row">
+        <strong>Persistent local feature with explicit user actions only.</strong>
+        <div class="muted">New memories remain pending and inactive until approved. Automatic response-agent retrieval is not yet enabled.</div>
+      </div>
+      <div class="actions">
+        <button id="memory-center-refresh-button" type="button">Refresh memory status</button>
+        <a class="button-link" href="/memory">Open Memory Center</a>
+      </div>
     </section>
     <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
@@ -1677,6 +1700,7 @@ def dashboard_html() -> str:
       renderLocalResponseAgentsIndex(summary.localResponseAgentsIndex);
       initializeLocalResponseAgentsWorkbench(summary.localResponseAgentsIndex);
       await loadVmValidationPrep();
+      await loadMemoryCenterSummary();
       await loadBackupReadiness();
       await loadActivityTimeline();
       await loadDashboardSurfaceHealth();
@@ -1854,6 +1878,60 @@ def dashboard_html() -> str:
       };
     }
     async function loadBackupReadiness() {
+    async function loadMemoryCenterSummary() {
+      const status = document.getElementById('memory-center-status');
+      const metrics = document.getElementById('memory-center-metrics');
+      status.textContent = 'Loading approval-gated memory status...';
+      metrics.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch('/api/memory/summary');
+        if (!response.ok) {
+          throw new Error('Memory summary request failed.');
+        }
+        const summary = await response.json();
+        renderMemoryCenterSummary(summary);
+        status.textContent = summary.total
+          ? 'Local memory records are available for explicit administrative review.'
+          : 'No local memory records have been created.';
+      } catch (error) {
+        metrics.replaceChildren();
+        status.textContent = error instanceof Error ? error.message : 'Memory status is unavailable.';
+      } finally {
+        metrics.setAttribute('aria-busy', 'false');
+      }
+      bindMemoryCenterControls();
+    }
+    function renderMemoryCenterSummary(summary) {
+      const metrics = document.getElementById('memory-center-metrics');
+      metrics.replaceChildren();
+      const counts = summary.counts || {};
+      const values = {
+        total: summary.total || 0,
+        pending: counts.pending || 0,
+        active: summary.active || 0,
+        disabled: counts.disabled || 0,
+        rejected: counts.rejected || 0,
+        expired: summary.expired || 0,
+      };
+      Object.entries(values).forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        const labelNode = document.createElement('span');
+        labelNode.textContent = label;
+        const valueNode = document.createElement('strong');
+        valueNode.textContent = String(value);
+        card.append(labelNode, valueNode);
+        metrics.append(card);
+      });
+    }
+    function bindMemoryCenterControls() {
+      const refreshButton = document.getElementById('memory-center-refresh-button');
+      refreshButton.onclick = async () => {
+        refreshButton.disabled = true;
+        await loadMemoryCenterSummary();
+        refreshButton.disabled = false;
+      };
+    }
       const readiness = await fetch('/backup/readiness').then((response) => response.json());
       document.getElementById('backup-readiness-status').textContent = JSON.stringify(readiness, null, 2);
       renderBackupReadiness(readiness);

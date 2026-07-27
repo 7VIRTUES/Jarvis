@@ -401,3 +401,120 @@ def test_hard_delete_removes_content_and_preserves_redacted_audit(memory_env):
     assert content not in event_bus_dump
     assert content not in jsonl_dump
     assert all("content" not in json.dumps(event["metadata"]).lower() for event in events)
+
+
+def test_blank_query_behaves_like_no_query(memory_env):
+    service, _, _ = memory_env
+    first = proposal(service, content="First searchable memory.")
+    second = proposal(service, content="Second searchable memory.")
+
+    without_query = service.list_memories(limit=50)
+    with_blank_query = service.list_memories(query="   ", limit=50)
+
+    assert {record["memoryId"] for record in without_query} == {first["memoryId"], second["memoryId"]}
+    assert with_blank_query == without_query
+
+
+def test_search_matches_content_type_scope_and_source_reference_case_insensitively(memory_env):
+    service, _, _ = memory_env
+    content_match = proposal(service, content="Prefers MIXED Case summaries.")
+    type_match = proposal(service, content="A milestone record.", memory_type="goal")
+    scope_match = proposal(
+        service,
+        content="Scoped fact.",
+        memory_type="project_fact",
+        scope_type="project",
+        scope_value="Project-ALPHA",
+    )
+    source_match = proposal(
+        service,
+        content="Referenced decision.",
+        source_reference="Owner-Review-Guide",
+    )
+
+    assert [record["memoryId"] for record in service.list_memories(query="mixed case")] == [content_match["memoryId"]]
+    assert [record["memoryId"] for record in service.list_memories(query="GOAL")] == [type_match["memoryId"]]
+    assert [record["memoryId"] for record in service.list_memories(query="project-alpha")] == [scope_match["memoryId"]]
+    assert [record["memoryId"] for record in service.list_memories(query="owner-review-guide")] == [source_match["memoryId"]]
+
+
+def test_search_combines_with_status_and_uses_pagination(memory_env):
+    service, _, _ = memory_env
+    pending_ids = []
+    for index in range(4):
+        memory_id = proposal(service, content=f"Shared search phrase {index}.")["memoryId"]
+        pending_ids.append(memory_id)
+    service.approve(pending_ids[0])
+
+    first_page = service.list_memories(query="shared search", status="pending", limit=2, offset=0)
+    second_page = service.list_memories(query="shared search", status="pending", limit=2, offset=2)
+
+    assert len(first_page) == 2
+    assert len(second_page) == 1
+    assert all(record["status"] == "pending" for record in first_page + second_page)
+    assert pending_ids[0] not in {record["memoryId"] for record in first_page + second_page}
+
+
+def test_search_treats_percent_underscore_and_injection_text_literally(memory_env):
+    service, conn, _ = memory_env
+    percent_id = proposal(service, content="Progress is exactly 50% complete.")["memoryId"]
+    underscore_id = proposal(service, content="Use literal_code_name in notes.")["memoryId"]
+    proposal(service, content="An unrelated memory.")
+
+    percent_results = service.list_memories(query="%")
+    underscore_results = service.list_memories(query="_")
+    injection_results = service.list_memories(query="%' OR 1=1 --")
+
+    assert [record["memoryId"] for record in percent_results] == [percent_id]
+    assert [record["memoryId"] for record in underscore_results] == [underscore_id]
+    assert injection_results == []
+    assert conn.execute("select count(*) from memories").fetchone()[0] == 3
+
+
+def test_search_query_length_is_limited(memory_env):
+    service, _, _ = memory_env
+
+    with pytest.raises(MemoryValidationError):
+        service.list_memories(query="x" * 201)
+
+
+def test_private_context_preview_returns_zero_without_affecting_admin_listing(memory_env):
+    service, conn, _ = memory_env
+    memory_id = proposal(service, content="Approved global preview memory.")["memoryId"]
+    service.approve(memory_id)
+    before_events = conn.execute("select count(*) from memory_events").fetchone()[0]
+
+    preview = service.list_active_memories(MemoryUseContext(private_session=True), limit=50)
+    administrative = service.list_memories(limit=50)
+    after_events = conn.execute("select count(*) from memory_events").fetchone()[0]
+
+    assert preview == []
+    assert [record["memoryId"] for record in administrative] == [memory_id]
+    assert before_events == after_events
+
+
+def test_context_preview_preserves_global_project_and_agent_scope_rules(memory_env):
+    service, _, _ = memory_env
+    global_id = proposal(service, content="Global preview.")["memoryId"]
+    project_id = proposal(
+        service,
+        content="Project preview.",
+        scope_type="project",
+        scope_value="Alpha",
+    )["memoryId"]
+    agent_id = proposal(
+        service,
+        content="Agent preview.",
+        scope_type="agent",
+        scope_value=KNOWN_AGENT,
+    )["memoryId"]
+    for memory_id in (global_id, project_id, agent_id):
+        service.approve(memory_id)
+
+    global_only = service.list_active_memories(MemoryUseContext())
+    project_context = service.list_active_memories(MemoryUseContext(project_name="Alpha"))
+    agent_context = service.list_active_memories(MemoryUseContext(agent_id=KNOWN_AGENT))
+
+    assert {record["memoryId"] for record in global_only} == {global_id}
+    assert {record["memoryId"] for record in project_context} == {global_id, project_id}
+    assert {record["memoryId"] for record in agent_context} == {global_id, agent_id}

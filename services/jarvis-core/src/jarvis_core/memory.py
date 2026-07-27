@@ -34,6 +34,7 @@ SOURCE_TYPES = frozenset({"manual", "agent_proposal", "migration"})
 
 MAX_CONTENT_LENGTH = 4000
 MAX_REASON_LENGTH = 1000
+MAX_QUERY_LENGTH = 200
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
 
@@ -227,6 +228,7 @@ class MemoryService:
     def list_memories(
         self,
         *,
+        query: str | None = None,
         status: str | None = None,
         memory_type: str | None = None,
         scope_type: str | None = None,
@@ -237,6 +239,29 @@ class MemoryService:
         limit, offset = _validate_pagination(limit, offset)
         conditions: list[str] = []
         parameters: list[Any] = []
+        normalized_query = _normalize_optional_text(query, MAX_QUERY_LENGTH, "search query")
+        if normalized_query is not None:
+            escaped_query = _escape_like_pattern(normalized_query)
+            search_pattern = f"%{escaped_query}%"
+            search_fields = (
+                "content",
+                "memory_type",
+                "scope_type",
+                "scope_value",
+                "source_type",
+                "source_agent_id",
+                "source_reference",
+                "proposal_reason",
+            )
+            conditions.append(
+                "("
+                + " or ".join(
+                    f"lower(coalesce({field}, '')) like lower(?) escape '\\'"
+                    for field in search_fields
+                )
+                + ")"
+            )
+            parameters.extend([search_pattern] * len(search_fields))
         if status is not None:
             _validate_choice("status", status, MEMORY_STATUSES)
             conditions.append("status = ?")
@@ -795,6 +820,10 @@ def _content_hash(content: str, scope_type: str, scope_value: str | None) -> str
     effective_scope = f"{scope_type}:{scope_value or ''}"
     material = f"{content}\n--effective-scope--\n{effective_scope}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
+
+
+def _escape_like_pattern(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _is_expired(expires_at: Any) -> bool:
