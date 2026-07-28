@@ -247,12 +247,16 @@ def memory_dashboard_html() -> str:
         <h1>Jarvis Memory Center</h1>
         <p>Local · User-controlled · Approval-gated · Auditable</p>
       </div>
-      <a class="button-link" href="/dashboard">Back to Dashboard</a>
+      <div class="actions">
+        <a class="button-link" href="/knowledge">Open Knowledge Library</a>
+        <a class="button-link" href="/dashboard">Back to Dashboard</a>
+      </div>
     </div>
   </header>
   <main id="main-content">
     <section class="safety-banner" aria-labelledby="memory-safety-title">
       <h2 id="memory-safety-title">Memory safety boundaries</h2>
+      <p><strong>Memory and knowledge remain separate.</strong> Memory stores approved user facts, preferences, and instructions. Knowledge stores explicitly imported source material. Their databases and management controls are not merged.</p>
       <ul>
         <li>Memory is stored locally in Jarvis SQLite.</li>
         <li>New memories begin as pending, and pending memories are inactive.</li>

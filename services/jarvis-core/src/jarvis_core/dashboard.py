@@ -68,7 +68,7 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1D Batch 4", "status": "all-agent controlled memory, proposals, and explicit feedback learning"},
+            "phase": {"current": "v0.1E Batch 1", "status": "Knowledge Library foundation and explicit manual ingestion"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -99,6 +99,7 @@ class DashboardService:
                 "localTransformationAgent": "implemented_local_only",
                 "localResponseAgentsIndex": "read_only_index",
                 "memoryCenter": "explicit_user_controlled_persistence",
+                "knowledgeLibrary": "implemented_manual_ingestion",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -162,8 +163,8 @@ class DashboardService:
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1D Batch 4",
-            "currentSlice": "all-agent controlled memory, proposals, and explicit feedback learning",
+            "phase": "v0.1E Batch 1",
+            "currentSlice": "Knowledge Library foundation and explicit manual ingestion",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -188,7 +189,21 @@ class DashboardService:
             "embeddingsEnabled": False,
             "localGenerativeModelEnabled": False,
             "selfModifyingCodeEnabled": False,
-            "documentKnowledgeIngestionEnabled": False,
+            "documentKnowledgeIngestionEnabled": True,
+            "knowledgeLibraryStatus": "implemented_manual_ingestion",
+            "knowledgePersistenceImplemented": True,
+            "knowledgePastedTextIngestionImplemented": True,
+            "knowledgeRegisteredProjectFileIngestionImplemented": True,
+            "knowledgeAutomaticScanningEnabled": False,
+            "knowledgeDirectoryIngestionEnabled": False,
+            "knowledgeFileUploadsEnabled": False,
+            "knowledgeUrlIngestionEnabled": False,
+            "knowledgeAgentRetrievalEnabled": False,
+            "knowledgeFtsIndexImplemented": True,
+            "knowledgeEmbeddingsEnabled": False,
+            "knowledgeVectorDatabaseEnabled": False,
+            "knowledgeLocalModelEnabled": False,
+            "knowledgeCenterEndpoint": "/knowledge",
             "privateSessionPersistenceImplemented": False,
             "automaticLearningEnabled": False,
             "memoryCenterEndpoint": "/memory",
@@ -800,6 +815,7 @@ def dashboard_html() -> str:
       <div id="dashboard-shortcut-help" class="muted shortcut-help">Keyboard shortcuts: / focuses section search, Escape clears the filter, e expands all sections, c collapses all sections.</div>
       <div class="home-grid" aria-label="Dashboard section navigation">
         <div class="home-card"><a href="/memory">Open Memory Center</a><span class="muted">Approval-gated local memory management.</span></div>
+        <div class="home-card"><a href="/knowledge">Open Knowledge Library</a><span class="muted">Explicit local document ingestion and provenance.</span></div>
         <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
         <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
         <div class="home-card"><a href="#security-safety-review">View Security/Safety Reviews</a><span class="muted">Registered project review surface.</span></div>
@@ -847,7 +863,13 @@ def dashboard_html() -> str:
         <a class="button-link" href="/memory">Open Memory Center</a>
       </div>
     </section>
-    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
+    <section id="knowledge-library" class="stack dashboard-section" data-section-title="Knowledge Library" data-section-keywords="knowledge library manual ingestion provenance local explicit">
+      <h2>Knowledge Library</h2>
+      <div id="knowledge-library-status" class="muted" aria-live="polite">Loading Knowledge Library status...</div>
+      <div id="knowledge-library-metrics" class="grid" aria-busy="true"></div>
+      <div class="row"><strong>Explicit manual ingestion only.</strong><div class="muted">No automatic scanning · No agent retrieval yet · No embeddings.</div></div>
+      <div class="actions"><button id="knowledge-library-refresh-button" type="button">Refresh knowledge status</button><a class="button-link" href="/knowledge">Open Knowledge Library</a></div>
+    </section>    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
       <pre id="settings">Loading settings/status summary...</pre>
     </section>
@@ -1837,6 +1859,7 @@ def dashboard_html() -> str:
       initializeLocalResponseAgentsWorkbench(summary.localResponseAgentsIndex);
       await loadVmValidationPrep();
       await loadMemoryCenterSummary();
+      await loadKnowledgeLibrarySummary();
       await loadBackupReadiness();
       await loadActivityTimeline();
       await loadDashboardSurfaceHealth();
@@ -2070,6 +2093,24 @@ def dashboard_html() -> str:
         await loadMemoryCenterSummary();
         refreshButton.disabled = false;
       };
+    }
+    async function loadKnowledgeLibrarySummary() {
+      const status = document.getElementById('knowledge-library-status');
+      const metrics = document.getElementById('knowledge-library-metrics');
+      status.textContent = 'Loading Knowledge Library status...';
+      metrics.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch('/api/knowledge/summary');
+        if (!response.ok) throw new Error('Knowledge Library summary request failed.');
+        const summary = await response.json();
+        metrics.replaceChildren();
+        const values = { totalSources: summary.totalSources || 0, activeSources: summary.activeSources || 0, disabledSources: summary.disabledSources || 0, totalChunks: summary.totalChunks || 0, indexMode: summary.indexMode || 'deterministic_fallback_available' };
+        Object.entries(values).forEach(([label, value]) => { const card = document.createElement('div'); card.className = 'metric'; const labelNode = document.createElement('span'); labelNode.textContent = label; const valueNode = document.createElement('strong'); valueNode.textContent = String(value); card.append(labelNode, valueNode); metrics.append(card); });
+        status.textContent = summary.totalSources ? 'Explicitly imported local knowledge sources are available for administrative review.' : 'No knowledge sources have been imported.';
+      } catch (error) { metrics.replaceChildren(); status.textContent = error instanceof Error ? error.message : 'Knowledge Library status is unavailable.'; }
+      finally { metrics.setAttribute('aria-busy', 'false'); }
+      const refreshButton = document.getElementById('knowledge-library-refresh-button');
+      refreshButton.onclick = async () => { refreshButton.disabled = true; await loadKnowledgeLibrarySummary(); refreshButton.disabled = false; };
     }
     async function loadBackupReadiness() {
       const readiness = await fetch('/backup/readiness').then((response) => response.json());

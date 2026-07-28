@@ -31,6 +31,15 @@ from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
 from .file_data_agent import FileDataAgentService
+from .knowledge import (
+    KnowledgeConflictError,
+    KnowledgeNotFoundError,
+    KnowledgeSecretError,
+    KnowledgeService,
+    KnowledgeValidationError,
+)
+from .knowledge_dashboard import knowledge_dashboard_html
+from .knowledge_ingestion import KnowledgeIngestionService
 from .inspector import inspect_project, write_markdown_report
 from .local_business_agent import LocalBusinessAgentService, LocalBusinessRequest
 from .local_career_agent import LocalCareerAgentService, LocalCareerRequest
@@ -118,6 +127,13 @@ conn = init_db(DATA_ROOT / "jarvis.sqlite")
 logger = JsonlLogger(DATA_ROOT / "logs")
 events = EventBus(conn, logger)
 projects = ProjectRegistry(conn, WORKSPACE_ROOT)
+knowledge_service = KnowledgeService(
+    conn,
+    events,
+    agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
+    project_exists=lambda project_name: projects.get_project(project_name) is not None,
+)
+knowledge_ingestion = KnowledgeIngestionService(knowledge_service, projects, WORKSPACE_ROOT)
 memory_service = MemoryService(
     conn,
     events,
@@ -347,6 +363,80 @@ class FeedbackPreferenceProposalInput(BaseModel):
     confidence: str
     sensitivity: str
     expiresAt: str | None = None
+    actor: str = "local_user"
+
+class KnowledgePastePreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=250000)
+    scopeType: str
+    scopeValue: str | None = Field(default=None, max_length=200)
+    sensitivity: str
+    mediaType: str
+    tags: list[str] = Field(default_factory=list, max_length=12)
+    privateSession: bool = False
+
+
+class KnowledgePasteImportInput(KnowledgePastePreviewInput):
+    expectedContentHash: str = Field(min_length=64, max_length=64)
+    confirmation: Literal["IMPORT"]
+    actor: str = "local_user"
+
+
+class KnowledgeProjectFilePreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    projectName: str = Field(min_length=1, max_length=200)
+    relativePath: str = Field(min_length=1, max_length=500)
+    sensitivity: str
+    tags: list[str] = Field(default_factory=list, max_length=12)
+    privateSession: bool = False
+
+
+class KnowledgeProjectFileImportInput(KnowledgeProjectFilePreviewInput):
+    expectedContentHash: str = Field(min_length=64, max_length=64)
+    expectedSizeBytes: int = Field(ge=0, le=500000)
+    expectedModifiedAt: str
+    confirmation: Literal["IMPORT"]
+    actor: str = "local_user"
+
+
+class KnowledgeMetadataEditInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    tags: list[str] | None = Field(default=None, max_length=12)
+    sensitivity: str | None = None
+    scopeType: str | None = None
+    scopeValue: str | None = Field(default=None, max_length=200)
+    actor: str = "local_user"
+
+
+class KnowledgeReplaceContentInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=250000)
+    actor: str = "local_user"
+
+
+class KnowledgeRefreshPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class KnowledgeRefreshInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedContentHash: str = Field(min_length=64, max_length=64)
+    expectedSizeBytes: int = Field(ge=0, le=500000)
+    expectedModifiedAt: str
+    confirmation: Literal["REFRESH"]
+    actor: str = "local_user"
+
+
+class KnowledgeActorInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     actor: str = "local_user"
 
 _MEMORY_EDIT_FIELD_MAP = {
@@ -1458,6 +1548,11 @@ def local_dashboard(_: None = Depends(require_dashboard_lan_access)) -> HTMLResp
 @app.get("/memory", response_class=HTMLResponse)
 def memory_center_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
     return HTMLResponse(memory_dashboard_html())
+
+
+@app.get("/knowledge", response_class=HTMLResponse)
+def knowledge_library_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
+    return HTMLResponse(knowledge_dashboard_html())
 
 
 @app.get("/setup/lan", response_class=HTMLResponse)
@@ -2631,6 +2726,237 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
 
 
 
+
+def _raise_knowledge_http_error(exc: Exception) -> None:
+    if isinstance(exc, KnowledgeNotFoundError):
+        raise HTTPException(status_code=404, detail="knowledge source or registered project not found") from exc
+    if isinstance(exc, KnowledgeConflictError):
+        detail: dict[str, object] = {"message": str(exc)}
+        if exc.existing_source_id:
+            detail["existingSourceId"] = exc.existing_source_id
+        raise HTTPException(status_code=409, detail=detail) from exc
+    if isinstance(exc, KnowledgeSecretError):
+        raise HTTPException(status_code=422, detail="knowledge content rejected: credential_or_secret_material") from exc
+    if isinstance(exc, KnowledgeValidationError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise exc
+
+
+@app.get("/api/knowledge/summary")
+def knowledge_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return knowledge_service.summary()
+
+
+@app.get("/api/knowledge/sources")
+def list_knowledge_sources(
+    status: str | None = None,
+    sourceType: str | None = None,
+    scopeType: str | None = None,
+    scopeValue: str | None = None,
+    sensitivity: str | None = None,
+    projectName: str | None = None,
+    query: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return knowledge_service.list_sources(
+            status=status, source_type=sourceType, scope_type=scopeType,
+            scope_value=scopeValue, sensitivity=sensitivity,
+            project_name=projectName, query=query, limit=limit, offset=offset,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.get("/api/knowledge/sources/{source_id}")
+def get_knowledge_source(
+    source_id: str, _: None = Depends(require_dashboard_lan_access)
+) -> dict[str, object]:
+    try:
+        return knowledge_service.get_source(source_id)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.get("/api/knowledge/sources/{source_id}/chunks")
+def get_knowledge_chunks(
+    source_id: str, _: None = Depends(require_dashboard_lan_access)
+) -> list[dict[str, object]]:
+    try:
+        return knowledge_service.list_chunks(source_id)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.get("/api/knowledge/sources/{source_id}/events")
+def get_knowledge_events(
+    source_id: str, _: None = Depends(require_dashboard_lan_access)
+) -> list[dict[str, object]]:
+    try:
+        return knowledge_service.list_events(source_id)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/preview/paste")
+def preview_pasted_knowledge(
+    payload: KnowledgePastePreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.preview_paste(
+            title=payload.title, content=payload.content,
+            scope_type=payload.scopeType, scope_value=payload.scopeValue,
+            sensitivity=payload.sensitivity, media_type=payload.mediaType,
+            tags=payload.tags, private_session=payload.privateSession,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/preview/project-file")
+def preview_project_file_knowledge(
+    payload: KnowledgeProjectFilePreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.preview_project_file(
+            project_name=payload.projectName, relative_path=payload.relativePath,
+            sensitivity=payload.sensitivity, tags=payload.tags,
+            private_session=payload.privateSession,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/paste")
+def import_pasted_knowledge(
+    payload: KnowledgePasteImportInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.import_paste(
+            title=payload.title, content=payload.content,
+            scope_type=payload.scopeType, scope_value=payload.scopeValue,
+            sensitivity=payload.sensitivity, media_type=payload.mediaType,
+            tags=payload.tags, expected_content_hash=payload.expectedContentHash,
+            confirmation=payload.confirmation, private_session=payload.privateSession,
+            actor=payload.actor,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/project-file")
+def import_project_file_knowledge(
+    payload: KnowledgeProjectFileImportInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.import_project_file(
+            project_name=payload.projectName, relative_path=payload.relativePath,
+            sensitivity=payload.sensitivity, tags=payload.tags,
+            expected_content_hash=payload.expectedContentHash,
+            expected_size_bytes=payload.expectedSizeBytes,
+            expected_modified_at=payload.expectedModifiedAt,
+            confirmation=payload.confirmation, private_session=payload.privateSession,
+            actor=payload.actor,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.patch("/api/knowledge/sources/{source_id}")
+def edit_knowledge_source(
+    source_id: str, payload: KnowledgeMetadataEditInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    raw = payload.model_dump(exclude_unset=True)
+    actor = raw.pop("actor", "local_user")
+    field_map = {
+        "title": "title", "tags": "tags", "sensitivity": "sensitivity",
+        "scopeType": "scope_type", "scopeValue": "scope_value",
+    }
+    try:
+        return knowledge_service.edit_metadata(
+            source_id, {field_map[key]: value for key, value in raw.items()}, actor=actor
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/{source_id}/replace-content")
+def replace_knowledge_content(
+    source_id: str, payload: KnowledgeReplaceContentInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_service.replace_pasted_content(
+            source_id, payload.content, actor=payload.actor
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/{source_id}/refresh-preview")
+def preview_knowledge_refresh(
+    source_id: str, payload: KnowledgeRefreshPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.refresh_preview(source_id)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/{source_id}/refresh")
+def refresh_knowledge_source(
+    source_id: str, payload: KnowledgeRefreshInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_ingestion.refresh(
+            source_id, expected_content_hash=payload.expectedContentHash,
+            expected_size_bytes=payload.expectedSizeBytes,
+            expected_modified_at=payload.expectedModifiedAt,
+            confirmation=payload.confirmation, actor=payload.actor,
+        )
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/{source_id}/disable")
+def disable_knowledge_source(
+    source_id: str, payload: KnowledgeActorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_service.disable(source_id, actor=payload.actor)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/sources/{source_id}/enable")
+def enable_knowledge_source(
+    source_id: str, payload: KnowledgeActorInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_service.enable(source_id, actor=payload.actor)
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.delete("/api/knowledge/sources/{source_id}")
+def delete_knowledge_source(
+    source_id: str, _: None = Depends(require_dashboard_lan_access)
+) -> dict[str, object]:
+    try:
+        return knowledge_service.delete(source_id, actor="local_user")
+    except (KnowledgeValidationError, KnowledgeConflictError, KnowledgeNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
 
 def _raise_memory_http_error(exc: Exception) -> None:
     if isinstance(exc, MemoryNotFoundError):

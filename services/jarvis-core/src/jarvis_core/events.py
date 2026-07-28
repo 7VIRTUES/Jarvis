@@ -56,6 +56,12 @@ EVENT_TYPES = {
     "feedback.updated",
     "feedback.deleted",
     "feedback.preference_proposed",
+    "knowledge.imported",
+    "knowledge.updated",
+    "knowledge.refreshed",
+    "knowledge.disabled",
+    "knowledge.enabled",
+    "knowledge.deleted",
 }
 
 

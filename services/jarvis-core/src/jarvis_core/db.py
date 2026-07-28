@@ -253,6 +253,51 @@ create table if not exists feedback_events (
   created_at text not null
 );
 
+create table if not exists knowledge_sources (
+  source_id text primary key,
+  title text not null,
+  source_type text not null,
+  status text not null,
+  scope_type text not null,
+  scope_value text,
+  sensitivity text not null,
+  media_type text not null,
+  project_name text,
+  relative_path text,
+  content text not null,
+  content_hash text not null,
+  tags text not null,
+  char_count integer not null,
+  chunk_count integer not null,
+  source_size_bytes integer,
+  source_modified_at text,
+  created_at text not null,
+  updated_at text not null,
+  imported_at text not null,
+  disabled_at text
+);
+
+create table if not exists knowledge_chunks (
+  chunk_id text primary key,
+  source_id text not null,
+  chunk_index integer not null,
+  content text not null,
+  content_hash text not null,
+  char_start integer not null,
+  char_end integer not null,
+  created_at text not null,
+  unique(source_id, chunk_index)
+);
+
+create table if not exists knowledge_events (
+  event_id text primary key,
+  source_id text not null,
+  event_type text not null,
+  actor text not null,
+  metadata text not null,
+  created_at text not null
+);
+
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
@@ -267,6 +312,16 @@ create index if not exists idx_response_feedback_rating_date on response_feedbac
 create index if not exists idx_response_feedback_linked_memory on response_feedback(linked_memory_id);
 create index if not exists idx_feedback_events_feedback_date on feedback_events(feedback_id, created_at);
 create index if not exists idx_memory_retrieval_items_rank on memory_retrieval_items(retrieval_id, rank);
+create index if not exists idx_knowledge_sources_status on knowledge_sources(status);
+create index if not exists idx_knowledge_sources_type on knowledge_sources(source_type);
+create index if not exists idx_knowledge_sources_scope on knowledge_sources(scope_type, scope_value);
+create index if not exists idx_knowledge_sources_sensitivity on knowledge_sources(sensitivity);
+create index if not exists idx_knowledge_sources_project on knowledge_sources(project_name);
+create index if not exists idx_knowledge_sources_content_hash on knowledge_sources(content_hash);
+create index if not exists idx_knowledge_sources_updated on knowledge_sources(updated_at);
+create index if not exists idx_knowledge_chunks_source_index on knowledge_chunks(source_id, chunk_index);
+create index if not exists idx_knowledge_chunks_content_hash on knowledge_chunks(content_hash);
+create index if not exists idx_knowledge_events_source_date on knowledge_events(source_id, created_at);
 """
 
 _MEMORY_FTS_COLUMNS = """
@@ -282,6 +337,17 @@ _MEMORY_FTS_COLUMNS = """
   tokenize = 'unicode61'
 """
 
+_KNOWLEDGE_FTS_COLUMNS = """
+  chunk_id unindexed,
+  source_id unindexed,
+  content,
+  source_title,
+  tags,
+  scope_type,
+  scope_value,
+  tokenize = 'unicode61'
+"""
+
 
 def init_db(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -293,6 +359,7 @@ def init_db(path: Path) -> sqlite3.Connection:
     _ensure_column(conn, "codex_executions", "check_results", "text not null default '{}'")
     _ensure_column(conn, "codex_executions", "repair_results", "text not null default '{}'")
     _initialize_memory_fts(conn)
+    _initialize_knowledge_fts(conn)
     conn.commit()
     return conn
 
@@ -365,6 +432,72 @@ def _initialize_memory_fts(conn: sqlite3.Connection) -> bool:
 def memory_fts5_available(conn: sqlite3.Connection) -> bool:
     try:
         conn.execute("select count(*) from memory_fts").fetchone()
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+def _initialize_knowledge_fts(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute(
+            f"create virtual table if not exists knowledge_chunks_fts using fts5({_KNOWLEDGE_FTS_COLUMNS})"
+        )
+        conn.executescript(
+            """
+            create trigger if not exists knowledge_chunks_fts_insert
+            after insert on knowledge_chunks begin
+              insert into knowledge_chunks_fts (
+                chunk_id, source_id, content, source_title, tags, scope_type, scope_value
+              )
+              select
+                new.chunk_id, new.source_id, new.content, source.title, source.tags,
+                source.scope_type, coalesce(source.scope_value, '')
+              from knowledge_sources as source
+              where source.source_id = new.source_id;
+            end;
+
+            create trigger if not exists knowledge_chunks_fts_update
+            after update on knowledge_chunks begin
+              delete from knowledge_chunks_fts where chunk_id = old.chunk_id;
+              insert into knowledge_chunks_fts (
+                chunk_id, source_id, content, source_title, tags, scope_type, scope_value
+              )
+              select
+                new.chunk_id, new.source_id, new.content, source.title, source.tags,
+                source.scope_type, coalesce(source.scope_value, '')
+              from knowledge_sources as source
+              where source.source_id = new.source_id;
+            end;
+
+            create trigger if not exists knowledge_chunks_fts_delete
+            after delete on knowledge_chunks begin
+              delete from knowledge_chunks_fts where chunk_id = old.chunk_id;
+            end;
+            """
+        )
+        conn.execute("delete from knowledge_chunks_fts")
+        conn.execute(
+            """
+            insert into knowledge_chunks_fts (
+              chunk_id, source_id, content, source_title, tags, scope_type, scope_value
+            )
+            select
+              chunk.chunk_id, chunk.source_id, chunk.content, source.title, source.tags,
+              source.scope_type, coalesce(source.scope_value, '')
+            from knowledge_chunks as chunk
+            join knowledge_sources as source on source.source_id = chunk.source_id
+            order by chunk.source_id, chunk.chunk_index
+            """
+        )
+        return True
+    except sqlite3.OperationalError as exc:
+        if "fts5" not in str(exc).lower():
+            raise
+        return False
+
+
+def knowledge_fts5_available(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("select count(*) from knowledge_chunks_fts").fetchone()
         return True
     except sqlite3.OperationalError:
         return False
