@@ -30,7 +30,7 @@ MEMORY_STATUSES = frozenset({"pending", "approved", "disabled", "rejected"})
 SCOPE_TYPES = frozenset({"global", "project", "agent"})
 CONFIDENCE_VALUES = frozenset({"low", "medium", "high"})
 SENSITIVITY_VALUES = frozenset({"standard", "sensitive"})
-SOURCE_TYPES = frozenset({"manual", "agent_proposal", "migration"})
+SOURCE_TYPES = frozenset({"manual", "agent_proposal", "feedback_proposal", "migration"})
 
 MAX_CONTENT_LENGTH = 4000
 MAX_REASON_LENGTH = 1000
@@ -586,15 +586,17 @@ class MemoryService:
     def _validated_values(self, values: dict[str, Any]) -> dict[str, Any]:
         memory_type = _validate_choice("memory type", values.get("memory_type"), MEMORY_TYPES)
         content = _normalize_content(values.get("content"))
-        _reject_secret_content(content)
+        reject_secret_like_content(content, label="memory content")
         scope_type = _validate_choice("scope type", values.get("scope_type"), SCOPE_TYPES)
         scope_value = _normalize_scope(scope_type, values.get("scope_value"))
         source_type = _validate_choice("source type", values.get("source_type"), SOURCE_TYPES)
         source_agent_id = _normalize_optional_text(
             values.get("source_agent_id"), 200, "source agent ID"
         )
-        if source_type == "agent_proposal" and not source_agent_id:
-            raise MemoryValidationError("source agent ID is required for an agent proposal")
+        if source_type in {"agent_proposal", "feedback_proposal"} and not source_agent_id:
+            raise MemoryValidationError(
+                f"source agent ID is required for a {source_type.replace('_', ' ')}"
+            )
         if source_agent_id:
             self._validate_agent(source_agent_id, "source agent ID")
         if scope_type == "agent":
@@ -800,7 +802,8 @@ def _validate_pagination(limit: Any, offset: Any) -> tuple[int, int]:
     return limit, offset
 
 
-def _reject_secret_content(content: str) -> None:
+def reject_secret_like_content(content: str, *, label: str = "content") -> None:
+    """Reject credential-like text without reproducing it in errors or audit data."""
     if any(
         pattern.search(content)
         for pattern in (
@@ -812,7 +815,7 @@ def _reject_secret_content(content: str) -> None:
         )
     ):
         raise MemorySecretError(
-            "memory content rejected: credential_or_secret_material"
+            f"{label} rejected: credential_or_secret_material"
         )
 
 

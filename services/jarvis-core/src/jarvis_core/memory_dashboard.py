@@ -259,7 +259,7 @@ def memory_dashboard_html() -> str:
         <li>Only approved, unexpired memories can be active.</li>
         <li>Jarvis does not automatically save conversations.</li>
         <li>Jarvis does not automatically approve memory.</li>
-        <li>Memory retrieval is opt-in for exactly six representative pilot agents.</li>
+        <li>Memory retrieval is explicit and opt-in for all 37 local response agents.</li>
         <li>Private-session state is temporary and page-local.</li>
         <li>Sensitive memories should be used sparingly.</li>
         <li>Obvious credentials and secrets are rejected before storage.</li>
@@ -589,6 +589,7 @@ def memory_dashboard_html() -> str:
               <select id="edit-source-type" required>
                 <option value="manual">manual</option>
                 <option value="agent_proposal">agent_proposal</option>
+                <option value="feedback_proposal">feedback_proposal</option>
                 <option value="migration">migration</option>
               </select>
             </div>
@@ -738,7 +739,7 @@ def memory_dashboard_html() -> str:
       <p class="muted">Redacted metadata only. Raw queries and historical memory content are not stored or displayed.</p>
       <div class="filter-grid">
         <div class="field">
-          <label for="retrieval-audit-agent">Pilot-agent filter</label>
+          <label for="retrieval-audit-agent">Response-agent filter</label>
           <select id="retrieval-audit-agent">
             <option value="">All agents and manual previews</option>
             <option value="local_planning_agent">local_planning_agent</option>
@@ -772,6 +773,80 @@ def memory_dashboard_html() -> str:
       <div id="retrieval-audit-list" class="list"></div>
       <div id="retrieval-audit-detail" class="row stack muted">Select a retrieval to inspect redacted ranked item metadata.</div>
     </section>
+    <section id="feedback-controlled-learning" aria-labelledby="feedback-learning-title">
+      <h2 id="feedback-learning-title">Feedback and Controlled Learning</h2>
+      <div class="safety-banner">
+        <strong>Learning boundary</strong>
+        <ul>
+          <li>Feedback does not retrain a model or automatically modify agent behavior.</li>
+          <li>Feedback-derived preferences require a separate pending-memory creation action.</li>
+          <li>Pending memory still requires approval.</li>
+          <li>Jarvis does not silently learn from every response.</li>
+          <li>Private sessions do not allow feedback persistence.</li>
+        </ul>
+      </div>
+      <div id="feedback-summary-metrics" class="summary-grid" aria-busy="true">
+        <div class="metric"><span>Total</span><strong id="feedback-summary-total">0</strong></div>
+        <div class="metric"><span>Helpful</span><strong id="feedback-summary-helpful">0</strong></div>
+        <div class="metric"><span>Partially helpful</span><strong id="feedback-summary-partial">0</strong></div>
+        <div class="metric"><span>Not helpful</span><strong id="feedback-summary-not-helpful">0</strong></div>
+        <div class="metric"><span>Linked proposals</span><strong id="feedback-summary-linked">0</strong></div>
+        <div class="metric"><span>Unlinked feedback</span><strong id="feedback-summary-unlinked">0</strong></div>
+      </div>
+      <div id="feedback-summary-error" class="empty-state" hidden></div>
+      <form id="feedback-filter-form" class="filter-grid">
+        <label>Agent ID<input id="feedback-filter-agent" type="text" maxlength="200" autocomplete="off"></label>
+        <label>Rating<select id="feedback-filter-rating"><option value="">All ratings</option><option value="helpful">helpful</option><option value="partially_helpful">partially_helpful</option><option value="not_helpful">not_helpful</option></select></label>
+        <label>Issue tag<select id="feedback-filter-tag"><option value="">All tags</option><option value="correct">correct</option><option value="incorrect">incorrect</option><option value="missed_constraint">missed_constraint</option><option value="outdated">outdated</option><option value="too_long">too_long</option><option value="too_short">too_short</option><option value="unclear">unclear</option><option value="good_structure">good_structure</option><option value="good_detail">good_detail</option><option value="good_tone">good_tone</option><option value="unsafe_or_risky">unsafe_or_risky</option></select></label>
+        <label>Page size<select id="feedback-page-size"><option value="10">10</option><option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="200">200</option></select></label>
+        <div class="actions">
+          <button type="submit">Apply</button>
+          <button id="feedback-clear-filters" type="button" class="secondary">Clear</button>
+          <button id="feedback-previous" type="button" class="secondary">Previous</button>
+          <button id="feedback-next" type="button" class="secondary">Next</button>
+          <button id="feedback-refresh" type="button">Manual refresh</button>
+        </div>
+      </form>
+      <div id="feedback-range" class="muted">No feedback loaded.</div>
+      <div id="feedback-list-error" class="empty-state" hidden></div>
+      <div id="feedback-list" class="list"></div>
+      <div id="feedback-detail" class="row stack muted">Select feedback to inspect its local detail and redacted event history.</div>
+      <div id="feedback-actions" class="row stack" hidden>
+        <h3>Update or delete selected feedback</h3>
+        <label>Rating<select id="feedback-edit-rating"><option value="helpful">helpful</option><option value="partially_helpful">partially_helpful</option><option value="not_helpful">not_helpful</option></select></label>
+        <fieldset id="feedback-edit-tags"><legend>Issue tags (maximum six)</legend>
+          <label><input type="checkbox" value="correct" data-feedback-edit-tag> correct</label>
+          <label><input type="checkbox" value="incorrect" data-feedback-edit-tag> incorrect</label>
+          <label><input type="checkbox" value="missed_constraint" data-feedback-edit-tag> missed_constraint</label>
+          <label><input type="checkbox" value="outdated" data-feedback-edit-tag> outdated</label>
+          <label><input type="checkbox" value="too_long" data-feedback-edit-tag> too_long</label>
+          <label><input type="checkbox" value="too_short" data-feedback-edit-tag> too_short</label>
+          <label><input type="checkbox" value="unclear" data-feedback-edit-tag> unclear</label>
+          <label><input type="checkbox" value="good_structure" data-feedback-edit-tag> good_structure</label>
+          <label><input type="checkbox" value="good_detail" data-feedback-edit-tag> good_detail</label>
+          <label><input type="checkbox" value="good_tone" data-feedback-edit-tag> good_tone</label>
+          <label><input type="checkbox" value="unsafe_or_risky" data-feedback-edit-tag> unsafe_or_risky</label>
+        </fieldset>
+        <label>Note<textarea id="feedback-edit-note" maxlength="1500"></textarea></label>
+        <button id="feedback-update" type="button">Update feedback</button>
+        <div class="notice">Deleting removes the feedback note. Redacted audit metadata may remain. A linked memory will not be deleted.</div>
+        <label>Type DELETE<input id="feedback-delete-confirm" type="text" autocomplete="off"></label>
+        <button id="feedback-delete" type="button" disabled>Delete feedback</button>
+        <div id="feedback-action-status" class="muted">No action selected.</div>
+        <div id="feedback-preference-form" class="row stack">
+          <h3>Create one pending preference proposal</h3>
+          <label>Preference content<textarea id="feedback-preference-content" maxlength="4000"></textarea></label>
+          <label>Scope<select id="feedback-preference-scope"><option value="agent">Stored feedback agent</option><option value="project">Project</option><option value="global">Global — broadest scope</option></select></label>
+          <label>Project name<input id="feedback-preference-project" type="text" maxlength="200" autocomplete="off" disabled></label>
+          <label>Confidence<select id="feedback-preference-confidence"><option value="low">low</option><option value="medium" selected>medium</option><option value="high">high</option></select></label>
+          <label>Sensitivity<select id="feedback-preference-sensitivity"><option value="standard">standard</option><option value="sensitive">sensitive</option></select></label>
+          <label>Expiration<input id="feedback-preference-expiration" type="datetime-local"></label>
+          <label><input id="feedback-preference-confirm" type="checkbox"> I reviewed this preference and understand it will be pending until separately approved.</label>
+          <button id="feedback-preference-submit" type="button">Create pending preference proposal</button>
+          <div id="feedback-preference-status" class="muted">No preference proposal created.</div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -781,6 +856,8 @@ def memory_dashboard_html() -> str:
     let currentEvents = [];
     let currentOffset = 0;
     let retrievalOffset = 0;
+    let feedbackOffset = 0;
+    let selectedFeedback = null;
 
     const byId = (id) => document.getElementById(id);
 
@@ -1364,6 +1441,246 @@ def memory_dashboard_html() -> str:
       (result.limitations || []).forEach((item) => limitations.append(createElement("li", "", item)));
     }
 
+
+    async function loadFeedbackSummary() {
+      const metrics = byId("feedback-summary-metrics");
+      metrics.setAttribute("aria-busy", "true");
+      setHidden("feedback-summary-error", true);
+      try {
+        const summary = await requestJson("/api/feedback/summary");
+        const ratings = summary.countsByRating || {};
+        byId("feedback-summary-total").textContent = String(summary.totalFeedback || 0);
+        byId("feedback-summary-helpful").textContent = String(ratings.helpful || 0);
+        byId("feedback-summary-partial").textContent = String(ratings.partially_helpful || 0);
+        byId("feedback-summary-not-helpful").textContent = String(ratings.not_helpful || 0);
+        byId("feedback-summary-linked").textContent = String(summary.linkedPreferenceProposalCount || 0);
+        byId("feedback-summary-unlinked").textContent = String(summary.unlinkedFeedbackCount || 0);
+      } catch (error) {
+        byId("feedback-summary-error").textContent = error.message;
+        setHidden("feedback-summary-error", false);
+      } finally {
+        metrics.setAttribute("aria-busy", "false");
+      }
+    }
+
+    function feedbackListUrl() {
+      const limit = Number(byId("feedback-page-size").value);
+      const parameters = new URLSearchParams({ limit: String(limit), offset: String(feedbackOffset) });
+      const agentId = normalizedOrNull(byId("feedback-filter-agent").value);
+      const rating = normalizedOrNull(byId("feedback-filter-rating").value);
+      const issueTag = normalizedOrNull(byId("feedback-filter-tag").value);
+      if (agentId) parameters.set("agentId", agentId);
+      if (rating) parameters.set("rating", rating);
+      if (issueTag) parameters.set("issueTag", issueTag);
+      return `/api/feedback?${parameters.toString()}`;
+    }
+
+    async function loadFeedbackList() {
+      const limit = Number(byId("feedback-page-size").value);
+      setHidden("feedback-list-error", true);
+      try {
+        const records = await requestJson(feedbackListUrl());
+        renderFeedbackList(records || []);
+        byId("feedback-range").textContent = records.length
+          ? `Showing ${feedbackOffset + 1}-${feedbackOffset + records.length}.`
+          : "No feedback on this page.";
+        byId("feedback-previous").disabled = feedbackOffset === 0;
+        byId("feedback-next").disabled = records.length < limit;
+      } catch (error) {
+        byId("feedback-list-error").textContent = error.message;
+        setHidden("feedback-list-error", false);
+      }
+    }
+
+    function renderFeedbackList(records) {
+      const list = byId("feedback-list");
+      list.replaceChildren();
+      records.forEach((record) => {
+        const card = createElement("article", "preview-card");
+        card.append(
+          createElement("strong", "", `${record.rating} · ${record.agentId}`),
+          createElement("div", "muted", `Feedback ${record.feedbackId}`),
+          createElement("div", "muted", `Tags: ${(record.issueTags || []).join(", ") || "none"}`),
+          createElement("div", "muted", `Note present: ${record.notePresent ? "yes" : "no"} · Linked memory: ${record.linkedMemoryId || "none"}`),
+          createElement("div", "muted", formatDate(record.createdAt))
+        );
+        const button = createElement("button", "", "Inspect feedback");
+        button.type = "button";
+        button.addEventListener("click", () => loadFeedbackDetail(record.feedbackId));
+        card.append(button);
+        list.append(card);
+      });
+      if (!records.length) list.append(createElement("div", "empty-state", "No feedback matches the current filters."));
+    }
+
+    async function loadFeedbackDetail(feedbackId) {
+      const detail = byId("feedback-detail");
+      detail.replaceChildren(createElement("div", "muted", "Loading feedback detail and redacted event history..."));
+      try {
+        const [record, events] = await Promise.all([
+          requestJson(`/api/feedback/${encodeURIComponent(feedbackId)}`),
+          requestJson(`/api/feedback/${encodeURIComponent(feedbackId)}/events`),
+        ]);
+        selectedFeedback = record;
+        renderFeedbackDetail(record, events || []);
+        populateFeedbackActions(record);
+      } catch (error) {
+        selectedFeedback = null;
+        detail.replaceChildren(createElement("div", "empty-state", error.message));
+        setHidden("feedback-actions", true);
+      }
+    }
+
+    function renderFeedbackDetail(record, events) {
+      const detail = byId("feedback-detail");
+      detail.className = "row stack";
+      detail.replaceChildren(createElement("strong", "", "Feedback detail"));
+      const metadata = createElement("dl", "detail-grid");
+      [
+        ["Feedback ID", record.feedbackId],
+        ["Response ID", record.responseId],
+        ["Agent", record.agentId],
+        ["Rating", record.rating],
+        ["Issue tags", (record.issueTags || []).join(", ") || "none"],
+        ["Note present", record.notePresent ? "Yes" : "No"],
+        ["Linked memory ID", record.linkedMemoryId],
+        ["Created", formatDate(record.createdAt)],
+        ["Updated", formatDate(record.updatedAt)],
+      ].forEach(([label, value]) => addDefinition(metadata, label, value));
+      detail.append(metadata, createElement("strong", "", "Feedback note"), createElement("div", "content-full", record.note || "No note."));
+      detail.append(createElement("strong", "", "Redacted event history"));
+      const eventList = createElement("div", "list");
+      events.forEach((event) => {
+        const card = createElement("article", "preview-card");
+        card.append(
+          createElement("strong", "", event.eventType),
+          createElement("div", "muted", `${event.actor} · ${formatDate(event.createdAt)}`),
+          createElement("pre", "", JSON.stringify(event.metadata || {}, null, 2))
+        );
+        eventList.append(card);
+      });
+      if (!events.length) eventList.append(createElement("div", "empty-state", "No redacted feedback events recorded."));
+      detail.append(eventList);
+    }
+
+    function populateFeedbackActions(record) {
+      setHidden("feedback-actions", false);
+      byId("feedback-edit-rating").value = record.rating;
+      document.querySelectorAll("[data-feedback-edit-tag]").forEach((control) => {
+        control.checked = (record.issueTags || []).includes(control.value);
+      });
+      byId("feedback-edit-note").value = record.note || "";
+      byId("feedback-delete-confirm").value = "";
+      byId("feedback-update").disabled = privateSession;
+      byId("feedback-delete-confirm").disabled = privateSession;
+      byId("feedback-delete").disabled = true;
+      byId("feedback-preference-content").value = "";
+      byId("feedback-preference-confirm").checked = false;
+      byId("feedback-preference-submit").disabled = privateSession || Boolean(record.linkedMemoryId);
+      byId("feedback-preference-status").textContent = record.linkedMemoryId
+        ? `Already linked to pending or reviewed memory ${record.linkedMemoryId}.`
+        : "No preference proposal created.";
+      byId("feedback-action-status").textContent = "Selected feedback is ready for an explicit action.";
+    }
+
+    function selectedFeedbackEditTags() {
+      return Array.from(document.querySelectorAll("[data-feedback-edit-tag]"))
+        .filter((control) => control.checked)
+        .map((control) => control.value);
+    }
+
+    async function updateSelectedFeedback() {
+      if (privateSession) {
+        byId("feedback-action-status").textContent = "Private session blocks feedback persistence actions.";
+        return;
+      }
+      if (!selectedFeedback) return;
+      const tags = selectedFeedbackEditTags();
+      if (tags.length > 6) {
+        byId("feedback-action-status").textContent = "Select no more than six issue tags.";
+        return;
+      }
+      const button = byId("feedback-update");
+      button.disabled = true;
+      try {
+        const record = await requestJson(`/api/feedback/${encodeURIComponent(selectedFeedback.feedbackId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: byId("feedback-edit-rating").value,
+            issueTags: tags,
+            note: byId("feedback-edit-note").value,
+            actor: "local_user",
+          }),
+        });
+        byId("feedback-action-status").textContent = `Feedback ${record.feedbackId} updated.`;
+        await Promise.all([loadFeedbackSummary(), loadFeedbackList(), loadFeedbackDetail(record.feedbackId)]);
+      } catch (error) {
+        byId("feedback-action-status").textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function deleteSelectedFeedback() {
+      if (privateSession) {
+        byId("feedback-action-status").textContent = "Private session blocks feedback persistence actions.";
+        return;
+      }
+      if (!selectedFeedback || byId("feedback-delete-confirm").value !== "DELETE") return;
+      if (!window.confirm("Delete this feedback note? Redacted audit metadata may remain and linked memory will not be deleted.")) return;
+      const feedbackId = selectedFeedback.feedbackId;
+      const button = byId("feedback-delete");
+      button.disabled = true;
+      try {
+        await requestJson(`/api/feedback/${encodeURIComponent(feedbackId)}`, { method: "DELETE" });
+        selectedFeedback = null;
+        setHidden("feedback-actions", true);
+        byId("feedback-detail").replaceChildren(createElement("div", "muted", `Feedback ${feedbackId} deleted. Redacted audit metadata may remain; linked memory was not deleted.`));
+        await Promise.all([loadFeedbackSummary(), loadFeedbackList()]);
+      } catch (error) {
+        byId("feedback-action-status").textContent = error.message;
+        button.disabled = false;
+      }
+    }
+
+    async function createSelectedFeedbackPreference() {
+      if (!selectedFeedback || !byId("feedback-preference-confirm").checked) {
+      if (privateSession) {
+        byId("feedback-preference-status").textContent = "Private session blocks feedback-derived proposal creation.";
+        return;
+      }
+        byId("feedback-preference-status").textContent = "Review and confirm the pending preference proposal first.";
+        return;
+      }
+      const scopeType = byId("feedback-preference-scope").value;
+      if (scopeType === "global" && !window.confirm("Global scope may affect every response agent. Continue with a pending proposal?")) return;
+      const button = byId("feedback-preference-submit");
+      button.disabled = true;
+      try {
+        const result = await requestJson(`/api/feedback/${encodeURIComponent(selectedFeedback.feedbackId)}/preference-proposal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: byId("feedback-preference-content").value,
+            scopeType,
+            projectName: normalizedOrNull(byId("feedback-preference-project").value),
+            confidence: byId("feedback-preference-confidence").value,
+            sensitivity: byId("feedback-preference-sensitivity").value,
+            expiresAt: toUtcIso(byId("feedback-preference-expiration").value),
+            actor: "local_user",
+          }),
+        });
+        byId("feedback-preference-status").replaceChildren(createElement("span", "", `Pending memory ${result.memory.memoryId} created. Separate approval is required. `));
+        const link = createElement("a", "", "Open memory detail list");
+        link.href = "/memory";
+        byId("feedback-preference-status").append(link);
+        await Promise.all([loadFeedbackSummary(), loadFeedbackList(), loadFeedbackDetail(selectedFeedback.feedbackId), loadSummary(), loadMemories()]);
+      } catch (error) {
+        button.disabled = false;
+        byId("feedback-preference-status").textContent = error.message;
+      }
+    }
     function initializeMemoryCenter() {
     async function submitRankedRetrieval(event) {
       event.preventDefault();
@@ -1521,11 +1838,50 @@ def memory_dashboard_html() -> str:
     }
 
       byId("summary-refresh-button").addEventListener("click", loadSummary);
+      byId("feedback-filter-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        feedbackOffset = 0;
+        loadFeedbackList();
+      });
+      byId("feedback-clear-filters").addEventListener("click", () => {
+        byId("feedback-filter-form").reset();
+        feedbackOffset = 0;
+        loadFeedbackList();
+      });
+      byId("feedback-previous").addEventListener("click", () => {
+        feedbackOffset = Math.max(0, feedbackOffset - Number(byId("feedback-page-size").value));
+        loadFeedbackList();
+      });
+      byId("feedback-next").addEventListener("click", () => {
+        feedbackOffset += Number(byId("feedback-page-size").value);
+        loadFeedbackList();
+      });
+      byId("feedback-refresh").addEventListener("click", () => Promise.all([loadFeedbackSummary(), loadFeedbackList()]));
+      byId("feedback-update").addEventListener("click", updateSelectedFeedback);
+      byId("feedback-delete-confirm").addEventListener("input", (event) => {
+        byId("feedback-delete").disabled = event.currentTarget.value !== "DELETE";
+      });
+      byId("feedback-delete").addEventListener("click", deleteSelectedFeedback);
+      byId("feedback-preference-scope").addEventListener("change", (event) => {
+        const scopeType = event.currentTarget.value;
+        byId("feedback-preference-project").disabled = scopeType !== "project";
+        byId("feedback-preference-status").textContent = scopeType === "global"
+          ? "Global scope is broad and requires an additional confirmation. The proposal will still be pending."
+          : "Pending preference still requires separate approval.";
+      });
+      byId("feedback-preference-submit").addEventListener("click", createSelectedFeedbackPreference);
+      byId("feedback-previous").disabled = true;
+      byId("feedback-next").disabled = true;
       byId("private-session-toggle").addEventListener("change", (event) => {
         privateSession = event.currentTarget.checked;
         byId("private-session-policy-status").textContent = privateSession
-          ? "Private session is on. Manual and ranked previews return zero memories; ranked retrieval creates no audit records or events."
-          : "Private session is off. Manual and ranked previews may return approved, unexpired matches.";
+          ? "Private session is on. Retrieval, suggestions, and feedback persistence actions are blocked. Stored memories and feedback were not deleted."
+          : "Private session is off. Explicit memory and feedback actions are available.";
+        byId("feedback-update").disabled = privateSession || !selectedFeedback;
+        byId("feedback-delete-confirm").disabled = privateSession || !selectedFeedback;
+        byId("feedback-delete").disabled = true;
+        byId("feedback-preference-submit").disabled = privateSession || !selectedFeedback || Boolean(selectedFeedback.linkedMemoryId);
+        if (privateSession) byId("feedback-action-status").textContent = "Private session blocks feedback persistence actions.";
       });
       byId("proposal-content").addEventListener("input", () => updateCounter("proposal-content", "proposal-content-count"));
       byId("proposal-scope-type").addEventListener("change", () => updateScopeRequirement("proposal-scope-type", "proposal-scope-value"));
@@ -1617,7 +1973,7 @@ def memory_dashboard_html() -> str:
       byId("retrieval-audit-next").disabled = true;
       updateScopeRequirement("proposal-scope-type", "proposal-scope-value");
       updateCounter("proposal-content", "proposal-content-count");
-      Promise.all([loadSummary(), loadMemories()]);
+      Promise.all([loadSummary(), loadMemories(), loadFeedbackSummary(), loadFeedbackList()]);
     }
 
     document.addEventListener("DOMContentLoaded", initializeMemoryCenter);

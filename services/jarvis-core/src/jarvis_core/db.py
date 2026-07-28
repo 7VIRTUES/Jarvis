@@ -232,6 +232,27 @@ create table if not exists memory_retrieval_items (
 
 create index if not exists idx_memories_status on memories(status);
 create index if not exists idx_memories_memory_type on memories(memory_type);
+create table if not exists response_feedback (
+  feedback_id text primary key,
+  response_id text not null unique,
+  agent_id text not null,
+  rating text not null,
+  issue_tags text not null,
+  note text not null default '',
+  linked_memory_id text,
+  created_at text not null,
+  updated_at text not null
+);
+
+create table if not exists feedback_events (
+  event_id text primary key,
+  feedback_id text not null,
+  event_type text not null,
+  actor text not null,
+  metadata text not null,
+  created_at text not null
+);
+
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
@@ -240,6 +261,11 @@ create index if not exists idx_memory_retrievals_date on memory_retrievals(creat
 create index if not exists idx_memory_retrievals_agent_date on memory_retrievals(agent_id, created_at);
 create index if not exists idx_memory_retrievals_project_date on memory_retrievals(project_name, created_at);
 create index if not exists idx_memory_retrieval_items_memory on memory_retrieval_items(memory_id);
+create index if not exists idx_response_feedback_created on response_feedback(created_at);
+create index if not exists idx_response_feedback_agent_date on response_feedback(agent_id, created_at);
+create index if not exists idx_response_feedback_rating_date on response_feedback(rating, created_at);
+create index if not exists idx_response_feedback_linked_memory on response_feedback(linked_memory_id);
+create index if not exists idx_feedback_events_feedback_date on feedback_events(feedback_id, created_at);
 create index if not exists idx_memory_retrieval_items_rank on memory_retrieval_items(retrieval_id, rank);
 """
 

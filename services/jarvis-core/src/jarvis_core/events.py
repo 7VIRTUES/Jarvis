@@ -52,6 +52,10 @@ EVENT_TYPES = {
     "memory.enabled",
     "memory.deleted",
     "memory.retrieved",
+    "feedback.created",
+    "feedback.updated",
+    "feedback.deleted",
+    "feedback.preference_proposed",
 }
 
 

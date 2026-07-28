@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from uuid import uuid4
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -14,6 +15,12 @@ from .backup_readiness import BackupReadinessService
 from .agent_manifest_health import AgentManifestHealthService
 from .approvals import ApprovalQueue
 from .audit import JsonlLogger
+from .feedback import (
+    FeedbackConflictError,
+    FeedbackNotFoundError,
+    FeedbackService,
+    FeedbackValidationError,
+)
 from .codex_plans import CodexPlanInput, CodexPlanService
 from .codex_execution import CodexExecutionService
 from .db import init_db
@@ -83,6 +90,7 @@ from .local_school_robotics_agent import LocalSchoolRoboticsAgentService, LocalS
 from .local_summarization_agent import LocalSummarizationAgentService, LocalSummarizationRequest
 from .local_transformation_agent import LocalTransformationAgentService, LocalTransformationRequest
 from .local_troubleshooting_agent import LocalTroubleshootingAgentService, LocalTroubleshootingRequest
+from .memory_proposals import MemoryProposalSuggestionService
 from .local_vehicle_devices_gear_agent import LocalVehicleDevicesGearAgentService, LocalVehicleDevicesGearRequest
 from .project_profiles import ProjectProfileService
 from .project_registry import ProjectRegistry
@@ -94,6 +102,7 @@ from .security_review_agent import SecurityReviewService
 from .task_control import TaskControlService
 from .tasks import TaskQueue
 from .validation_agent import ValidationAgentService
+from .time_utils import utc_now
 from .vm_validation_prep import VmValidationPrepService
 from .web_research import (
     agent_context_preview,
@@ -120,6 +129,13 @@ memory_retrieval_service = MemoryRetrievalService(
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
 )
 runtime = SafeActionRuntime(logger, conn, events)
+memory_proposal_suggestions = MemoryProposalSuggestionService()
+feedback_service = FeedbackService(
+    conn,
+    events,
+    memory_service,
+    agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
+)
 approvals = ApprovalQueue(conn, events)
 tasks = TaskQueue(conn, events, runtime, approvals)
 task_control = TaskControlService(tasks)
@@ -301,6 +317,38 @@ class MemoryRetrievalPreviewInput(BaseModel):
 
 
 
+class FeedbackCreateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    responseId: str
+    agentId: str
+    rating: str
+    issueTags: list[str] = Field(default_factory=list)
+    note: str = Field(default="", max_length=1500)
+    privateSession: bool = False
+    actor: str = "local_user"
+
+
+class FeedbackUpdateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rating: str | None = None
+    issueTags: list[str] | None = None
+    note: str | None = Field(default=None, max_length=1500)
+    actor: str = "local_user"
+
+
+class FeedbackPreferenceProposalInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+    scopeType: str
+    projectName: str | None = Field(default=None, max_length=200)
+    confidence: str
+    sensitivity: str
+    expiresAt: str | None = None
+    actor: str = "local_user"
+
 _MEMORY_EDIT_FIELD_MAP = {
     "memoryType": "memory_type",
     "content": "content",
@@ -452,10 +500,6 @@ class PriorAgentContextInput(BaseModel):
     source_type: str = "manual_prior_agent_output"
 
 
-class LocalResponseAgentInputBase(BaseModel):
-    web_context: list[WebContextSourceInput] = Field(default_factory=list)
-    prior_agent_context: PriorAgentContextInput | None = None
-
 class MemoryRetrievalOptionsInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -467,8 +511,23 @@ class MemoryRetrievalOptionsInput(BaseModel):
     maxItems: int = Field(default=5, ge=1, le=10)
 
 
-class MemoryAwareResponseAgentInputBase(LocalResponseAgentInputBase):
+class MemoryProposalSuggestionOptionsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    privateSession: bool = False
+    allowedTypes: list[str] = Field(default_factory=list)
+    projectName: str | None = Field(default=None, max_length=200)
+    maxSuggestions: int = Field(default=3, ge=1, le=3)
+
+
+class LocalResponseAgentInputBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    web_context: list[WebContextSourceInput] = Field(default_factory=list)
+    prior_agent_context: PriorAgentContextInput | None = None
     memory: MemoryRetrievalOptionsInput | None = None
+    memoryProposalSuggestions: MemoryProposalSuggestionOptionsInput | None = None
 
 
 class LocalResearchBriefInput(LocalResponseAgentInputBase):
@@ -485,7 +544,7 @@ class FileDataSummaryInput(LocalResponseAgentInputBase):
     projectName: str
 
 
-class LocalPlanningInput(MemoryAwareResponseAgentInputBase):
+class LocalPlanningInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     goal: str
@@ -497,7 +556,7 @@ class LocalPlanningInput(MemoryAwareResponseAgentInputBase):
     desiredOutputType: str = "project_plan"
 
 
-class LocalDraftingInput(MemoryAwareResponseAgentInputBase):
+class LocalDraftingInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     purpose: str
@@ -522,7 +581,7 @@ class LocalReviewInput(LocalResponseAgentInputBase):
     severity: str = "balanced"
 
 
-class LocalDecisionInput(MemoryAwareResponseAgentInputBase):
+class LocalDecisionInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
@@ -765,7 +824,7 @@ class LocalHobbiesAdventureInput(LocalResponseAgentInputBase):
     constraintsOrNotes: str = ""
 
 
-class LocalPersonalKnowledgeMemoryOrganizerInput(MemoryAwareResponseAgentInputBase):
+class LocalPersonalKnowledgeMemoryOrganizerInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -783,7 +842,7 @@ class LocalPersonalKnowledgeMemoryOrganizerInput(MemoryAwareResponseAgentInputBa
     constraintsOrNotes: str = ""
 
 
-class LocalLifeDashboardCoordinatorInput(MemoryAwareResponseAgentInputBase):
+class LocalLifeDashboardCoordinatorInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -890,7 +949,7 @@ class LocalSchoolRoboticsInput(LocalResponseAgentInputBase):
     desiredOutputType: str = "school_brief"
 
 
-class LocalCareerInput(MemoryAwareResponseAgentInputBase):
+class LocalCareerInput(LocalResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -1216,9 +1275,19 @@ _MEMORY_CONTEXT_LIMITATIONS = [
 ]
 
 
-def _pilot_memory_context(
-    payload: MemoryAwareResponseAgentInputBase,
+def _private_session_requested(payload: LocalResponseAgentInputBase) -> bool:
+    memory_private = bool(payload.memory and payload.memory.privateSession)
+    suggestions_private = bool(
+        payload.memoryProposalSuggestions and payload.memoryProposalSuggestions.privateSession
+    )
+    return memory_private or suggestions_private
+
+
+def _memory_context(
+    payload: LocalResponseAgentInputBase,
     agent_id: str,
+    *,
+    private_session: bool,
 ) -> dict[str, object]:
     options = payload.memory
     if options is None or not options.enabled:
@@ -1228,13 +1297,25 @@ def _pilot_memory_context(
             "blocked": False,
             "blockReason": None,
             "retrievalId": None,
-            "retrievalMode": None,
-            "projectName": options.projectName if options else None,
-            "includeSensitive": options.includeSensitive if options else False,
             "selectedCount": 0,
             "items": [],
             "considerations": [],
-            "limitations": list(_MEMORY_CONTEXT_LIMITATIONS),
+            "limitations": [],
+        }
+    if private_session:
+        return {
+            "requested": True,
+            "used": False,
+            "blocked": True,
+            "blockReason": "private_session",
+            "retrievalId": None,
+            "selectedCount": 0,
+            "items": [],
+            "considerations": [],
+            "limitations": [
+                "Private session blocked retrieval and all retrieval auditing.",
+                *_MEMORY_CONTEXT_LIMITATIONS,
+            ],
         }
     try:
         retrieval = memory_retrieval_service.retrieve(
@@ -1242,7 +1323,7 @@ def _pilot_memory_context(
                 query=options.query,
                 agent_id=agent_id,
                 project_name=options.projectName,
-                private_session=options.privateSession,
+                private_session=private_session,
                 include_sensitive=options.includeSensitive,
                 max_items=options.maxItems,
                 purpose="agent_response",
@@ -1280,8 +1361,65 @@ def _pilot_memory_context(
     }
 
 
-def _local_response_with_web_context(response: dict[str, object], payload: LocalResponseAgentInputBase) -> dict[str, object]:
-    agent_id, category = LOCAL_RESPONSE_AGENT_SOURCE_CONTEXT.get(payload.__class__.__name__, ("local_response_agent", "General"))
+def _memory_proposal_suggestion_context(
+    payload: LocalResponseAgentInputBase,
+    agent_id: str,
+    response_id: str,
+    *,
+    private_session: bool,
+) -> dict[str, object]:
+    options = payload.memoryProposalSuggestions
+    if options is None:
+        return memory_proposal_suggestions.suggest(
+            request_fields={},
+            response_id=response_id,
+            agent_id=agent_id,
+            enabled=False,
+            private_session=False,
+            allowed_types=[],
+            project_name=None,
+            max_suggestions=3,
+        )
+    try:
+        return memory_proposal_suggestions.suggest(
+            request_fields=payload.model_dump(exclude_unset=True),
+            response_id=response_id,
+            agent_id=agent_id,
+            enabled=options.enabled,
+            private_session=private_session,
+            allowed_types=options.allowedTypes,
+            project_name=options.projectName,
+            max_suggestions=options.maxSuggestions,
+        )
+    except MemoryValidationError as exc:
+        _raise_memory_http_error(exc)
+
+
+def _response_context(agent_id: str, response_id: str, *, private_session: bool) -> dict[str, object]:
+    limitations = [
+        "The response itself was not automatically saved.",
+        "No feedback was stored automatically.",
+        "The response ID is only an ephemeral reference until explicit feedback submission.",
+    ]
+    if private_session:
+        limitations.append("Private session blocks feedback persistence for this response.")
+    return {
+        "responseId": response_id,
+        "agentId": agent_id,
+        "generatedAt": utc_now(),
+        "feedbackEligible": not private_session,
+        "persisted": False,
+        "limitations": limitations,
+    }
+
+
+def _local_response_with_web_context(
+    response: dict[str, object],
+    payload: LocalResponseAgentInputBase,
+) -> dict[str, object]:
+    agent_id, category = LOCAL_RESPONSE_AGENT_SOURCE_CONTEXT.get(
+        payload.__class__.__name__, ("local_response_agent", "General")
+    )
     source_response = apply_source_aware_response_fields(
         response,
         agent_id,
@@ -1289,8 +1427,20 @@ def _local_response_with_web_context(response: dict[str, object], payload: Local
         [source.model_dump() for source in payload.web_context],
     )
     enriched = apply_prior_context_response_fields(source_response, payload.prior_agent_context)
-    if isinstance(payload, MemoryAwareResponseAgentInputBase):
-        enriched["memoryContext"] = _pilot_memory_context(payload, agent_id)
+    private_session = _private_session_requested(payload)
+    response_id = str(uuid4())
+    enriched["memoryContext"] = _memory_context(
+        payload, agent_id, private_session=private_session
+    )
+    enriched["memoryProposalSuggestions"] = _memory_proposal_suggestion_context(
+        payload,
+        agent_id,
+        response_id,
+        private_session=private_session,
+    )
+    enriched["responseContext"] = _response_context(
+        agent_id, response_id, private_session=private_session
+    )
     return enriched
 
 
@@ -2498,7 +2648,137 @@ def _raise_memory_http_error(exc: Exception) -> None:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     raise exc
 
+def _raise_feedback_http_error(exc: Exception) -> None:
+    if isinstance(exc, FeedbackNotFoundError):
+        raise HTTPException(status_code=404, detail="feedback not found") from exc
+    if isinstance(exc, FeedbackConflictError):
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if isinstance(exc, FeedbackValidationError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise exc
 
+
+
+@app.get("/api/feedback/summary")
+def feedback_summary(
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return feedback_service.summary()
+
+
+@app.get("/api/feedback")
+def list_feedback(
+    agentId: str | None = None,
+    rating: str | None = None,
+    issueTag: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return feedback_service.list(
+            agent_id=agentId,
+            rating=rating,
+            issue_tag=issueTag,
+            limit=limit,
+            offset=offset,
+        )
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.get("/api/feedback/{feedback_id}")
+def get_feedback(
+    feedback_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return feedback_service.get(feedback_id)
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.get("/api/feedback/{feedback_id}/events")
+def get_feedback_events(
+    feedback_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return feedback_service.events(feedback_id)
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.post("/api/feedback")
+def create_feedback(
+    payload: FeedbackCreateInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return feedback_service.create(
+            response_id=payload.responseId,
+            agent_id=payload.agentId,
+            rating=payload.rating,
+            issue_tags=payload.issueTags,
+            note=payload.note,
+            private_session=payload.privateSession,
+            actor=payload.actor,
+        )
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.patch("/api/feedback/{feedback_id}")
+def update_feedback(
+    feedback_id: str,
+    payload: FeedbackUpdateInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    raw = payload.model_dump(exclude_unset=True)
+    actor = raw.pop("actor", "local_user")
+    updates: dict[str, object] = {}
+    if "rating" in raw:
+        updates["rating"] = raw["rating"]
+    if "issueTags" in raw:
+        updates["issue_tags"] = raw["issueTags"]
+    if "note" in raw:
+        updates["note"] = raw["note"]
+    try:
+        return feedback_service.update(feedback_id, updates, actor=actor)
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.delete("/api/feedback/{feedback_id}")
+def delete_feedback(
+    feedback_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return feedback_service.delete(feedback_id, actor="local_user")
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
+
+
+@app.post("/api/feedback/{feedback_id}/preference-proposal")
+def create_feedback_preference_proposal(
+    feedback_id: str,
+    payload: FeedbackPreferenceProposalInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return feedback_service.create_preference_proposal(
+            feedback_id,
+            content=payload.content,
+            scope_type=payload.scopeType,
+            project_name=payload.projectName,
+            confidence=payload.confidence,
+            sensitivity=payload.sensitivity,
+            expires_at=payload.expiresAt,
+            actor=payload.actor,
+        )
+    except (FeedbackValidationError, FeedbackConflictError, FeedbackNotFoundError) as exc:
+        _raise_feedback_http_error(exc)
 @app.get("/api/memory/summary")
 def memory_summary(
     _: None = Depends(require_dashboard_lan_access),
@@ -2544,7 +2824,7 @@ def preview_memory_context(
             "No memory was injected into an agent.",
             "No relevance ranking was performed.",
             "No automatic proposal or persistence occurred.",
-            "Retrieval integration is deferred to Batch 3.",
+            "All-agent retrieval remains available only through explicit per-request controls.",
         ],
     }
 
@@ -2658,6 +2938,11 @@ def create_memory_proposal(
     payload: MemoryProposalInput,
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
+    if payload.sourceType == "feedback_proposal":
+        raise HTTPException(
+            status_code=422,
+            detail="feedback proposals must be created from stored feedback",
+        )
     try:
         return memory_service.create_proposal(
             memory_type=payload.memoryType,

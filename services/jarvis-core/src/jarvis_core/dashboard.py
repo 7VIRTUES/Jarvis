@@ -68,7 +68,7 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1D Batch 3", "status": "deterministic memory retrieval and representative-agent pilot"},
+            "phase": {"current": "v0.1D Batch 4", "status": "all-agent controlled memory, proposals, and explicit feedback learning"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -162,8 +162,8 @@ class DashboardService:
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1D",
-            "currentSlice": "deterministic memory retrieval and representative-agent pilot",
+            "phase": "v0.1D Batch 4",
+            "currentSlice": "all-agent controlled memory, proposals, and explicit feedback learning",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -172,15 +172,23 @@ class DashboardService:
             "durableMemoryPersistenceImplemented": True,
             "automaticMemorySavingEnabled": False,
             "memoryApprovalRequired": True,
-            "memoryRetrievalStatus": "implemented_pilot",
+            "memoryRetrievalStatus": "implemented_all_response_agents",
             "memoryRetrievalMode": "fts5_with_deterministic_fallback",
             "memoryAgentRetrievalImplemented": True,
-            "memoryAgentRetrievalPilotCount": 6,
-            "memoryAgentRetrievalAllAgents": False,
+            "memoryAgentRetrievalAgentCount": 37,
+            "memoryAgentRetrievalAllAgents": True,
+            "memoryProposalSuggestionsImplemented": True,
+            "memoryProposalSuggestionsRequireOptIn": True,
+            "memoryProposalSuggestionPersistenceAutomatic": False,
+            "feedbackCaptureImplemented": True,
+            "feedbackPersistenceRequiresExplicitSubmit": True,
+            "feedbackDerivedPreferenceProposalImplemented": True,
+            "feedbackDerivedPreferenceApprovalAutomatic": False,
             "automaticMemoryApprovalEnabled": False,
             "embeddingsEnabled": False,
             "localGenerativeModelEnabled": False,
-            "automaticMemoryProposalEnabled": False,
+            "selfModifyingCodeEnabled": False,
+            "documentKnowledgeIngestionEnabled": False,
             "privateSessionPersistenceImplemented": False,
             "automaticLearningEnabled": False,
             "memoryCenterEndpoint": "/memory",
@@ -832,7 +840,7 @@ def dashboard_html() -> str:
       <div id="memory-center-metrics" class="grid" aria-busy="true"></div>
       <div class="row">
         <strong>Persistent local feature with explicit user actions only.</strong>
-        <div class="muted">New memories remain pending and inactive until approved. Deterministic retrieval is opt-in for exactly six pilot agents.</div>
+        <div class="muted">Controlled local memory with explicit retrieval, pending proposals, and user-submitted feedback.</div>
       </div>
       <div class="actions">
         <button id="memory-center-refresh-button" type="button">Refresh memory status</button>
@@ -1370,11 +1378,10 @@ def dashboard_html() -> str:
           </label>
         <div id="local-response-agents-payload-preview-status" class="muted">Editable JSON payload preview is filled from the selected template sample.</div>
         </div>
-        <div id="local-response-agents-memory-pilot" class="row stack">
-          <h3>Approved Memory Pilot</h3>
-          <div id="local-response-agents-memory-unsupported" class="muted">Memory retrieval is not enabled for this agent in the current pilot.</div>
-          <div id="local-response-agents-memory-controls" class="row stack" hidden>
-            <div class="muted">Explicit per-request retrieval for six pilot agents only. No automatic retrieval while typing and no memory is created or changed.</div>
+        <div id="local-response-agents-memory-context" class="row stack">
+          <h3>Approved Memory Context</h3>
+          <div class="muted">Explicit per-request retrieval is available to all 37 response agents. Retrieval remains disabled by default and never changes stored memory.</div>
+          <div id="local-response-agents-memory-controls" class="row stack">
             <label>
               <input id="local-response-agents-memory-enabled" type="checkbox">
               Enable approved memory
@@ -1383,12 +1390,13 @@ def dashboard_html() -> str:
               <input id="local-response-agents-memory-private-session" type="checkbox">
               Private session
             </label>
+            <div class="muted">Private session is page-local. It blocks retrieval, suggestion generation, and feedback persistence; it does not delete stored memories.</div>
             <label>
-              Retrieval query
+              Explicit retrieval query
               <input id="local-response-agents-memory-query" type="text" maxlength="1000" autocomplete="off">
             </label>
             <label>
-              Project name
+              Retrieval project name
               <input id="local-response-agents-memory-project" type="text" maxlength="200" autocomplete="off">
             </label>
             <label>
@@ -1402,6 +1410,32 @@ def dashboard_html() -> str:
             </label>
             <div id="local-response-agents-memory-control-status" class="muted">Approved memory is disabled by default.</div>
           </div>
+        </div>
+        <div id="local-response-agents-memory-suggestions" class="row stack">
+          <h3>Reviewable Memory Suggestions</h3>
+          <div class="muted">Deterministic suggestions use only explicit structured request fields. They are not saved unless you review and submit a pending proposal.</div>
+          <label>
+            <input id="local-response-agents-memory-suggestions-enabled" type="checkbox">
+            Enable memory suggestions
+          </label>
+          <fieldset id="local-response-agents-memory-suggestion-types">
+            <legend>Allowed suggestion types</legend>
+            <label><input type="checkbox" value="preference" data-memory-suggestion-type checked> Preference</label>
+            <label><input type="checkbox" value="goal" data-memory-suggestion-type checked> Goal</label>
+            <label><input type="checkbox" value="constraint" data-memory-suggestion-type checked> Constraint</label>
+            <label><input type="checkbox" value="project_fact" data-memory-suggestion-type> Project fact</label>
+            <label><input type="checkbox" value="decision" data-memory-suggestion-type> Decision</label>
+            <label><input type="checkbox" value="agent_instruction" data-memory-suggestion-type> Agent instruction</label>
+          </fieldset>
+          <label>
+            Suggestion project name
+            <input id="local-response-agents-memory-suggestions-project" type="text" maxlength="200" autocomplete="off">
+          </label>
+          <label>
+            Maximum suggestions
+            <input id="local-response-agents-memory-suggestions-max" type="number" min="1" max="3" value="3">
+          </label>
+          <div id="local-response-agents-memory-suggestions-status" class="muted">Memory suggestions are disabled by default.</div>
         </div>
 
         <div id="local-response-agents-context-kit" class="row stack">
@@ -1520,6 +1554,65 @@ def dashboard_html() -> str:
         </div>
         <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
         <div id="local-response-agents-memory-result" class="row stack muted">No memory retrieval result yet.</div>
+        <div id="local-response-agents-memory-suggestion-result" class="row stack muted">No memory suggestions requested yet.</div>
+        <div id="local-response-agents-response-context" class="row stack muted">No ephemeral response context yet.</div>
+        <div id="local-response-agents-feedback-panel" class="row stack">
+          <h3>Explicit Response Feedback</h3>
+          <div class="muted">Not saved. Nothing is stored until you explicitly submit. The request and response body are never stored with feedback.</div>
+          <label>Rating
+            <select id="local-response-agents-feedback-rating">
+              <option value="">Select a rating</option>
+              <option value="helpful">Helpful</option>
+              <option value="partially_helpful">Partially helpful</option>
+              <option value="not_helpful">Not helpful</option>
+            </select>
+          </label>
+          <fieldset id="local-response-agents-feedback-tags">
+            <legend>Issue tags (maximum six)</legend>
+            <label><input type="checkbox" value="correct" data-feedback-tag> Correct</label>
+            <label><input type="checkbox" value="incorrect" data-feedback-tag> Incorrect</label>
+            <label><input type="checkbox" value="missed_constraint" data-feedback-tag> Missed constraint</label>
+            <label><input type="checkbox" value="outdated" data-feedback-tag> Outdated</label>
+            <label><input type="checkbox" value="too_long" data-feedback-tag> Too long</label>
+            <label><input type="checkbox" value="too_short" data-feedback-tag> Too short</label>
+            <label><input type="checkbox" value="unclear" data-feedback-tag> Unclear</label>
+            <label><input type="checkbox" value="good_structure" data-feedback-tag> Good structure</label>
+            <label><input type="checkbox" value="good_detail" data-feedback-tag> Good detail</label>
+            <label><input type="checkbox" value="good_tone" data-feedback-tag> Good tone</label>
+            <label><input type="checkbox" value="unsafe_or_risky" data-feedback-tag> Unsafe or risky</label>
+          </fieldset>
+          <label>Optional feedback note
+            <textarea id="local-response-agents-feedback-note" maxlength="1500"></textarea>
+          </label>
+          <div class="actions">
+            <button id="local-response-agents-feedback-submit" type="button">Submit feedback</button>
+            <button id="local-response-agents-feedback-update" type="button" disabled>Update feedback</button>
+          </div>
+          <label>Type DELETE to confirm feedback deletion
+            <input id="local-response-agents-feedback-delete-confirm" type="text" autocomplete="off">
+          </label>
+          <button id="local-response-agents-feedback-delete" type="button" disabled>Delete feedback</button>
+          <div id="local-response-agents-feedback-status" class="muted">Not saved.</div>
+          <div id="local-response-agents-feedback-preference" class="row stack" hidden>
+            <h3>Create pending preference proposal</h3>
+            <div class="muted">Enter the preference manually. It will remain pending until separately approved and will not change agent behavior automatically.</div>
+            <label>Preference content<textarea id="local-response-agents-feedback-preference-content" maxlength="4000"></textarea></label>
+            <label>Scope
+              <select id="local-response-agents-feedback-preference-scope">
+                <option value="agent">Current agent</option>
+                <option value="project">Project</option>
+                <option value="global">Global — broadest scope</option>
+              </select>
+            </label>
+            <label>Project name<input id="local-response-agents-feedback-preference-project" type="text" maxlength="200" autocomplete="off" disabled></label>
+            <label>Confidence<select id="local-response-agents-feedback-preference-confidence"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+            <label>Sensitivity<select id="local-response-agents-feedback-preference-sensitivity"><option value="standard">Standard</option><option value="sensitive">Sensitive</option></select></label>
+            <label>Expiration<input id="local-response-agents-feedback-preference-expiration" type="datetime-local"></label>
+            <label><input id="local-response-agents-feedback-preference-confirm" type="checkbox"> I reviewed this preference and understand it will be pending until separately approved.</label>
+            <button id="local-response-agents-feedback-preference-submit" type="button">Create pending preference proposal</button>
+            <div id="local-response-agents-feedback-preference-status" class="muted">No preference proposal created.</div>
+          </div>
+        </div>
         <div id="local-response-agents-latest-source-trace" class="row stack muted">No latest source-to-answer trace yet.</div>
         <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
         <div id="local-response-agents-session-result-board" class="row stack">
@@ -1956,7 +2049,7 @@ def dashboard_html() -> str:
         expired: summary.expired || 0,
         fts5Available: summary.fts5Available ? 'yes' : 'no',
         retrievalMode: summary.retrievalMode || 'deterministic_fallback',
-        pilotAgents: summary.memoryAgentRetrievalPilotCount || 6,
+        supportedAgents: summary.memoryAgentRetrievalAgentCount || 37,
         recentRetrievals: summary.recentRetrievalCount || 0,
       };
       Object.entries(values).forEach(([label, value]) => {
@@ -2652,6 +2745,10 @@ def dashboard_html() -> str:
       const usedKeys = new Set(fields.flatMap((field) => [field, field.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())]));
       usedKeys.add('memoryContext');
       usedKeys.add('memory_context');
+      usedKeys.add('memoryProposalSuggestions');
+      usedKeys.add('memory_proposal_suggestions');
+      usedKeys.add('responseContext');
+      usedKeys.add('response_context');
       const rows = fields
         .map((field) => [field, localResponseKnownValue(responseBody, field)])
         .filter(([, value]) => value !== undefined)
@@ -2815,7 +2912,6 @@ def dashboard_html() -> str:
       const responseOutput = document.getElementById('local-response-agents-workbench-response');
       const memoryResult = document.getElementById('local-response-agents-memory-result');
       const memoryControls = document.getElementById('local-response-agents-memory-controls');
-      const memoryUnsupported = document.getElementById('local-response-agents-memory-unsupported');
       const memoryEnabled = document.getElementById('local-response-agents-memory-enabled');
       const memoryPrivateSession = document.getElementById('local-response-agents-memory-private-session');
       const memoryQuery = document.getElementById('local-response-agents-memory-query');
@@ -2823,7 +2919,34 @@ def dashboard_html() -> str:
       const memoryIncludeSensitive = document.getElementById('local-response-agents-memory-include-sensitive');
       const memoryMaxItems = document.getElementById('local-response-agents-memory-max-items');
       const memoryControlStatus = document.getElementById('local-response-agents-memory-control-status');
-      const memoryPilotAgentIds = new Set(['local_planning_agent', 'local_drafting_agent', 'local_decision_agent', 'local_career_agent', 'local_personal_knowledge_memory_organizer', 'local_life_dashboard_cross_agent_coordinator']);
+      const memorySuggestionsEnabled = document.getElementById('local-response-agents-memory-suggestions-enabled');
+      const memorySuggestionTypeControls = Array.from(document.querySelectorAll('[data-memory-suggestion-type]'));
+      const memorySuggestionsProject = document.getElementById('local-response-agents-memory-suggestions-project');
+      const memorySuggestionsMax = document.getElementById('local-response-agents-memory-suggestions-max');
+      const memorySuggestionsStatus = document.getElementById('local-response-agents-memory-suggestions-status');
+      const memorySuggestionResult = document.getElementById('local-response-agents-memory-suggestion-result');
+      const responseContextResult = document.getElementById('local-response-agents-response-context');
+      const feedbackRating = document.getElementById('local-response-agents-feedback-rating');
+      const feedbackTagControls = Array.from(document.querySelectorAll('[data-feedback-tag]'));
+      const feedbackNote = document.getElementById('local-response-agents-feedback-note');
+      const feedbackSubmit = document.getElementById('local-response-agents-feedback-submit');
+      const feedbackUpdate = document.getElementById('local-response-agents-feedback-update');
+      const feedbackDeleteConfirm = document.getElementById('local-response-agents-feedback-delete-confirm');
+      const feedbackDelete = document.getElementById('local-response-agents-feedback-delete');
+      const feedbackStatus = document.getElementById('local-response-agents-feedback-status');
+      const feedbackPreference = document.getElementById('local-response-agents-feedback-preference');
+      const feedbackPreferenceContent = document.getElementById('local-response-agents-feedback-preference-content');
+      const feedbackPreferenceScope = document.getElementById('local-response-agents-feedback-preference-scope');
+      const feedbackPreferenceProject = document.getElementById('local-response-agents-feedback-preference-project');
+      const feedbackPreferenceConfidence = document.getElementById('local-response-agents-feedback-preference-confidence');
+      const feedbackPreferenceSensitivity = document.getElementById('local-response-agents-feedback-preference-sensitivity');
+      const feedbackPreferenceExpiration = document.getElementById('local-response-agents-feedback-preference-expiration');
+      const feedbackPreferenceConfirm = document.getElementById('local-response-agents-feedback-preference-confirm');
+      const feedbackPreferenceSubmit = document.getElementById('local-response-agents-feedback-preference-submit');
+      const feedbackPreferenceStatus = document.getElementById('local-response-agents-feedback-preference-status');
+      let latestResponseContext = null;
+      let currentFeedback = null;
+      const submittedSuggestionIds = new Set();
       const sessionBoardAddButton = document.getElementById('local-response-agents-session-board-add-button');
       const sessionBoardCompareButton = document.getElementById('local-response-agents-session-board-compare-button');
       const sessionBoardPacketButton = document.getElementById('local-response-agents-session-board-packet-button');
@@ -3093,33 +3216,32 @@ def dashboard_html() -> str:
         const index = Number(select.value || 0);
         return activeAgents[index] || null;
       }
-      function selectedAgentUsesMemoryPilot() {
-        return memoryPilotAgentIds.has(localResponseAgentId(selectedAgent()));
-      }
-      function updateMemoryPilotControls() {
-        const pilot = selectedAgentUsesMemoryPilot();
-        memoryControls.hidden = !pilot;
-        memoryUnsupported.hidden = pilot;
-        if (!pilot) {
-          memoryControlStatus.textContent = 'Memory retrieval is not enabled for this agent in the current pilot.';
-          return;
-        }
+      function updateMemoryControls() {
+        memoryControls.hidden = false;
         const privateBlocked = memoryPrivateSession.checked;
-        const enabled = memoryEnabled.checked;
+        const retrievalEnabled = memoryEnabled.checked;
+        const suggestionsEnabled = memorySuggestionsEnabled.checked;
         memoryEnabled.disabled = privateBlocked;
+        memorySuggestionsEnabled.disabled = privateBlocked;
         [memoryQuery, memoryProject, memoryIncludeSensitive, memoryMaxItems].forEach((control) => {
-          control.disabled = privateBlocked || !enabled;
+          control.disabled = privateBlocked || !retrievalEnabled;
+        });
+        [memorySuggestionsProject, memorySuggestionsMax, ...memorySuggestionTypeControls].forEach((control) => {
+          control.disabled = privateBlocked || !suggestionsEnabled;
         });
         memoryControlStatus.textContent = privateBlocked
-          ? 'Private session is on. Memory retrieval will be blocked and no retrieval audit will be created.'
-          : enabled
-            ? 'Approved memory will be retrieved only when this agent request is submitted.'
+          ? 'Private session is on. Retrieval is blocked and no retrieval audit will be created. Stored memories were not deleted.'
+          : retrievalEnabled
+            ? 'Approved memory will be retrieved only when this agent request is explicitly submitted.'
             : 'Approved memory is disabled by default.';
+        memorySuggestionsStatus.textContent = privateBlocked
+          ? 'Private session is on. Suggestions are blocked and nothing will be persisted.'
+          : suggestionsEnabled
+            ? 'Suggestions will be generated deterministically only from explicit structured request fields.'
+            : 'Memory suggestions are disabled by default.';
+        syncFeedbackAvailability();
       }
       function memoryOptionsForSubmission() {
-        if (!selectedAgentUsesMemoryPilot()) {
-          return null;
-        }
         return {
           enabled: memoryEnabled.checked,
           privateSession: memoryPrivateSession.checked,
@@ -3127,6 +3249,15 @@ def dashboard_html() -> str:
           projectName: memoryProject.value.trim() || null,
           includeSensitive: memoryIncludeSensitive.checked,
           maxItems: Number(memoryMaxItems.value || 5),
+        };
+      }
+      function memorySuggestionOptionsForSubmission() {
+        return {
+          enabled: memorySuggestionsEnabled.checked,
+          privateSession: memoryPrivateSession.checked,
+          allowedTypes: memorySuggestionTypeControls.filter((control) => control.checked).map((control) => control.value),
+          projectName: memorySuggestionsProject.value.trim() || null,
+          maxSuggestions: Number(memorySuggestionsMax.value || 3),
         };
       }
       function memoryResultElement(tag, text, className = '') {
@@ -3184,6 +3315,320 @@ def dashboard_html() -> str:
         memoryResult.append(memoryResultElement('strong', 'Limitations'), limitations);
       }
 
+      function renderResponseContext(responseContext) {
+        responseContextResult.replaceChildren();
+        latestResponseContext = responseContext || null;
+        currentFeedback = null;
+        feedbackRating.value = '';
+        feedbackTagControls.forEach((control) => { control.checked = false; });
+        feedbackNote.value = '';
+        feedbackDeleteConfirm.value = '';
+        feedbackPreference.hidden = true;
+        feedbackPreferenceContent.value = '';
+        feedbackPreferenceConfirm.checked = false;
+        feedbackPreferenceSubmit.disabled = false;
+        feedbackPreferenceStatus.textContent = 'No preference proposal created.';
+        feedbackPreferenceProject.disabled = true;
+        feedbackStatus.textContent = responseContext ? 'Not saved.' : 'No response is eligible for feedback yet.';
+        if (!responseContext) {
+          responseContextResult.className = 'row stack muted';
+          responseContextResult.append(memoryResultElement('div', 'No ephemeral response context yet.'));
+          syncFeedbackAvailability();
+          return;
+        }
+        responseContextResult.className = 'row stack';
+        responseContextResult.append(memoryResultElement('strong', 'Ephemeral response context'));
+        [
+          ['Response ID', responseContext.responseId],
+          ['Agent ID', responseContext.agentId],
+          ['Generated', responseContext.generatedAt],
+          ['Feedback eligible', responseContext.feedbackEligible ? 'yes' : 'no'],
+          ['Persisted', responseContext.persisted ? 'yes' : 'no'],
+        ].forEach(([label, value]) => {
+          const row = memoryResultElement('div', '', 'muted');
+          row.append(memoryResultElement('strong', `${label}: `), document.createTextNode(String(value || 'none')));
+          responseContextResult.append(row);
+        });
+        const limitations = memoryResultElement('ul');
+        (responseContext.limitations || []).forEach((item) => limitations.append(memoryResultElement('li', item)));
+        responseContextResult.append(memoryResultElement('strong', 'Limitations'), limitations);
+        syncFeedbackAvailability();
+      }
+
+      function labeledSuggestionControl(labelText, control) {
+        const label = memoryResultElement('label', labelText);
+        label.append(control);
+        return label;
+      }
+
+      function suggestionSelect(values, selected) {
+        const selectControl = document.createElement('select');
+        values.forEach((value) => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          option.selected = value === selected;
+          selectControl.append(option);
+        });
+        return selectControl;
+      }
+
+      function renderMemorySuggestions(result) {
+        memorySuggestionResult.replaceChildren();
+        if (!result) {
+          memorySuggestionResult.className = 'row stack muted';
+          memorySuggestionResult.append(memoryResultElement('div', 'No memory suggestions requested yet.'));
+          return;
+        }
+        memorySuggestionResult.className = 'row stack';
+        memorySuggestionResult.append(memoryResultElement('strong', 'Reviewable memory suggestions'));
+        const summary = memoryResultElement('div', '', 'muted');
+        summary.append(
+          document.createTextNode(`Requested: ${result.requested ? 'yes' : 'no'} · `),
+          document.createTextNode(`Blocked: ${result.blocked ? 'yes' : 'no'} · `),
+          document.createTextNode(`Persisted: ${result.persisted ? 'yes' : 'no'} · `),
+          document.createTextNode(`Count: ${result.count || 0}`)
+        );
+        memorySuggestionResult.append(summary);
+        (result.items || []).forEach((item) => {
+          const card = memoryResultElement('article', '', 'row stack');
+          card.append(memoryResultElement('strong', `${item.memoryType} suggestion`));
+          const provenance = memoryResultElement('dl');
+          [
+            ['Suggestion ID', item.suggestionId],
+            ['Source agent', item.sourceAgentId],
+            ['Source reference', item.sourceReference],
+            ['Evidence fields', (item.evidenceFields || []).join(', ') || 'none'],
+            ['Proposal reason', item.proposalReason],
+          ].forEach(([label, value]) => {
+            provenance.append(memoryResultElement('dt', label), memoryResultElement('dd', value || 'none'));
+          });
+          card.append(provenance);
+          const content = document.createElement('textarea');
+          content.maxLength = 4000;
+          content.value = item.content || '';
+          const memoryType = suggestionSelect(
+            ['preference', 'personal_fact', 'goal', 'constraint', 'project_fact', 'decision', 'routine', 'terminology', 'agent_instruction'],
+            item.memoryType
+          );
+          const scopeType = suggestionSelect(['agent', 'project', 'global'], item.suggestedScopeType);
+          const scopeValue = document.createElement('input');
+          scopeValue.type = 'text';
+          scopeValue.maxLength = 1000;
+          scopeValue.value = item.suggestedScopeValue || '';
+          const confidence = suggestionSelect(['low', 'medium', 'high'], item.confidence);
+          const sensitivity = suggestionSelect(['standard', 'sensitive'], item.sensitivity);
+          const expiration = document.createElement('input');
+          expiration.type = 'datetime-local';
+          const confirmation = document.createElement('input');
+          confirmation.type = 'checkbox';
+          const confirmationLabel = memoryResultElement('label');
+          confirmationLabel.append(
+            confirmation,
+            document.createTextNode(' I reviewed this suggestion and want to create a pending proposal.')
+          );
+          const submit = memoryResultElement('button', 'Create pending proposal');
+          submit.type = 'button';
+          const itemStatus = memoryResultElement('div', 'Not submitted.', 'muted');
+          scopeType.addEventListener('change', () => {
+            scopeValue.disabled = scopeType.value === 'global';
+            if (scopeType.value === 'global') scopeValue.value = '';
+            if (scopeType.value === 'agent') scopeValue.value = item.sourceAgentId || '';
+          });
+          submit.addEventListener('click', async () => {
+            if (!confirmation.checked) {
+              itemStatus.textContent = 'Review and confirm the suggestion before creating a pending proposal.';
+              return;
+            }
+            if (submittedSuggestionIds.has(item.suggestionId)) {
+              itemStatus.textContent = 'This suggestion was already submitted in the current page session.';
+              return;
+            }
+            submit.disabled = true;
+            try {
+              const response = await fetch('/api/memories/proposals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  memoryType: memoryType.value,
+                  content: content.value,
+                  scopeType: scopeType.value,
+                  scopeValue: scopeType.value === 'global' ? null : scopeValue.value.trim() || null,
+                  sourceType: 'agent_proposal',
+                  sourceAgentId: item.sourceAgentId,
+                  sourceReference: item.sourceReference,
+                  proposalReason: item.proposalReason,
+                  confidence: confidence.value,
+                  sensitivity: sensitivity.value,
+                  expiresAt: expiration.value ? new Date(expiration.value).toISOString() : null,
+                  actor: 'local_user',
+                }),
+              });
+              const body = await response.json();
+              if (!response.ok) throw new Error(body.detail || `Request failed with HTTP ${response.status}`);
+              submittedSuggestionIds.add(item.suggestionId);
+              itemStatus.replaceChildren(
+                document.createTextNode(`Pending memory ${body.memoryId} created. Approval must occur separately. `)
+              );
+              const link = document.createElement('a');
+              link.href = '/memory';
+              link.textContent = 'Open Memory Center';
+              itemStatus.append(link);
+            } catch (error) {
+              submit.disabled = false;
+              itemStatus.textContent = error.message;
+            }
+          });
+          card.append(
+            labeledSuggestionControl('Content', content),
+            labeledSuggestionControl('Memory type', memoryType),
+            labeledSuggestionControl('Scope', scopeType),
+            labeledSuggestionControl('Scope value', scopeValue),
+            labeledSuggestionControl('Confidence', confidence),
+            labeledSuggestionControl('Sensitivity', sensitivity),
+            labeledSuggestionControl('Expiration', expiration),
+            confirmationLabel,
+            submit,
+            itemStatus
+          );
+          memorySuggestionResult.append(card);
+        });
+        if (!(result.items || []).length) {
+          memorySuggestionResult.append(memoryResultElement('div', result.blocked ? 'Private session blocked suggestions.' : 'No conservative suggestion candidates were found.', 'muted'));
+        }
+        const limitations = memoryResultElement('ul');
+        (result.limitations || []).forEach((item) => limitations.append(memoryResultElement('li', item)));
+        memorySuggestionResult.append(memoryResultElement('strong', 'Limitations'), limitations);
+      }
+
+      function selectedFeedbackTags() {
+        return feedbackTagControls.filter((control) => control.checked).map((control) => control.value);
+      }
+
+      function syncFeedbackAvailability() {
+        const privateBlocked = memoryPrivateSession.checked;
+        const eligible = Boolean(latestResponseContext && latestResponseContext.feedbackEligible && !privateBlocked);
+        const hasFeedback = Boolean(currentFeedback);
+        [feedbackRating, feedbackNote, ...feedbackTagControls].forEach((control) => {
+          control.disabled = !eligible;
+        });
+        feedbackSubmit.disabled = !eligible || hasFeedback;
+        feedbackUpdate.disabled = !eligible || !hasFeedback;
+        feedbackDelete.disabled = !eligible || !hasFeedback;
+        feedbackDeleteConfirm.disabled = !eligible || !hasFeedback;
+        if (privateBlocked) {
+          feedbackStatus.textContent = 'Private session blocks feedback persistence. No stored feedback was deleted.';
+        } else if (!latestResponseContext) {
+          feedbackStatus.textContent = 'Not saved. Run one agent manually before submitting feedback.';
+        }
+      }
+
+      async function feedbackRequest(path, method, body) {
+        const response = await fetch(path, {
+          method,
+          headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `Request failed with HTTP ${response.status}`);
+        return result;
+      }
+
+      function feedbackPayload() {
+        const tags = selectedFeedbackTags();
+        if (!feedbackRating.value) throw new Error('Select a feedback rating.');
+        if (tags.length > 6) throw new Error('Select no more than six feedback tags.');
+        return { rating: feedbackRating.value, issueTags: tags, note: feedbackNote.value, actor: 'local_user' };
+      }
+
+      async function submitExplicitFeedback() {
+        if (!latestResponseContext || memoryPrivateSession.checked) {
+          feedbackStatus.textContent = 'Feedback persistence is unavailable for this response or private session.';
+          return;
+        }
+        feedbackSubmit.disabled = true;
+        try {
+          const payload = feedbackPayload();
+          currentFeedback = await feedbackRequest('/api/feedback', 'POST', {
+            responseId: latestResponseContext.responseId,
+            agentId: latestResponseContext.agentId,
+            ...payload,
+            privateSession: memoryPrivateSession.checked,
+          });
+          feedbackStatus.textContent = `Saved feedback ${currentFeedback.feedbackId}. The request and response were not stored.`;
+          feedbackPreference.hidden = false;
+        } catch (error) {
+          feedbackStatus.textContent = error.message;
+        } finally {
+          syncFeedbackAvailability();
+        }
+      }
+
+      async function updateExplicitFeedback() {
+        if (!currentFeedback || memoryPrivateSession.checked) return;
+        feedbackUpdate.disabled = true;
+        try {
+          currentFeedback = await feedbackRequest(`/api/feedback/${encodeURIComponent(currentFeedback.feedbackId)}`, 'PATCH', feedbackPayload());
+          feedbackStatus.textContent = `Updated feedback ${currentFeedback.feedbackId}.`;
+        } catch (error) {
+          feedbackStatus.textContent = error.message;
+        } finally {
+          syncFeedbackAvailability();
+        }
+      }
+
+      async function deleteExplicitFeedback() {
+        if (!currentFeedback || feedbackDeleteConfirm.value !== 'DELETE') {
+          feedbackStatus.textContent = 'Type DELETE to confirm hard deletion of the feedback note.';
+          return;
+        }
+        if (!window.confirm('Delete this feedback note? Redacted audit metadata may remain and linked memory will not be deleted.')) return;
+        feedbackDelete.disabled = true;
+        try {
+          const deletedId = currentFeedback.feedbackId;
+          await feedbackRequest(`/api/feedback/${encodeURIComponent(deletedId)}`, 'DELETE');
+          currentFeedback = null;
+          feedbackPreference.hidden = true;
+          feedbackStatus.textContent = `Feedback ${deletedId} deleted. Redacted audit metadata may remain; linked memory was not deleted.`;
+        } catch (error) {
+          feedbackStatus.textContent = error.message;
+        } finally {
+          syncFeedbackAvailability();
+        }
+      }
+
+      async function createFeedbackPreferenceProposal() {
+        if (!currentFeedback || !feedbackPreferenceConfirm.checked) {
+          feedbackPreferenceStatus.textContent = 'Review and confirm the pending preference proposal first.';
+          return;
+        }
+        if (feedbackPreferenceScope.value === 'global' && !window.confirm('Global scope may affect every response agent. Continue with a pending proposal?')) return;
+        feedbackPreferenceSubmit.disabled = true;
+        try {
+          const result = await feedbackRequest(
+            `/api/feedback/${encodeURIComponent(currentFeedback.feedbackId)}/preference-proposal`,
+            'POST',
+            {
+              content: feedbackPreferenceContent.value,
+              scopeType: feedbackPreferenceScope.value,
+              projectName: feedbackPreferenceProject.value.trim() || null,
+              confidence: feedbackPreferenceConfidence.value,
+              sensitivity: feedbackPreferenceSensitivity.value,
+              expiresAt: feedbackPreferenceExpiration.value ? new Date(feedbackPreferenceExpiration.value).toISOString() : null,
+              actor: 'local_user',
+            }
+          );
+          currentFeedback.linkedMemoryId = result.memory.memoryId;
+          feedbackPreferenceStatus.replaceChildren(document.createTextNode(`Pending memory ${result.memory.memoryId} created and linked. Separate approval is required. `));
+          const link = document.createElement('a');
+          link.href = '/memory';
+          link.textContent = 'Open Memory Center';
+          feedbackPreferenceStatus.append(link);
+        } catch (error) {
+          feedbackPreferenceSubmit.disabled = false;
+          feedbackPreferenceStatus.textContent = error.message;
+        }
+      }
       function localResponseAgentSearchText(agent) {
         if (!agent) {
           return '';
@@ -5338,8 +5783,10 @@ def dashboard_html() -> str:
       }
       async function loadSelectedExample() {
         const agent = selectedAgent();
-        updateMemoryPilotControls();
+        updateMemoryControls();
         renderMemoryContext(null);
+        renderMemorySuggestions(null);
+        renderResponseContext(null);
         if (!agent) {
           endpointDisplay.textContent = 'No agent selected.';
           bodyInput.value = '{}';
@@ -5377,10 +5824,21 @@ def dashboard_html() -> str:
         updateReadinessUi();
       });
       bindDashboardChange(outputTypeSelect, refreshPayloadOutputType);
-      bindDashboardChange(memoryEnabled, updateMemoryPilotControls);
-      bindDashboardChange(memoryPrivateSession, updateMemoryPilotControls);
-      bindDashboardChange(memoryMaxItems, updateMemoryPilotControls);
-      bindDashboardInput(memoryQuery, updateMemoryPilotControls);
+      bindDashboardChange(memoryEnabled, updateMemoryControls);
+      bindDashboardChange(memoryPrivateSession, updateMemoryControls);
+      bindDashboardChange(memoryMaxItems, updateMemoryControls);
+      bindDashboardInput(memoryQuery, updateMemoryControls);
+      bindDashboardChange(memorySuggestionsEnabled, updateMemoryControls);
+      bindDashboardChange(memorySuggestionsMax, updateMemoryControls);
+      memorySuggestionTypeControls.forEach((control) => bindDashboardChange(control, updateMemoryControls));
+      bindDashboardClick(feedbackSubmit, submitExplicitFeedback);
+      bindDashboardClick(feedbackUpdate, updateExplicitFeedback);
+      bindDashboardClick(feedbackDelete, deleteExplicitFeedback);
+      bindDashboardClick(feedbackPreferenceSubmit, createFeedbackPreferenceProposal);
+      bindDashboardChange(feedbackPreferenceScope, () => {
+        feedbackPreferenceProject.disabled = feedbackPreferenceScope.value !== 'project';
+        feedbackPreferenceStatus.textContent = feedbackPreferenceScope.value === 'global' ? 'Global scope requires an additional confirmation.' : 'Pending preference still requires separate approval.';
+      });
       bindDashboardInput(bodyInput, renderReviewedWebContextPreview);
       bindDashboardInput(commandSearch, renderCommandCenter);
       bindDashboardChange(commandCategory, renderCommandCenter);
@@ -5645,11 +6103,12 @@ def dashboard_html() -> str:
         }
         parsedBody = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
         const memoryOptions = memoryOptionsForSubmission();
-        if (memoryOptions) {
-          parsedBody.memory = memoryOptions;
-        }
+        parsedBody.memory = memoryOptions;
+        parsedBody.memoryProposalSuggestions = memorySuggestionOptionsForSubmission();
         runButton.disabled = true;
         renderMemoryContext(null);
+        renderMemorySuggestions(null);
+        renderResponseContext(null);
         status.textContent = 'Loading the manually selected allowlisted local response-agent response.';
         bodyInput.value = JSON.stringify(parsedBody, null, 2);
         try {
@@ -5665,6 +6124,8 @@ def dashboard_html() -> str:
           } catch {
             responseBody = { rawResponse: responseText };
           }
+          renderMemorySuggestions(responseBody.memoryProposalSuggestions || responseBody.memory_proposal_suggestions || null);
+          renderResponseContext(responseBody.responseContext || responseBody.response_context || null);
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
           renderMemoryContext(responseBody.memoryContext || responseBody.memory_context || null);
           if (response.ok) {
@@ -5684,6 +6145,8 @@ def dashboard_html() -> str:
           latestLocalResponseBody = null;
           latestLocalResponseAgent = null;
           status.textContent = `Backend error: ${error.message}`;
+          renderMemorySuggestions(null);
+          renderResponseContext(null);
           responseOutput.textContent = '';
           renderMemoryContext(null);
           renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);

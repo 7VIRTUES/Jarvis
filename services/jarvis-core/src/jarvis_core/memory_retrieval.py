@@ -112,8 +112,9 @@ class MemoryRetrievalService:
         return {
             "fts5Available": self.fts5_available,
             "retrievalMode": self.retrieval_mode,
-            "memoryRetrievalStatus": "implemented_pilot",
-            "memoryAgentRetrievalPilotCount": 6,
+            "memoryRetrievalStatus": "implemented_all_response_agents",
+            "memoryAgentRetrievalAgentCount": 37,
+            "memoryAgentRetrievalAllAgents": True,
             "recentRetrievalCount": recent_count,
         }
 
