@@ -39,6 +39,11 @@ from .knowledge import (
     KnowledgeValidationError,
 )
 from .knowledge_dashboard import knowledge_dashboard_html
+from .knowledge_retrieval import (
+    KnowledgeRetrievalNotFoundError,
+    KnowledgeRetrievalRequest,
+    KnowledgeRetrievalService,
+)
 from .knowledge_ingestion import KnowledgeIngestionService
 from .inspector import inspect_project, write_markdown_report
 from .local_business_agent import LocalBusinessAgentService, LocalBusinessRequest
@@ -132,6 +137,11 @@ knowledge_service = KnowledgeService(
     events,
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
     project_exists=lambda project_name: projects.get_project(project_name) is not None,
+)
+knowledge_retrieval_service = KnowledgeRetrievalService(
+    conn,
+    events,
+    agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
 )
 knowledge_ingestion = KnowledgeIngestionService(knowledge_service, projects, WORKSPACE_ROOT)
 memory_service = MemoryService(
@@ -439,6 +449,18 @@ class KnowledgeActorInput(BaseModel):
 
     actor: str = "local_user"
 
+
+class KnowledgeRetrievalPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=1000)
+    privateSession: bool = False
+    projectName: str | None = Field(default=None, max_length=200)
+    agentId: str | None = Field(default=None, max_length=200)
+    includeSensitive: bool = False
+    maxItems: int = Field(default=5, ge=1, le=10)
+
+
 _MEMORY_EDIT_FIELD_MAP = {
     "memoryType": "memory_type",
     "content": "content",
@@ -601,6 +623,17 @@ class MemoryRetrievalOptionsInput(BaseModel):
     maxItems: int = Field(default=5, ge=1, le=10)
 
 
+class KnowledgeRetrievalOptionsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    privateSession: bool = False
+    query: str = ""
+    projectName: str | None = Field(default=None, max_length=200)
+    includeSensitive: bool = False
+    maxItems: int = Field(default=5, ge=1, le=10)
+
+
 class MemoryProposalSuggestionOptionsInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -617,6 +650,7 @@ class LocalResponseAgentInputBase(BaseModel):
     web_context: list[WebContextSourceInput] = Field(default_factory=list)
     prior_agent_context: PriorAgentContextInput | None = None
     memory: MemoryRetrievalOptionsInput | None = None
+    knowledge: KnowledgeRetrievalOptionsInput | None = None
     memoryProposalSuggestions: MemoryProposalSuggestionOptionsInput | None = None
 
 
@@ -1367,10 +1401,11 @@ _MEMORY_CONTEXT_LIMITATIONS = [
 
 def _private_session_requested(payload: LocalResponseAgentInputBase) -> bool:
     memory_private = bool(payload.memory and payload.memory.privateSession)
+    knowledge_private = bool(payload.knowledge and payload.knowledge.privateSession)
     suggestions_private = bool(
         payload.memoryProposalSuggestions and payload.memoryProposalSuggestions.privateSession
     )
-    return memory_private or suggestions_private
+    return memory_private or knowledge_private or suggestions_private
 
 
 def _memory_context(
@@ -1451,6 +1486,103 @@ def _memory_context(
     }
 
 
+_KNOWLEDGE_CONTEXT_LIMITATIONS = [
+    "Knowledge context is supplementary; current user instructions remain authoritative.",
+    "Imported sources may be outdated or incomplete.",
+    "Source content was not independently verified.",
+    "Sensitive or consequential material requires review.",
+    "No source was modified.",
+    "No model training occurred.",
+    "No embeddings were used.",
+    "No original project file was opened during retrieval.",
+]
+
+
+def _knowledge_context(
+    payload: LocalResponseAgentInputBase,
+    agent_id: str,
+    *,
+    private_session: bool,
+) -> dict[str, object]:
+    options = payload.knowledge
+    if options is None or not options.enabled:
+        return {
+            "requested": False,
+            "used": False,
+            "blocked": False,
+            "blockReason": None,
+            "retrievalId": None,
+            "selectedChunkCount": 0,
+            "selectedSourceCount": 0,
+            "items": [],
+            "considerations": [],
+            "limitations": [],
+        }
+    try:
+        retrieval = knowledge_retrieval_service.retrieve(
+            KnowledgeRetrievalRequest(
+                query=options.query,
+                agent_id=agent_id,
+                project_name=options.projectName,
+                private_session=private_session,
+                include_sensitive=options.includeSensitive,
+                max_items=options.maxItems,
+                purpose="agent_response",
+                server_known_agent=True,
+            )
+        )
+    except KnowledgeValidationError as exc:
+        _raise_knowledge_http_error(exc)
+    items = list(retrieval["items"])
+    considerations = [
+        {
+            "citationLabel": item["citationLabel"],
+            "sourceId": item["sourceId"],
+            "sourceTitle": item["sourceTitle"],
+            "chunkId": item["chunkId"],
+            "content": item["content"],
+            "scopeType": item["scopeType"],
+            "scopeValue": item["scopeValue"],
+            "reason": "; ".join(item["matchReasons"]),
+        }
+        for item in items
+    ]
+    context = dict(retrieval)
+    context["used"] = bool(items) and not bool(retrieval["blocked"])
+    context["considerations"] = considerations
+    context["limitations"] = list(retrieval["limitations"]) + list(
+        _KNOWLEDGE_CONTEXT_LIMITATIONS
+    )
+    return context
+
+
+def _local_context_summary(
+    memory_context: dict[str, object],
+    knowledge_context: dict[str, object],
+    *,
+    private_session: bool,
+) -> dict[str, object]:
+    return {
+        "privateSession": private_session,
+        "memoryRequested": bool(memory_context.get("requested")),
+        "memoryUsed": bool(memory_context.get("used")),
+        "memoryRetrievalId": memory_context.get("retrievalId"),
+        "memoryItemCount": int(memory_context.get("selectedCount") or 0),
+        "knowledgeRequested": bool(knowledge_context.get("requested")),
+        "knowledgeUsed": bool(knowledge_context.get("used")),
+        "knowledgeRetrievalId": knowledge_context.get("retrievalId"),
+        "knowledgeChunkCount": int(knowledge_context.get("selectedChunkCount") or 0),
+        "knowledgeSourceCount": int(knowledge_context.get("selectedSourceCount") or 0),
+        "currentRequestAuthoritative": True,
+        "automaticPersistence": False,
+        "limitations": [
+            "Memory and knowledge keep separate provenance and retrieval IDs.",
+            "Local context is supplementary; the current request remains authoritative.",
+            "No memory or knowledge was persisted automatically.",
+        ],
+    }
+
+
 def _memory_proposal_suggestion_context(
     payload: LocalResponseAgentInputBase,
     agent_id: str,
@@ -1470,9 +1602,11 @@ def _memory_proposal_suggestion_context(
             project_name=None,
             max_suggestions=3,
         )
+    request_fields = payload.model_dump(exclude_unset=True)
+    request_fields.pop("knowledge", None)
     try:
         return memory_proposal_suggestions.suggest(
-            request_fields=payload.model_dump(exclude_unset=True),
+            request_fields=request_fields,
             response_id=response_id,
             agent_id=agent_id,
             enabled=options.enabled,
@@ -1519,8 +1653,12 @@ def _local_response_with_web_context(
     enriched = apply_prior_context_response_fields(source_response, payload.prior_agent_context)
     private_session = _private_session_requested(payload)
     response_id = str(uuid4())
-    enriched["memoryContext"] = _memory_context(
-        payload, agent_id, private_session=private_session
+    memory_context = _memory_context(payload, agent_id, private_session=private_session)
+    enriched["memoryContext"] = memory_context
+    knowledge_context = _knowledge_context(payload, agent_id, private_session=private_session)
+    enriched["knowledgeContext"] = knowledge_context
+    enriched["localContext"] = _local_context_summary(
+        memory_context, knowledge_context, private_session=private_session
     )
     enriched["memoryProposalSuggestions"] = _memory_proposal_suggestion_context(
         payload,
@@ -2728,6 +2866,8 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
 
 
 def _raise_knowledge_http_error(exc: Exception) -> None:
+    if isinstance(exc, KnowledgeRetrievalNotFoundError):
+        raise HTTPException(status_code=404, detail="knowledge retrieval not found") from exc
     if isinstance(exc, KnowledgeNotFoundError):
         raise HTTPException(status_code=404, detail="knowledge source or registered project not found") from exc
     if isinstance(exc, KnowledgeConflictError):
@@ -2744,7 +2884,64 @@ def _raise_knowledge_http_error(exc: Exception) -> None:
 
 @app.get("/api/knowledge/summary")
 def knowledge_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
-    return knowledge_service.summary()
+    summary = knowledge_service.summary()
+    summary.update(knowledge_retrieval_service.status())
+    return summary
+
+
+@app.post("/api/knowledge/retrieval-preview")
+def preview_knowledge_retrieval(
+    payload: KnowledgeRetrievalPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_retrieval_service.retrieve(
+            KnowledgeRetrievalRequest(
+                query=payload.query,
+                agent_id=payload.agentId,
+                project_name=payload.projectName,
+                private_session=payload.privateSession,
+                include_sensitive=payload.includeSensitive,
+                max_items=payload.maxItems,
+                purpose="manual_preview",
+            )
+        )
+    except KnowledgeValidationError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.get("/api/knowledge/retrievals")
+def list_knowledge_retrievals(
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    agentId: str | None = None,
+    projectName: str | None = None,
+    purpose: str | None = None,
+    retrievalMode: str | None = None,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return knowledge_retrieval_service.list_retrievals(
+            limit=limit,
+            offset=offset,
+            agent_id=agentId,
+            project_name=projectName,
+            purpose=purpose,
+            retrieval_mode=retrievalMode,
+        )
+    except KnowledgeValidationError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.get("/api/knowledge/retrievals/{retrieval_id}")
+def get_knowledge_retrieval(
+    retrieval_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_retrieval_service.get_retrieval(retrieval_id)
+    except (KnowledgeValidationError, KnowledgeRetrievalNotFoundError) as exc:
+        _raise_knowledge_http_error(exc)
 
 
 @app.get("/api/knowledge/sources")

@@ -68,7 +68,7 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1E Batch 1", "status": "Knowledge Library foundation and explicit manual ingestion"},
+            "phase": {"current": "v0.1E Batch 2", "status": "ranked knowledge retrieval and all-agent knowledge context"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -99,7 +99,7 @@ class DashboardService:
                 "localTransformationAgent": "implemented_local_only",
                 "localResponseAgentsIndex": "read_only_index",
                 "memoryCenter": "explicit_user_controlled_persistence",
-                "knowledgeLibrary": "implemented_manual_ingestion",
+                "knowledgeLibrary": "implemented_with_ranked_retrieval",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -163,8 +163,8 @@ class DashboardService:
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1E Batch 1",
-            "currentSlice": "Knowledge Library foundation and explicit manual ingestion",
+            "phase": "v0.1E Batch 2",
+            "currentSlice": "ranked knowledge retrieval and all-agent knowledge context",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -190,19 +190,30 @@ class DashboardService:
             "localGenerativeModelEnabled": False,
             "selfModifyingCodeEnabled": False,
             "documentKnowledgeIngestionEnabled": True,
-            "knowledgeLibraryStatus": "implemented_manual_ingestion",
+            "knowledgeLibraryStatus": "implemented_with_ranked_retrieval",
             "knowledgePersistenceImplemented": True,
             "knowledgePastedTextIngestionImplemented": True,
             "knowledgeRegisteredProjectFileIngestionImplemented": True,
+            "knowledgeRetrievalStatus": "implemented_all_response_agents",
+            "knowledgeRetrievalMode": "fts5_with_deterministic_fallback",
+            "knowledgeRetrievalAuditImplemented": True,
+            "knowledgeAgentRetrievalEnabled": True,
+            "knowledgeAgentRetrievalAgentCount": 37,
+            "knowledgeAgentRetrievalAllAgents": True,
+            "knowledgeRetrievalRequiresExplicitOptIn": True,
+            "knowledgeRetrievalRequiresExplicitQuery": True,
+            "knowledgeSensitiveRetrievalDefaultEnabled": False,
+            "knowledgeOriginalFileReadsDuringRetrieval": False,
             "knowledgeAutomaticScanningEnabled": False,
+            "knowledgeAutomaticInjectionEnabled": False,
             "knowledgeDirectoryIngestionEnabled": False,
             "knowledgeFileUploadsEnabled": False,
             "knowledgeUrlIngestionEnabled": False,
-            "knowledgeAgentRetrievalEnabled": False,
             "knowledgeFtsIndexImplemented": True,
             "knowledgeEmbeddingsEnabled": False,
             "knowledgeVectorDatabaseEnabled": False,
             "knowledgeLocalModelEnabled": False,
+            "knowledgeModelTrainingEnabled": False,
             "knowledgeCenterEndpoint": "/knowledge",
             "privateSessionPersistenceImplemented": False,
             "automaticLearningEnabled": False,
@@ -867,7 +878,7 @@ def dashboard_html() -> str:
       <h2>Knowledge Library</h2>
       <div id="knowledge-library-status" class="muted" aria-live="polite">Loading Knowledge Library status...</div>
       <div id="knowledge-library-metrics" class="grid" aria-busy="true"></div>
-      <div class="row"><strong>Explicit manual ingestion only.</strong><div class="muted">No automatic scanning · No agent retrieval yet · No embeddings.</div></div>
+      <div class="row"><strong>Explicit source ingestion and explicit per-request retrieval.</strong><div class="muted">No automatic source scanning · No embeddings · No local model.</div></div>
       <div class="actions"><button id="knowledge-library-refresh-button" type="button">Refresh knowledge status</button><a class="button-link" href="/knowledge">Open Knowledge Library</a></div>
     </section>    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
@@ -1433,6 +1444,35 @@ def dashboard_html() -> str:
             <div id="local-response-agents-memory-control-status" class="muted">Approved memory is disabled by default.</div>
           </div>
         </div>
+        <div id="local-response-agents-knowledge-context" class="row stack">
+          <h3>Active Knowledge Context</h3>
+          <div class="muted">Explicit ranked retrieval is available to all 37 response agents. It searches active stored SQLite chunks only, is disabled by default, and never opens original project files.</div>
+          <div id="local-response-agents-knowledge-controls" class="row stack">
+            <label>
+              <input id="local-response-agents-knowledge-enabled" type="checkbox">
+              Enable active knowledge
+            </label>
+            <div class="muted">The shared page-local private-session control above also blocks knowledge retrieval and its audit.</div>
+            <label>
+              Knowledge retrieval query
+              <input id="local-response-agents-knowledge-query" type="text" maxlength="1000" autocomplete="off">
+            </label>
+            <label>
+              Knowledge project name
+              <input id="local-response-agents-knowledge-project" type="text" maxlength="200" autocomplete="off">
+            </label>
+            <label>
+              <input id="local-response-agents-knowledge-include-sensitive" type="checkbox">
+              Include sensitive knowledge
+            </label>
+            <div class="muted">Sensitive knowledge is excluded by default and requires explicit inclusion for this request.</div>
+            <label>
+              Maximum knowledge chunks
+              <input id="local-response-agents-knowledge-max-items" type="number" min="1" max="10" value="5">
+            </label>
+            <div id="local-response-agents-knowledge-control-status" class="muted">Active knowledge is disabled by default.</div>
+          </div>
+        </div>
         <div id="local-response-agents-memory-suggestions" class="row stack">
           <h3>Reviewable Memory Suggestions</h3>
           <div class="muted">Deterministic suggestions use only explicit structured request fields. They are not saved unless you review and submit a pending proposal.</div>
@@ -1576,6 +1616,8 @@ def dashboard_html() -> str:
         </div>
         <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
         <div id="local-response-agents-memory-result" class="row stack muted">No memory retrieval result yet.</div>
+        <div id="local-response-agents-knowledge-result" class="row stack muted">No knowledge retrieval result yet.</div>
+        <div id="local-response-agents-local-context-result" class="row stack muted">No combined local-context summary yet.</div>
         <div id="local-response-agents-memory-suggestion-result" class="row stack muted">No memory suggestions requested yet.</div>
         <div id="local-response-agents-response-context" class="row stack muted">No ephemeral response context yet.</div>
         <div id="local-response-agents-feedback-panel" class="row stack">
@@ -2104,9 +2146,9 @@ def dashboard_html() -> str:
         if (!response.ok) throw new Error('Knowledge Library summary request failed.');
         const summary = await response.json();
         metrics.replaceChildren();
-        const values = { totalSources: summary.totalSources || 0, activeSources: summary.activeSources || 0, disabledSources: summary.disabledSources || 0, totalChunks: summary.totalChunks || 0, indexMode: summary.indexMode || 'deterministic_fallback_available' };
+        const values = { activeSources: summary.activeSources || 0, totalChunks: summary.totalChunks || 0, fts5Available: summary.fts5Available ? 'yes' : 'no', retrievalMode: summary.retrievalMode || 'deterministic_fallback', recentRetrievalCount: summary.recentRetrievalCount || 0, allAgentKnowledgeRetrieval: summary.knowledgeAgentRetrievalAllAgents ? 'enabled for 37' : 'not enabled', sensitiveRetrievalDefault: 'excluded' };
         Object.entries(values).forEach(([label, value]) => { const card = document.createElement('div'); card.className = 'metric'; const labelNode = document.createElement('span'); labelNode.textContent = label; const valueNode = document.createElement('strong'); valueNode.textContent = String(value); card.append(labelNode, valueNode); metrics.append(card); });
-        status.textContent = summary.totalSources ? 'Explicitly imported local knowledge sources are available for administrative review.' : 'No knowledge sources have been imported.';
+        status.textContent = summary.totalSources ? 'Explicit ingestion remains required. Ranked retrieval runs only after explicit enablement and submission.' : 'No knowledge sources have been imported; retrieval remains explicit and returns no source content.';
       } catch (error) { metrics.replaceChildren(); status.textContent = error instanceof Error ? error.message : 'Knowledge Library status is unavailable.'; }
       finally { metrics.setAttribute('aria-busy', 'false'); }
       const refreshButton = document.getElementById('knowledge-library-refresh-button');
@@ -2786,6 +2828,10 @@ def dashboard_html() -> str:
       const usedKeys = new Set(fields.flatMap((field) => [field, field.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())]));
       usedKeys.add('memoryContext');
       usedKeys.add('memory_context');
+      usedKeys.add('knowledgeContext');
+      usedKeys.add('knowledge_context');
+      usedKeys.add('localContext');
+      usedKeys.add('local_context');
       usedKeys.add('memoryProposalSuggestions');
       usedKeys.add('memory_proposal_suggestions');
       usedKeys.add('responseContext');
@@ -2960,6 +3006,14 @@ def dashboard_html() -> str:
       const memoryIncludeSensitive = document.getElementById('local-response-agents-memory-include-sensitive');
       const memoryMaxItems = document.getElementById('local-response-agents-memory-max-items');
       const memoryControlStatus = document.getElementById('local-response-agents-memory-control-status');
+      const knowledgeEnabled = document.getElementById('local-response-agents-knowledge-enabled');
+      const knowledgeQuery = document.getElementById('local-response-agents-knowledge-query');
+      const knowledgeProject = document.getElementById('local-response-agents-knowledge-project');
+      const knowledgeIncludeSensitive = document.getElementById('local-response-agents-knowledge-include-sensitive');
+      const knowledgeMaxItems = document.getElementById('local-response-agents-knowledge-max-items');
+      const knowledgeControlStatus = document.getElementById('local-response-agents-knowledge-control-status');
+      const knowledgeResult = document.getElementById('local-response-agents-knowledge-result');
+      const localContextResult = document.getElementById('local-response-agents-local-context-result');
       const memorySuggestionsEnabled = document.getElementById('local-response-agents-memory-suggestions-enabled');
       const memorySuggestionTypeControls = Array.from(document.querySelectorAll('[data-memory-suggestion-type]'));
       const memorySuggestionsProject = document.getElementById('local-response-agents-memory-suggestions-project');
@@ -3261,11 +3315,16 @@ def dashboard_html() -> str:
         memoryControls.hidden = false;
         const privateBlocked = memoryPrivateSession.checked;
         const retrievalEnabled = memoryEnabled.checked;
+        const knowledgeRetrievalEnabled = knowledgeEnabled.checked;
         const suggestionsEnabled = memorySuggestionsEnabled.checked;
         memoryEnabled.disabled = privateBlocked;
+        knowledgeEnabled.disabled = privateBlocked;
         memorySuggestionsEnabled.disabled = privateBlocked;
         [memoryQuery, memoryProject, memoryIncludeSensitive, memoryMaxItems].forEach((control) => {
           control.disabled = privateBlocked || !retrievalEnabled;
+        });
+        [knowledgeQuery, knowledgeProject, knowledgeIncludeSensitive, knowledgeMaxItems].forEach((control) => {
+          control.disabled = privateBlocked || !knowledgeRetrievalEnabled;
         });
         [memorySuggestionsProject, memorySuggestionsMax, ...memorySuggestionTypeControls].forEach((control) => {
           control.disabled = privateBlocked || !suggestionsEnabled;
@@ -3275,6 +3334,11 @@ def dashboard_html() -> str:
           : retrievalEnabled
             ? 'Approved memory will be retrieved only when this agent request is explicitly submitted.'
             : 'Approved memory is disabled by default.';
+        knowledgeControlStatus.textContent = privateBlocked
+          ? 'Private session is on. Knowledge retrieval is blocked, no retrieval audit will be created, and stored sources were not deleted.'
+          : knowledgeRetrievalEnabled
+            ? 'Active stored knowledge will be ranked only when this agent request is explicitly submitted with this explicit query.'
+            : 'Active knowledge is disabled by default.';
         memorySuggestionsStatus.textContent = privateBlocked
           ? 'Private session is on. Suggestions are blocked and nothing will be persisted.'
           : suggestionsEnabled
@@ -3290,6 +3354,16 @@ def dashboard_html() -> str:
           projectName: memoryProject.value.trim() || null,
           includeSensitive: memoryIncludeSensitive.checked,
           maxItems: Number(memoryMaxItems.value || 5),
+        };
+      }
+      function knowledgeOptionsForSubmission() {
+        return {
+          enabled: knowledgeEnabled.checked,
+          privateSession: memoryPrivateSession.checked,
+          query: knowledgeQuery.value.trim(),
+          projectName: knowledgeProject.value.trim() || null,
+          includeSensitive: knowledgeIncludeSensitive.checked,
+          maxItems: Number(knowledgeMaxItems.value || 5),
         };
       }
       function memorySuggestionOptionsForSubmission() {
@@ -3354,6 +3428,95 @@ def dashboard_html() -> str:
         const limitations = memoryResultElement('ul');
         (memoryContext.limitations || []).forEach((limitation) => limitations.append(memoryResultElement('li', limitation)));
         memoryResult.append(memoryResultElement('strong', 'Limitations'), limitations);
+      }
+
+      function renderKnowledgeContext(knowledgeContext) {
+        knowledgeResult.replaceChildren();
+        if (!knowledgeContext) {
+          knowledgeResult.className = 'row stack muted';
+          knowledgeResult.append(memoryResultElement('div', 'No knowledge retrieval result yet.'));
+          return;
+        }
+        knowledgeResult.className = 'row stack';
+        knowledgeResult.append(memoryResultElement('strong', 'Knowledge context'));
+        const metadata = memoryResultElement('div', '', 'stack');
+        [
+          ['Requested', knowledgeContext.requested ? 'yes' : 'no'],
+          ['Used', knowledgeContext.used ? 'yes' : 'no'],
+          ['Blocked', knowledgeContext.blocked ? 'yes' : 'no'],
+          ['Block reason', knowledgeContext.blockReason || 'none'],
+          ['Retrieval ID', knowledgeContext.retrievalId || 'not created'],
+          ['Retrieval mode', knowledgeContext.retrievalMode || 'not requested'],
+          ['FTS5 available', knowledgeContext.fts5Available ? 'yes' : 'no'],
+          ['Candidate chunks', knowledgeContext.candidateChunkCount || 0],
+          ['Candidate sources', knowledgeContext.candidateSourceCount || 0],
+          ['Candidate limit reached', knowledgeContext.candidateLimitReached ? 'yes' : 'no'],
+          ['Selected chunks', knowledgeContext.selectedChunkCount || 0],
+          ['Selected sources', knowledgeContext.selectedSourceCount || 0],
+        ].forEach(([label, value]) => {
+          const row = memoryResultElement('div', '', 'muted');
+          row.append(memoryResultElement('strong', `${label}: `), document.createTextNode(String(value)));
+          metadata.append(row);
+        });
+        knowledgeResult.append(metadata);
+        const diversity = Array.isArray(knowledgeContext.sourceDiversity) ? knowledgeContext.sourceDiversity : [];
+        if (diversity.length) {
+          const diversityList = memoryResultElement('ul');
+          diversity.forEach((entry) => diversityList.append(memoryResultElement('li', `${entry.sourceId}: ${entry.selectedChunkCount} selected chunk(s), best rank ${entry.bestRank}`)));
+          knowledgeResult.append(memoryResultElement('strong', 'Source diversity'), diversityList);
+        }
+        const items = Array.isArray(knowledgeContext.items) ? knowledgeContext.items : [];
+        items.forEach((item) => {
+          const card = memoryResultElement('article', '', 'row stack');
+          card.append(
+            memoryResultElement('strong', `${item.citationLabel} ${item.sourceTitle}`),
+            memoryResultElement('div', `Source ${item.sourceId} · chunk ${item.chunkId} · rank ${item.rank}`, 'muted'),
+            memoryResultElement('div', `Scope: ${item.scopeType}${item.scopeValue ? `:${item.scopeValue}` : ''} · sensitivity: ${item.sensitivity} · project: ${item.projectName || 'none'}`, 'muted'),
+            memoryResultElement('div', `Relative path: ${item.relativePath || 'none'} · score ${item.textScore} · scope priority ${item.scopePriority}`, 'muted'),
+            memoryResultElement('pre', item.content, 'content-full')
+          );
+          const reasons = memoryResultElement('ul');
+          (item.matchReasons || []).forEach((reason) => reasons.append(memoryResultElement('li', reason)));
+          card.append(memoryResultElement('strong', 'Match reasons'), reasons);
+          knowledgeResult.append(card);
+        });
+        if (!items.length) {
+          knowledgeResult.append(memoryResultElement('div', knowledgeContext.blocked ? 'Private session blocked knowledge retrieval.' : 'No active stored knowledge chunks were selected.', 'muted'));
+        }
+        const limitations = memoryResultElement('ul');
+        (knowledgeContext.limitations || []).forEach((limitation) => limitations.append(memoryResultElement('li', limitation)));
+        knowledgeResult.append(memoryResultElement('strong', 'Limitations'), limitations);
+      }
+
+      function renderLocalContext(localContext) {
+        localContextResult.replaceChildren();
+        if (!localContext) {
+          localContextResult.className = 'row stack muted';
+          localContextResult.append(memoryResultElement('div', 'No combined local-context summary yet.'));
+          return;
+        }
+        localContextResult.className = 'row stack';
+        localContextResult.append(memoryResultElement('strong', 'Combined local-context summary'));
+        const fields = [
+          ['Private session', localContext.privateSession ? 'yes' : 'no'],
+          ['Memory requested / used', `${localContext.memoryRequested ? 'yes' : 'no'} / ${localContext.memoryUsed ? 'yes' : 'no'}`],
+          ['Memory retrieval ID', localContext.memoryRetrievalId || 'not created'],
+          ['Memory items', localContext.memoryItemCount || 0],
+          ['Knowledge requested / used', `${localContext.knowledgeRequested ? 'yes' : 'no'} / ${localContext.knowledgeUsed ? 'yes' : 'no'}`],
+          ['Knowledge retrieval ID', localContext.knowledgeRetrievalId || 'not created'],
+          ['Knowledge chunks / sources', `${localContext.knowledgeChunkCount || 0} / ${localContext.knowledgeSourceCount || 0}`],
+          ['Current request authoritative', localContext.currentRequestAuthoritative ? 'yes' : 'no'],
+          ['Automatic persistence', localContext.automaticPersistence ? 'yes' : 'no'],
+        ];
+        const metadata = memoryResultElement('div', '', 'stack');
+        fields.forEach(([label, value]) => {
+          const row = memoryResultElement('div', '', 'muted');
+          row.append(memoryResultElement('strong', `${label}: `), document.createTextNode(String(value)));
+          metadata.append(row);
+        });
+        const limitations = memoryResultElement('ul');
+        (localContext.limitations || []).forEach((limitation) => limitations.append(memoryResultElement('li', limitation)));
+        localContextResult.append(metadata, memoryResultElement('strong', 'Limitations'), limitations);
       }
 
       function renderResponseContext(responseContext) {
@@ -5826,6 +5989,8 @@ def dashboard_html() -> str:
         const agent = selectedAgent();
         updateMemoryControls();
         renderMemoryContext(null);
+        renderKnowledgeContext(null);
+        renderLocalContext(null);
         renderMemorySuggestions(null);
         renderResponseContext(null);
         if (!agent) {
@@ -5869,6 +6034,9 @@ def dashboard_html() -> str:
       bindDashboardChange(memoryPrivateSession, updateMemoryControls);
       bindDashboardChange(memoryMaxItems, updateMemoryControls);
       bindDashboardInput(memoryQuery, updateMemoryControls);
+      bindDashboardChange(knowledgeEnabled, updateMemoryControls);
+      bindDashboardChange(knowledgeMaxItems, updateMemoryControls);
+      bindDashboardInput(knowledgeQuery, updateMemoryControls);
       bindDashboardChange(memorySuggestionsEnabled, updateMemoryControls);
       bindDashboardChange(memorySuggestionsMax, updateMemoryControls);
       memorySuggestionTypeControls.forEach((control) => bindDashboardChange(control, updateMemoryControls));
@@ -6145,9 +6313,12 @@ def dashboard_html() -> str:
         parsedBody = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
         const memoryOptions = memoryOptionsForSubmission();
         parsedBody.memory = memoryOptions;
+        parsedBody.knowledge = knowledgeOptionsForSubmission();
         parsedBody.memoryProposalSuggestions = memorySuggestionOptionsForSubmission();
         runButton.disabled = true;
         renderMemoryContext(null);
+        renderKnowledgeContext(null);
+        renderLocalContext(null);
         renderMemorySuggestions(null);
         renderResponseContext(null);
         status.textContent = 'Loading the manually selected allowlisted local response-agent response.';
@@ -6165,10 +6336,12 @@ def dashboard_html() -> str:
           } catch {
             responseBody = { rawResponse: responseText };
           }
+          renderMemoryContext(responseBody.memoryContext || responseBody.memory_context || null);
+          renderKnowledgeContext(responseBody.knowledgeContext || responseBody.knowledge_context || null);
+          renderLocalContext(responseBody.localContext || responseBody.local_context || null);
           renderMemorySuggestions(responseBody.memoryProposalSuggestions || responseBody.memory_proposal_suggestions || null);
           renderResponseContext(responseBody.responseContext || responseBody.response_context || null);
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
-          renderMemoryContext(responseBody.memoryContext || responseBody.memory_context || null);
           if (response.ok) {
             latestLocalResponseBody = responseBody;
             latestLocalResponseAgent = agent;
@@ -6190,6 +6363,8 @@ def dashboard_html() -> str:
           renderResponseContext(null);
           responseOutput.textContent = '';
           renderMemoryContext(null);
+          renderKnowledgeContext(null);
+          renderLocalContext(null);
           renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);
         } finally {
           runButton.disabled = false;

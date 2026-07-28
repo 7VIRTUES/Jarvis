@@ -256,7 +256,7 @@ def memory_dashboard_html() -> str:
   <main id="main-content">
     <section class="safety-banner" aria-labelledby="memory-safety-title">
       <h2 id="memory-safety-title">Memory safety boundaries</h2>
-      <p><strong>Memory and knowledge remain separate.</strong> Memory stores approved user facts, preferences, and instructions. Knowledge stores explicitly imported source material. Their databases and management controls are not merged.</p>
+      <p><strong>Memory and knowledge remain separate.</strong> Memory stores approved user facts, preferences, and instructions. Knowledge stores explicitly imported source material and now supports explicit ranked retrieval through agent controls. Knowledge retrieval does not create memory, and memory retrieval does not import documents. Their provenance, retrieval IDs, databases, and management controls are not merged.</p>
       <ul>
         <li>Memory is stored locally in Jarvis SQLite.</li>
         <li>New memories begin as pending, and pending memories are inactive.</li>

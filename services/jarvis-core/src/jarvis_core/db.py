@@ -298,6 +298,34 @@ create table if not exists knowledge_events (
   created_at text not null
 );
 
+create table if not exists knowledge_retrievals (
+  retrieval_id text primary key,
+  purpose text not null,
+  agent_id text,
+  project_name text,
+  query_hash text not null,
+  query_term_count integer not null,
+  include_sensitive integer not null,
+  retrieval_mode text not null,
+  candidate_chunk_count integer not null,
+  candidate_source_count integer not null,
+  selected_chunk_count integer not null,
+  selected_source_count integer not null,
+  created_at text not null
+);
+
+create table if not exists knowledge_retrieval_items (
+  retrieval_id text not null,
+  chunk_id text not null,
+  source_id text not null,
+  rank integer not null,
+  text_score real not null,
+  scope_priority integer not null,
+  source_rank integer not null,
+  chunk_index integer not null,
+  created_at text not null,
+  unique(retrieval_id, chunk_id)
+);
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
@@ -322,6 +350,13 @@ create index if not exists idx_knowledge_sources_updated on knowledge_sources(up
 create index if not exists idx_knowledge_chunks_source_index on knowledge_chunks(source_id, chunk_index);
 create index if not exists idx_knowledge_chunks_content_hash on knowledge_chunks(content_hash);
 create index if not exists idx_knowledge_events_source_date on knowledge_events(source_id, created_at);
+create index if not exists idx_knowledge_retrievals_date on knowledge_retrievals(created_at);
+create index if not exists idx_knowledge_retrievals_agent_date on knowledge_retrievals(agent_id, created_at);
+create index if not exists idx_knowledge_retrievals_project_date on knowledge_retrievals(project_name, created_at);
+create index if not exists idx_knowledge_retrievals_purpose_date on knowledge_retrievals(purpose, created_at);
+create index if not exists idx_knowledge_retrieval_items_source on knowledge_retrieval_items(source_id);
+create index if not exists idx_knowledge_retrieval_items_chunk on knowledge_retrieval_items(chunk_id);
+create index if not exists idx_knowledge_retrieval_items_rank on knowledge_retrieval_items(retrieval_id, rank);
 """
 
 _MEMORY_FTS_COLUMNS = """

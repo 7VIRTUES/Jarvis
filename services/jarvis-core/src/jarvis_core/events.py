@@ -62,6 +62,7 @@ EVENT_TYPES = {
     "knowledge.disabled",
     "knowledge.enabled",
     "knowledge.deleted",
+    "knowledge.retrieved",
 }
 
 

@@ -332,7 +332,8 @@ class KnowledgeService:
             "sensitiveSources": row[6] or 0, "totalCharacters": row[7] or 0,
             "totalChunks": row[8] or 0, "fts5Available": available,
             "indexMode": "fts5" if available else "deterministic_fallback_available",
-            "automaticScanningEnabled": False, "agentRetrievalEnabled": False,
+            "automaticScanningEnabled": False, "agentRetrievalEnabled": True,
+            "retrievalRequiresExplicitOptIn": True, "automaticInjectionEnabled": False,
             "embeddingsEnabled": False, "localModelEnabled": False,
         }
 
