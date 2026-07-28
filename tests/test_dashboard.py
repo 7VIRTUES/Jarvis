@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 import jarvis_core.app as app_module
-from jarvis_core.dashboard import DashboardService
+from jarvis_core.dashboard import DashboardService, dashboard_html
 from jarvis_core.db import init_db
 
 
@@ -21,7 +21,7 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1D Batch 2"
+    assert summary["phase"]["current"] == "v0.1D Batch 3"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
@@ -47,7 +47,7 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
 
     assert settings["appName"] == "Jarvis PC Local"
     assert settings["phase"] == "v0.1D"
-    assert settings["currentSlice"] == "Memory Center dashboard and private-session UX"
+    assert settings["currentSlice"] == "deterministic memory retrieval and representative-agent pilot"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
@@ -331,7 +331,13 @@ def test_dashboard_reports_truthful_memory_capability_metadata(tmp_path, monkeyp
     assert settings["durableMemoryPersistenceImplemented"] is True
     assert settings["automaticMemorySavingEnabled"] is False
     assert settings["memoryApprovalRequired"] is True
-    assert settings["memoryAgentRetrievalImplemented"] is False
+    assert settings["memoryAgentRetrievalImplemented"] is True
+    assert settings["memoryRetrievalStatus"] == "implemented_pilot"
+    assert settings["memoryRetrievalMode"] == "fts5_with_deterministic_fallback"
+    assert settings["memoryAgentRetrievalPilotCount"] == 6
+    assert settings["memoryAgentRetrievalAllAgents"] is False
+    assert settings["embeddingsEnabled"] is False
+    assert settings["localGenerativeModelEnabled"] is False
     assert settings["privateSessionPersistenceImplemented"] is False
     assert settings["automaticLearningEnabled"] is False
     assert settings["memoryCenterEndpoint"] == "/memory"
@@ -355,7 +361,7 @@ def test_main_dashboard_has_memory_center_card_and_status_section(tmp_path, monk
     assert 'id="memory-center-refresh-button"' in page_text
     assert "Persistent local feature with explicit user actions only." in page_text
     assert "New memories remain pending and inactive until approved." in page_text
-    assert "Automatic response-agent retrieval is not yet enabled." in page_text
+    assert "Deterministic retrieval is opt-in for exactly six pilot agents." in page_text
     assert "fetch('/api/memory/summary')" in page_text
     assert "async function loadMemoryCenterSummary()" in page_text
     assert "function renderMemoryCenterSummary(summary)" in page_text
@@ -394,3 +400,17 @@ def test_existing_dashboard_boundaries_remain_unchanged_with_memory_center(tmp_p
     assert summary["capabilities"]["privateAlphaPackaging"] == "placeholder_only"
     assert summary["safety"]["connectorExecution"] is False
     assert summary["safety"]["paidApis"] is False
+
+
+def test_memory_and_backup_loaders_have_independent_top_level_javascript_scope():
+    page = dashboard_html()
+
+    assert page.count("async function loadMemoryCenterSummary() {") == 1
+    assert page.count("async function loadBackupReadiness() {") == 1
+    assert "async function loadBackupReadiness() {\n    async function loadMemoryCenterSummary() {" not in page
+    assert "async function loadBackupReadiness() {\n      const readiness = await fetch('/backup/readiness')" in page
+    assert "await loadMemoryCenterSummary();" in page
+    assert "await loadBackupReadiness();" in page
+    assert page.index("async function loadMemoryCenterSummary() {") < page.index("async function loadBackupReadiness() {")
+    assert "renderMemoryCenterSummary(summary);" in page
+    assert "renderBackupReadiness(readiness);" in page

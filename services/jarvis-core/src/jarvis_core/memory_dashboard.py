@@ -259,7 +259,7 @@ def memory_dashboard_html() -> str:
         <li>Only approved, unexpired memories can be active.</li>
         <li>Jarvis does not automatically save conversations.</li>
         <li>Jarvis does not automatically approve memory.</li>
-        <li>Response agents are not retrieving memory in this batch.</li>
+        <li>Memory retrieval is opt-in for exactly six representative pilot agents.</li>
         <li>Private-session state is temporary and page-local.</li>
         <li>Sensitive memories should be used sparingly.</li>
         <li>Obvious credentials and secrets are rejected before storage.</li>
@@ -297,15 +297,14 @@ def memory_dashboard_html() -> str:
       <h2 id="private-session-title">Private-session policy</h2>
       <label class="inline-check" for="private-session-toggle">
         <input id="private-session-toggle" type="checkbox" role="switch" aria-describedby="private-session-help">
-        <span><strong>Private session</strong> — block memory use in manual context previews from this page.</span>
+        <span><strong>Private session</strong> — block memory use in manual and ranked previews from this page.</span>
       </label>
       <p id="private-session-help" class="help">
         This temporary page-only switch does not delete or hide stored memories. Administrative review remains
-        available. Future memory-aware requests from this page can use this explicit state after Batch 3; it does
-        not affect unrelated pages today.
+        available, while ranked retrieval is blocked without audit records or events.
       </p>
       <div id="private-session-policy-status" class="status-line" aria-live="polite">
-        Private session is off. Manual context preview may return approved, unexpired matches.
+        Private session is off. Manual and ranked previews may return approved, unexpired matches.
       </div>
     </section>
 
@@ -685,6 +684,94 @@ def memory_dashboard_html() -> str:
         <ul id="context-preview-limitations"></ul>
       </div>
     </section>
+
+    <section aria-labelledby="ranked-retrieval-title">
+      <h2 id="ranked-retrieval-title">Ranked Retrieval Preview</h2>
+      <div class="status-line"><strong>No agent is invoked · No memory is modified · Explicit click only</strong></div>
+      <p>Search approved, unexpired, in-scope memories using FTS5 when available or the disclosed deterministic fallback.</p>
+      <form id="ranked-retrieval-form">
+        <div class="form-grid">
+          <div class="field full">
+            <label for="ranked-retrieval-query">Retrieval query</label>
+            <input id="ranked-retrieval-query" type="text" maxlength="1000" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="ranked-retrieval-project">Project name</label>
+            <input id="ranked-retrieval-project" type="text" maxlength="200" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="ranked-retrieval-agent">Agent ID</label>
+            <select id="ranked-retrieval-agent">
+              <option value="">No agent scope</option>
+              <option value="local_planning_agent">local_planning_agent</option>
+              <option value="local_drafting_agent">local_drafting_agent</option>
+              <option value="local_decision_agent">local_decision_agent</option>
+              <option value="local_career_agent">local_career_agent</option>
+              <option value="local_personal_knowledge_memory_organizer">local_personal_knowledge_memory_organizer</option>
+              <option value="local_life_dashboard_cross_agent_coordinator">local_life_dashboard_cross_agent_coordinator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ranked-retrieval-max-items">Maximum results</label>
+            <input id="ranked-retrieval-max-items" type="number" min="1" max="10" value="5" required>
+          </div>
+          <label class="inline-check" for="ranked-retrieval-sensitive">
+            <input id="ranked-retrieval-sensitive" type="checkbox">
+            <span>Include approved sensitive memories. These may contain personal information.</span>
+          </label>
+        </div>
+        <button id="ranked-retrieval-button" type="submit">Run ranked retrieval preview</button>
+      </form>
+      <div id="ranked-retrieval-loading" class="muted" hidden>Loading ranked retrieval preview...</div>
+      <div id="ranked-retrieval-error" class="empty-state" hidden></div>
+      <div id="ranked-retrieval-empty" class="empty-state">No ranked preview has been requested in this page session.</div>
+      <div id="ranked-retrieval-result" hidden>
+        <dl id="ranked-retrieval-metadata"></dl>
+        <div id="ranked-retrieval-items" class="list"></div>
+        <h3>Limitations</h3>
+        <ul id="ranked-retrieval-limitations"></ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="retrieval-audit-title">
+      <h2 id="retrieval-audit-title">Retrieval Audit History</h2>
+      <p class="muted">Redacted metadata only. Raw queries and historical memory content are not stored or displayed.</p>
+      <div class="filter-grid">
+        <div class="field">
+          <label for="retrieval-audit-agent">Pilot-agent filter</label>
+          <select id="retrieval-audit-agent">
+            <option value="">All agents and manual previews</option>
+            <option value="local_planning_agent">local_planning_agent</option>
+            <option value="local_drafting_agent">local_drafting_agent</option>
+            <option value="local_decision_agent">local_decision_agent</option>
+            <option value="local_career_agent">local_career_agent</option>
+            <option value="local_personal_knowledge_memory_organizer">local_personal_knowledge_memory_organizer</option>
+            <option value="local_life_dashboard_cross_agent_coordinator">local_life_dashboard_cross_agent_coordinator</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="retrieval-audit-purpose">Purpose</label>
+          <select id="retrieval-audit-purpose">
+            <option value="">all</option>
+            <option value="manual_preview">manual_preview</option>
+            <option value="agent_response">agent_response</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="retrieval-audit-page-size">Page size</label>
+          <select id="retrieval-audit-page-size"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="retrieval-audit-refresh" type="button">Refresh retrieval history</button>
+        <button id="retrieval-audit-previous" type="button" class="secondary">Previous page</button>
+        <button id="retrieval-audit-next" type="button" class="secondary">Next page</button>
+        <span id="retrieval-audit-range" class="muted">No retrieval history loaded.</span>
+      </div>
+      <div id="retrieval-audit-error" class="empty-state" hidden></div>
+      <div id="retrieval-audit-list" class="list"></div>
+      <div id="retrieval-audit-detail" class="row stack muted">Select a retrieval to inspect redacted ranked item metadata.</div>
+    </section>
   </main>
 
   <script>
@@ -693,6 +780,7 @@ def memory_dashboard_html() -> str:
     let currentRecords = [];
     let currentEvents = [];
     let currentOffset = 0;
+    let retrievalOffset = 0;
 
     const byId = (id) => document.getElementById(id);
 
@@ -1277,12 +1365,167 @@ def memory_dashboard_html() -> str:
     }
 
     function initializeMemoryCenter() {
+    async function submitRankedRetrieval(event) {
+      event.preventDefault();
+      if (!event.currentTarget.reportValidity()) return;
+      const button = byId("ranked-retrieval-button");
+      button.disabled = true;
+      setHidden("ranked-retrieval-loading", false);
+      setHidden("ranked-retrieval-error", true);
+      setHidden("ranked-retrieval-empty", true);
+      try {
+        const result = await requestJson("/api/memory/retrieval-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: byId("ranked-retrieval-query").value,
+            privateSession,
+            projectName: normalizedOrNull(byId("ranked-retrieval-project").value),
+            agentId: normalizedOrNull(byId("ranked-retrieval-agent").value),
+            includeSensitive: byId("ranked-retrieval-sensitive").checked,
+            maxItems: Number(byId("ranked-retrieval-max-items").value)
+          })
+        });
+        renderRankedRetrieval(result);
+        setHidden("ranked-retrieval-result", false);
+      } catch (error) {
+        byId("ranked-retrieval-error").textContent = error.message;
+        setHidden("ranked-retrieval-error", false);
+        setHidden("ranked-retrieval-result", true);
+      } finally {
+        setHidden("ranked-retrieval-loading", true);
+        button.disabled = false;
+      }
+    }
+
+    function renderRankedRetrieval(result) {
+      const metadata = byId("ranked-retrieval-metadata");
+      metadata.replaceChildren();
+      addDefinition(metadata, "Blocked", result.blocked ? "Yes" : "No");
+      addDefinition(metadata, "Block reason", result.blockReason);
+      addDefinition(metadata, "FTS5 available", result.fts5Available ? "Yes" : "No");
+      addDefinition(metadata, "Retrieval mode", result.retrievalMode);
+      addDefinition(metadata, "Retrieval ID", result.retrievalId);
+      addDefinition(metadata, "Normalized query", result.query);
+      addDefinition(metadata, "Query term count", String(result.queryTermCount));
+      addDefinition(metadata, "Candidates", String(result.candidateCount));
+      addDefinition(metadata, "Selected", String(result.selectedCount));
+      addDefinition(metadata, "No agent invoked", "Yes");
+      addDefinition(metadata, "Memory modified", "No");
+      const items = byId("ranked-retrieval-items");
+      items.replaceChildren();
+      (result.items || []).forEach((item) => {
+        const card = createElement("article", "preview-card");
+        card.append(
+          createElement("strong", "", `#${item.rank} ${item.memoryType} · ${scopeLabel(item)}`),
+          createElement("div", "content-full", item.content),
+          createElement("div", "muted", `Text score ${item.textScore} · scope ${item.scopePriority} · type ${item.memoryTypePriority} · confidence ${item.confidencePriority}`)
+        );
+        const reasons = createElement("ul");
+        (item.matchReasons || []).forEach((reason) => reasons.append(createElement("li", "", reason)));
+        card.append(createElement("strong", "", "Match reasons"), reasons);
+        items.append(card);
+      });
+      if (!(result.items || []).length) {
+        items.append(createElement("div", "empty-state", result.blocked ? "Private session blocked ranked retrieval and audit creation." : "No approved, unexpired memories matched the query and exact scope."));
+      }
+      const limitations = byId("ranked-retrieval-limitations");
+      limitations.replaceChildren();
+      (result.limitations || []).forEach((item) => limitations.append(createElement("li", "", item)));
+    }
+
+    async function loadRetrievalHistory() {
+      const limit = Number(byId("retrieval-audit-page-size").value);
+      const parameters = new URLSearchParams({ limit: String(limit), offset: String(retrievalOffset) });
+      const agentId = normalizedOrNull(byId("retrieval-audit-agent").value);
+      const purpose = normalizedOrNull(byId("retrieval-audit-purpose").value);
+      if (agentId) parameters.set("agentId", agentId);
+      if (purpose) parameters.set("purpose", purpose);
+      setHidden("retrieval-audit-error", true);
+      try {
+        const records = await requestJson(`/api/memory/retrievals?${parameters.toString()}`);
+        renderRetrievalHistory(records);
+        byId("retrieval-audit-range").textContent = records.length
+          ? `Showing ${retrievalOffset + 1}-${retrievalOffset + records.length}.`
+          : "No retrievals on this page.";
+        byId("retrieval-audit-previous").disabled = retrievalOffset === 0;
+        byId("retrieval-audit-next").disabled = records.length < limit;
+      } catch (error) {
+        byId("retrieval-audit-error").textContent = error.message;
+        setHidden("retrieval-audit-error", false);
+      }
+    }
+
+    function renderRetrievalHistory(records) {
+      const list = byId("retrieval-audit-list");
+      list.replaceChildren();
+      (records || []).forEach((record) => {
+        const card = createElement("article", "event-card");
+        const heading = createElement("strong", "", `${record.purpose} · ${record.retrievalMode}`);
+        const fields = createElement("dl");
+        addDefinition(fields, "Retrieval ID", record.retrievalId);
+        addDefinition(fields, "Agent", record.agentId);
+        addDefinition(fields, "Project", record.projectName);
+        addDefinition(fields, "Query hash", record.queryHash);
+        addDefinition(fields, "Query term count", String(record.queryTermCount));
+        addDefinition(fields, "Include sensitive", record.includeSensitive ? "Yes" : "No");
+        addDefinition(fields, "Candidate / selected", `${record.candidateCount} / ${record.selectedCount}`);
+        addDefinition(fields, "Timestamp", formatDate(record.createdAt));
+        const button = createElement("button", "secondary", "Inspect redacted detail");
+        button.type = "button";
+        button.addEventListener("click", () => loadRetrievalDetail(record.retrievalId));
+        card.append(heading, fields, button);
+        list.append(card);
+      });
+      if (!(records || []).length) list.append(createElement("div", "empty-state", "No retrieval audit records match the current filters."));
+    }
+
+    async function loadRetrievalDetail(retrievalId) {
+      const detail = byId("retrieval-audit-detail");
+      detail.replaceChildren(createElement("div", "muted", "Loading redacted retrieval detail..."));
+      try {
+        const record = await requestJson(`/api/memory/retrievals/${encodeURIComponent(retrievalId)}`);
+        renderRetrievalDetail(record);
+      } catch (error) {
+        detail.replaceChildren(createElement("div", "empty-state", error.message));
+      }
+    }
+
+    function renderRetrievalDetail(record) {
+      const detail = byId("retrieval-audit-detail");
+      detail.className = "row stack";
+      detail.replaceChildren(createElement("strong", "", "Redacted retrieval detail"));
+      const metadata = createElement("dl");
+      addDefinition(metadata, "Retrieval ID", record.retrievalId);
+      addDefinition(metadata, "Purpose", record.purpose);
+      addDefinition(metadata, "Agent", record.agentId);
+      addDefinition(metadata, "Project present", record.projectPresent ? "Yes" : "No");
+      addDefinition(metadata, "Project", record.projectName);
+      addDefinition(metadata, "Retrieval mode", record.retrievalMode);
+      addDefinition(metadata, "Query hash", record.queryHash);
+      addDefinition(metadata, "Query term count", String(record.queryTermCount));
+      addDefinition(metadata, "Include sensitive", record.includeSensitive ? "Yes" : "No");
+      addDefinition(metadata, "Candidate / selected", `${record.candidateCount} / ${record.selectedCount}`);
+      addDefinition(metadata, "Timestamp", formatDate(record.createdAt));
+      detail.append(metadata);
+      (record.items || []).forEach((item) => {
+        const itemCard = createElement("article", "preview-card");
+        itemCard.append(
+          createElement("strong", "", `#${item.rank} ${item.memoryId}`),
+          createElement("div", "muted", `${item.memoryType} · ${item.scopeType}`),
+          createElement("div", "muted", `Text score ${item.textScore} · scope ${item.scopePriority} · confidence ${item.confidencePriority}`)
+        );
+        detail.append(itemCard);
+      });
+      if (!(record.items || []).length) detail.append(createElement("div", "empty-state", "No selected item metadata was recorded."));
+    }
+
       byId("summary-refresh-button").addEventListener("click", loadSummary);
       byId("private-session-toggle").addEventListener("change", (event) => {
         privateSession = event.currentTarget.checked;
         byId("private-session-policy-status").textContent = privateSession
-          ? "Private session is on. Manual context preview will return zero memories; stored administrative records remain visible."
-          : "Private session is off. Manual context preview may return approved, unexpired matches.";
+          ? "Private session is on. Manual and ranked previews return zero memories; ranked retrieval creates no audit records or events."
+          : "Private session is off. Manual and ranked previews may return approved, unexpired matches.";
       });
       byId("proposal-content").addEventListener("input", () => updateCounter("proposal-content", "proposal-content-count"));
       byId("proposal-scope-type").addEventListener("change", () => updateScopeRequirement("proposal-scope-type", "proposal-scope-value"));
@@ -1357,6 +1600,21 @@ def memory_dashboard_html() -> str:
       byId("edit-cancel-button").addEventListener("click", () => setHidden("memory-edit-section", true));
       byId("event-history-refresh-button").addEventListener("click", loadEventHistory);
       byId("context-preview-form").addEventListener("submit", submitContextPreview);
+      byId("ranked-retrieval-form").addEventListener("submit", submitRankedRetrieval);
+      byId("retrieval-audit-refresh").addEventListener("click", () => {
+        retrievalOffset = 0;
+        loadRetrievalHistory();
+      });
+      byId("retrieval-audit-previous").addEventListener("click", () => {
+        retrievalOffset = Math.max(0, retrievalOffset - Number(byId("retrieval-audit-page-size").value));
+        loadRetrievalHistory();
+      });
+      byId("retrieval-audit-next").addEventListener("click", () => {
+        retrievalOffset += Number(byId("retrieval-audit-page-size").value);
+        loadRetrievalHistory();
+      });
+      byId("retrieval-audit-previous").disabled = true;
+      byId("retrieval-audit-next").disabled = true;
       updateScopeRequirement("proposal-scope-type", "proposal-scope-value");
       updateCounter("proposal-content", "proposal-content-count");
       Promise.all([loadSummary(), loadMemories()]);

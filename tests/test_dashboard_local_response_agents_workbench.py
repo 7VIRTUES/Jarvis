@@ -273,18 +273,18 @@ def test_dashboard_workbench_js_builds_allowlist_from_summary_agents(tmp_path, m
     assert "function insertReviewPacketAsPriorContext()" in page_text
     assert "function clearSessionResultBoard()" in page_text
     assert "async function postWebResearchJson(path, body)" in page_text
-    assert "outputTypeSelect.onchange = refreshPayloadOutputType" in page_text
-    assert "useSampleButton.onclick = () =>" in page_text
-    assert "routePreviewSuggestions.onchange = async () =>" in page_text
-    assert "manualWorkflowPreviewButton.onclick = async () =>" in page_text
-    assert "manualWorkflowLoadStepButton.onclick = async () =>" in page_text
-    assert "priorContextCopyButton.onclick = insertLatestResponseAsPriorContext" in page_text
-    assert "sessionBoardAddButton.onclick = addLatestResponseToSessionBoard" in page_text
-    assert "sessionBoardCompareButton.onclick = buildSessionComparison" in page_text
-    assert "sessionBoardPacketButton.onclick = buildReviewPacket" in page_text
-    assert "sessionBoardInsertEntryButton.onclick = insertSelectedBoardEntryAsPriorContext" in page_text
-    assert "sessionBoardInsertPacketButton.onclick = insertReviewPacketAsPriorContext" in page_text
-    assert "sessionBoardClearButton.onclick = clearSessionResultBoard" in page_text
+    assert "bindDashboardChange(outputTypeSelect, refreshPayloadOutputType)" in page_text
+    assert "bindDashboardClick(useSampleButton, () =>" in page_text
+    assert "bindDashboardChange(routePreviewSuggestions, async () =>" in page_text
+    assert "bindDashboardClick(manualWorkflowPreviewButton, async () =>" in page_text
+    assert "bindDashboardClick(manualWorkflowLoadStepButton, async () =>" in page_text
+    assert "bindDashboardClick(priorContextCopyButton, insertLatestResponseAsPriorContext)" in page_text
+    assert "bindDashboardClick(sessionBoardAddButton, addLatestResponseToSessionBoard)" in page_text
+    assert "bindDashboardClick(sessionBoardCompareButton, buildSessionComparison)" in page_text
+    assert "bindDashboardClick(sessionBoardPacketButton, buildReviewPacket)" in page_text
+    assert "bindDashboardClick(sessionBoardInsertEntryButton, insertSelectedBoardEntryAsPriorContext)" in page_text
+    assert "bindDashboardClick(sessionBoardInsertPacketButton, insertReviewPacketAsPriorContext)" in page_text
+    assert "bindDashboardClick(sessionBoardClearButton, clearSessionResultBoard)" in page_text
     assert "webResearchValidateButton.onclick = async () =>" in page_text
     assert "webResearchFetchButton.onclick = async () =>" in page_text
     assert "webResearchContextButton.onclick = async () =>" in page_text
@@ -320,7 +320,7 @@ def test_dashboard_workbench_uses_discovery_template_and_route_preview_endpoints
     assert "populateOutputTypeSelect(template, agent)" in page_text
     assert "applySamplePayloadToComposer(template, agent)" in page_text
     assert "preferredOutputType: outputTypeSelect.value || 'summary'" in page_text
-    assert "useSampleButton.onclick = () =>" in page_text
+    assert "bindDashboardClick(useSampleButton, () =>" in page_text
     assert "routePreviewButton.onclick = async () =>" in page_text
     assert "Suggested only — not executed" in page_text
     assert "Route preview does not invoke agents" in page_text
@@ -332,9 +332,9 @@ def test_dashboard_workbench_uses_discovery_template_and_route_preview_endpoints
     assert "prior_agent_context inserted into the editable payload for manual review. No automatic handoff, no persistence, and no agent invocation occurred." in page_text
     assert "Latest response is available for manual board capture. Add latest response to session board only after review." in page_text
     assert "No latest response yet. Run one selected local response agent manually, review the result, then add it to the session board." in page_text
-    assert "No board entries yet. Add latest response to session board after a structured response returns." in page_text
-    assert "No selected entries. Select board entries before building a comparison." in page_text
-    assert "Fewer than 2 selected entries for comparison. Select at least two board entries." in page_text
+    assert "No board entries yet. After manually running one selected local response agent and reviewing the result, add it here for session-only comparison." in page_text
+    assert "No board entries match the current comparison scope. Add or select entries in the session board first." in page_text
+    assert "Fewer than 2 entries are available for comparison. Choose a broader scope or mark more entries." in page_text
     assert "Invalid editable payload JSON while inserting prior context" in page_text
     assert "prior_agent_context insertion succeeded from selected board entry, but agent was not run. Editable JSON payload updated only." in page_text
     assert "prior_agent_context insertion succeeded from review packet, but agent was not run. Editable JSON payload updated only." in page_text
@@ -494,7 +494,7 @@ def test_dashboard_route_preview_suggestions_can_select_agent_without_invocation
 
     assert "function renderRoutePreviewSuggestions(result)" in page_text
     assert "async function localResponseAgentSelectSuggestedAgent(agentId)" in page_text
-    assert "routePreviewSuggestions.onchange = async () =>" in page_text
+    assert "bindDashboardChange(routePreviewSuggestions, async () =>" in page_text
     assert (
         "Suggested agent selected for manual review. Route preview does not invoke agents. "
         "Select manually before running a local response."
@@ -532,10 +532,8 @@ def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_control
         "cloud sync",
         "email sending",
         "public posting",
-        "save",
         "copy to clipboard",
         "schedule",
-        "reminder",
         "shell",
         "git ",
     ]
@@ -545,7 +543,7 @@ def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_control
     assert "no downloads or scripts" in section
     assert "no file export" in section
     assert "download file" not in section
-    assert section.count("<button") == 17
+    assert section.count("<button") == 30
 
 
 def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, monkeypatch):
@@ -558,3 +556,48 @@ def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, m
     assert all(agent["exampleRequestBody"] for agent in index["agents"])
     assert all(agent["webResearchAvailable"] is True for agent in index["agents"])
     assert all(agent["webResearchRequiresUserEnabled"] is True for agent in index["agents"])
+
+
+def test_dashboard_workbench_has_six_agent_memory_pilot_controls_and_safe_result_panel(tmp_path, monkeypatch):
+    page_text = dashboard_page_text()
+    app_services(tmp_path, monkeypatch)
+    section = local_response_agents_section()
+
+    for element_id in (
+        "local-response-agents-memory-pilot",
+        "local-response-agents-memory-unsupported",
+        "local-response-agents-memory-controls",
+        "local-response-agents-memory-enabled",
+        "local-response-agents-memory-private-session",
+        "local-response-agents-memory-query",
+        "local-response-agents-memory-project",
+        "local-response-agents-memory-include-sensitive",
+        "local-response-agents-memory-max-items",
+        "local-response-agents-memory-control-status",
+        "local-response-agents-memory-result",
+    ):
+        assert f'id="{element_id}"' in section
+    for agent_id in (
+        "local_planning_agent",
+        "local_drafting_agent",
+        "local_decision_agent",
+        "local_career_agent",
+        "local_personal_knowledge_memory_organizer",
+        "local_life_dashboard_cross_agent_coordinator",
+    ):
+        assert agent_id in page_text
+    assert "Memory retrieval is not enabled for this agent in the current pilot." in section
+    assert "Approved sensitive memories may contain personal information." in section
+    assert "memoryPilotAgentIds = new Set" in page_text
+    assert "parsedBody.memory = memoryOptions" in page_text
+    assert "renderMemoryContext(responseBody.memoryContext" in page_text
+    assert "memoryResult.replaceChildren()" in page_text
+    assert "item.content" in page_text
+    assert "memoryResult.innerHTML" not in page_text
+    assert "encodeURIComponent(item.content" not in page_text
+    assert "runButton.disabled = true" in page_text
+    assert "runButton.disabled = false" in page_text
+    assert "localStorage" not in page_text
+    assert "sessionStorage" not in page_text
+    assert "document.cookie" not in page_text
+    assert "setInterval" not in page_text

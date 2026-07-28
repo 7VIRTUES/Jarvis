@@ -68,7 +68,7 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1D Batch 2", "status": "Memory Center dashboard and private-session UX"},
+            "phase": {"current": "v0.1D Batch 3", "status": "deterministic memory retrieval and representative-agent pilot"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -163,7 +163,7 @@ class DashboardService:
             "productName": "Jarvis PC Local",
             "version": VERSION,
             "phase": "v0.1D",
-            "currentSlice": "Memory Center dashboard and private-session UX",
+            "currentSlice": "deterministic memory retrieval and representative-agent pilot",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -172,7 +172,15 @@ class DashboardService:
             "durableMemoryPersistenceImplemented": True,
             "automaticMemorySavingEnabled": False,
             "memoryApprovalRequired": True,
-            "memoryAgentRetrievalImplemented": False,
+            "memoryRetrievalStatus": "implemented_pilot",
+            "memoryRetrievalMode": "fts5_with_deterministic_fallback",
+            "memoryAgentRetrievalImplemented": True,
+            "memoryAgentRetrievalPilotCount": 6,
+            "memoryAgentRetrievalAllAgents": False,
+            "automaticMemoryApprovalEnabled": False,
+            "embeddingsEnabled": False,
+            "localGenerativeModelEnabled": False,
+            "automaticMemoryProposalEnabled": False,
             "privateSessionPersistenceImplemented": False,
             "automaticLearningEnabled": False,
             "memoryCenterEndpoint": "/memory",
@@ -824,7 +832,7 @@ def dashboard_html() -> str:
       <div id="memory-center-metrics" class="grid" aria-busy="true"></div>
       <div class="row">
         <strong>Persistent local feature with explicit user actions only.</strong>
-        <div class="muted">New memories remain pending and inactive until approved. Automatic response-agent retrieval is not yet enabled.</div>
+        <div class="muted">New memories remain pending and inactive until approved. Deterministic retrieval is opt-in for exactly six pilot agents.</div>
       </div>
       <div class="actions">
         <button id="memory-center-refresh-button" type="button">Refresh memory status</button>
@@ -1362,6 +1370,40 @@ def dashboard_html() -> str:
           </label>
         <div id="local-response-agents-payload-preview-status" class="muted">Editable JSON payload preview is filled from the selected template sample.</div>
         </div>
+        <div id="local-response-agents-memory-pilot" class="row stack">
+          <h3>Approved Memory Pilot</h3>
+          <div id="local-response-agents-memory-unsupported" class="muted">Memory retrieval is not enabled for this agent in the current pilot.</div>
+          <div id="local-response-agents-memory-controls" class="row stack" hidden>
+            <div class="muted">Explicit per-request retrieval for six pilot agents only. No automatic retrieval while typing and no memory is created or changed.</div>
+            <label>
+              <input id="local-response-agents-memory-enabled" type="checkbox">
+              Enable approved memory
+            </label>
+            <label>
+              <input id="local-response-agents-memory-private-session" type="checkbox">
+              Private session
+            </label>
+            <label>
+              Retrieval query
+              <input id="local-response-agents-memory-query" type="text" maxlength="1000" autocomplete="off">
+            </label>
+            <label>
+              Project name
+              <input id="local-response-agents-memory-project" type="text" maxlength="200" autocomplete="off">
+            </label>
+            <label>
+              <input id="local-response-agents-memory-include-sensitive" type="checkbox">
+              Include sensitive memories
+            </label>
+            <div class="muted">Approved sensitive memories may contain personal information. Include them only after explicit review.</div>
+            <label>
+              Maximum results
+              <input id="local-response-agents-memory-max-items" type="number" min="1" max="10" value="5">
+            </label>
+            <div id="local-response-agents-memory-control-status" class="muted">Approved memory is disabled by default.</div>
+          </div>
+        </div>
+
         <div id="local-response-agents-context-kit" class="row stack">
           <h3>Session-only Context Kit Builder</h3>
           <div><span class="pill">Session-only / not saved</span> <span class="pill">Manual insertion only</span> <span class="pill">No clipboard write</span></div>
@@ -1477,6 +1519,7 @@ def dashboard_html() -> str:
           <span class="pill">Non-persistent</span>
         </div>
         <div id="local-response-agents-structured-response" class="row stack muted">No structured local response-agent result yet.</div>
+        <div id="local-response-agents-memory-result" class="row stack muted">No memory retrieval result yet.</div>
         <div id="local-response-agents-latest-source-trace" class="row stack muted">No latest source-to-answer trace yet.</div>
         <pre id="local-response-agents-workbench-response">No local response-agent result yet.</pre>
         <div id="local-response-agents-session-result-board" class="row stack">
@@ -1877,7 +1920,6 @@ def dashboard_html() -> str:
         refreshButton.disabled = false;
       };
     }
-    async function loadBackupReadiness() {
     async function loadMemoryCenterSummary() {
       const status = document.getElementById('memory-center-status');
       const metrics = document.getElementById('memory-center-metrics');
@@ -1912,6 +1954,10 @@ def dashboard_html() -> str:
         disabled: counts.disabled || 0,
         rejected: counts.rejected || 0,
         expired: summary.expired || 0,
+        fts5Available: summary.fts5Available ? 'yes' : 'no',
+        retrievalMode: summary.retrievalMode || 'deterministic_fallback',
+        pilotAgents: summary.memoryAgentRetrievalPilotCount || 6,
+        recentRetrievals: summary.recentRetrievalCount || 0,
       };
       Object.entries(values).forEach(([label, value]) => {
         const card = document.createElement('div');
@@ -1932,6 +1978,7 @@ def dashboard_html() -> str:
         refreshButton.disabled = false;
       };
     }
+    async function loadBackupReadiness() {
       const readiness = await fetch('/backup/readiness').then((response) => response.json());
       document.getElementById('backup-readiness-status').textContent = JSON.stringify(readiness, null, 2);
       renderBackupReadiness(readiness);
@@ -2603,6 +2650,8 @@ def dashboard_html() -> str:
         'agent_id',
       ];
       const usedKeys = new Set(fields.flatMap((field) => [field, field.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())]));
+      usedKeys.add('memoryContext');
+      usedKeys.add('memory_context');
       const rows = fields
         .map((field) => [field, localResponseKnownValue(responseBody, field)])
         .filter(([, value]) => value !== undefined)
@@ -2764,6 +2813,17 @@ def dashboard_html() -> str:
       const status = document.getElementById('local-response-agents-workbench-status');
       const structuredResponse = document.getElementById('local-response-agents-structured-response');
       const responseOutput = document.getElementById('local-response-agents-workbench-response');
+      const memoryResult = document.getElementById('local-response-agents-memory-result');
+      const memoryControls = document.getElementById('local-response-agents-memory-controls');
+      const memoryUnsupported = document.getElementById('local-response-agents-memory-unsupported');
+      const memoryEnabled = document.getElementById('local-response-agents-memory-enabled');
+      const memoryPrivateSession = document.getElementById('local-response-agents-memory-private-session');
+      const memoryQuery = document.getElementById('local-response-agents-memory-query');
+      const memoryProject = document.getElementById('local-response-agents-memory-project');
+      const memoryIncludeSensitive = document.getElementById('local-response-agents-memory-include-sensitive');
+      const memoryMaxItems = document.getElementById('local-response-agents-memory-max-items');
+      const memoryControlStatus = document.getElementById('local-response-agents-memory-control-status');
+      const memoryPilotAgentIds = new Set(['local_planning_agent', 'local_drafting_agent', 'local_decision_agent', 'local_career_agent', 'local_personal_knowledge_memory_organizer', 'local_life_dashboard_cross_agent_coordinator']);
       const sessionBoardAddButton = document.getElementById('local-response-agents-session-board-add-button');
       const sessionBoardCompareButton = document.getElementById('local-response-agents-session-board-compare-button');
       const sessionBoardPacketButton = document.getElementById('local-response-agents-session-board-packet-button');
@@ -3033,6 +3093,97 @@ def dashboard_html() -> str:
         const index = Number(select.value || 0);
         return activeAgents[index] || null;
       }
+      function selectedAgentUsesMemoryPilot() {
+        return memoryPilotAgentIds.has(localResponseAgentId(selectedAgent()));
+      }
+      function updateMemoryPilotControls() {
+        const pilot = selectedAgentUsesMemoryPilot();
+        memoryControls.hidden = !pilot;
+        memoryUnsupported.hidden = pilot;
+        if (!pilot) {
+          memoryControlStatus.textContent = 'Memory retrieval is not enabled for this agent in the current pilot.';
+          return;
+        }
+        const privateBlocked = memoryPrivateSession.checked;
+        const enabled = memoryEnabled.checked;
+        memoryEnabled.disabled = privateBlocked;
+        [memoryQuery, memoryProject, memoryIncludeSensitive, memoryMaxItems].forEach((control) => {
+          control.disabled = privateBlocked || !enabled;
+        });
+        memoryControlStatus.textContent = privateBlocked
+          ? 'Private session is on. Memory retrieval will be blocked and no retrieval audit will be created.'
+          : enabled
+            ? 'Approved memory will be retrieved only when this agent request is submitted.'
+            : 'Approved memory is disabled by default.';
+      }
+      function memoryOptionsForSubmission() {
+        if (!selectedAgentUsesMemoryPilot()) {
+          return null;
+        }
+        return {
+          enabled: memoryEnabled.checked,
+          privateSession: memoryPrivateSession.checked,
+          query: memoryQuery.value.trim(),
+          projectName: memoryProject.value.trim() || null,
+          includeSensitive: memoryIncludeSensitive.checked,
+          maxItems: Number(memoryMaxItems.value || 5),
+        };
+      }
+      function memoryResultElement(tag, text, className = '') {
+        const element = document.createElement(tag);
+        if (className) {
+          element.className = className;
+        }
+        if (text !== undefined && text !== null) {
+          element.textContent = String(text);
+        }
+        return element;
+      }
+      function renderMemoryContext(memoryContext) {
+        memoryResult.replaceChildren();
+        if (!memoryContext) {
+          memoryResult.className = 'row stack muted';
+          memoryResult.append(memoryResultElement('div', 'No memory retrieval result yet.'));
+          return;
+        }
+        memoryResult.className = 'row stack';
+        memoryResult.append(memoryResultElement('strong', 'Memory context'));
+        const metadata = memoryResultElement('div', '', 'stack');
+        [
+          ['Requested', memoryContext.requested ? 'yes' : 'no'],
+          ['Used', memoryContext.used ? 'yes' : 'no'],
+          ['Blocked', memoryContext.blocked ? 'yes' : 'no'],
+          ['Block reason', memoryContext.blockReason || 'none'],
+          ['Retrieval mode', memoryContext.retrievalMode || 'not requested'],
+          ['Retrieval ID', memoryContext.retrievalId || 'not created'],
+          ['Selected count', memoryContext.selectedCount || 0],
+        ].forEach(([label, value]) => {
+          const row = memoryResultElement('div', 'muted');
+          row.append(memoryResultElement('strong', `${label}: `), document.createTextNode(String(value)));
+          metadata.append(row);
+        });
+        memoryResult.append(metadata);
+        const items = Array.isArray(memoryContext.items) ? memoryContext.items : [];
+        items.forEach((item) => {
+          const card = memoryResultElement('article', '', 'row stack');
+          card.append(
+            memoryResultElement('strong', `#${item.rank} ${item.memoryType} · ${item.scopeType}${item.scopeValue ? `:${item.scopeValue}` : ''}`),
+            memoryResultElement('div', item.content, 'content-full'),
+            memoryResultElement('div', `Mode score: ${item.textScore} · scope ${item.scopePriority} · type ${item.memoryTypePriority} · confidence ${item.confidencePriority}`, 'muted')
+          );
+          const reasons = memoryResultElement('ul');
+          (item.matchReasons || []).forEach((reason) => reasons.append(memoryResultElement('li', reason)));
+          card.append(memoryResultElement('strong', 'Match reasons'), reasons);
+          memoryResult.append(card);
+        });
+        if (!items.length) {
+          memoryResult.append(memoryResultElement('div', memoryContext.blocked ? 'Private session blocked memory retrieval.' : 'No approved memory was selected.', 'muted'));
+        }
+        const limitations = memoryResultElement('ul');
+        (memoryContext.limitations || []).forEach((limitation) => limitations.append(memoryResultElement('li', limitation)));
+        memoryResult.append(memoryResultElement('strong', 'Limitations'), limitations);
+      }
+
       function localResponseAgentSearchText(agent) {
         if (!agent) {
           return '';
@@ -5187,6 +5338,8 @@ def dashboard_html() -> str:
       }
       async function loadSelectedExample() {
         const agent = selectedAgent();
+        updateMemoryPilotControls();
+        renderMemoryContext(null);
         if (!agent) {
           endpointDisplay.textContent = 'No agent selected.';
           bodyInput.value = '{}';
@@ -5224,6 +5377,10 @@ def dashboard_html() -> str:
         updateReadinessUi();
       });
       bindDashboardChange(outputTypeSelect, refreshPayloadOutputType);
+      bindDashboardChange(memoryEnabled, updateMemoryPilotControls);
+      bindDashboardChange(memoryPrivateSession, updateMemoryPilotControls);
+      bindDashboardChange(memoryMaxItems, updateMemoryPilotControls);
+      bindDashboardInput(memoryQuery, updateMemoryPilotControls);
       bindDashboardInput(bodyInput, renderReviewedWebContextPreview);
       bindDashboardInput(commandSearch, renderCommandCenter);
       bindDashboardChange(commandCategory, renderCommandCenter);
@@ -5460,6 +5617,9 @@ def dashboard_html() -> str:
         }
       };
       runButton.onclick = async () => {
+        if (runButton.disabled) {
+          return;
+        }
         const agent = selectedAgent();
         const endpointPath = selectedEndpointPath(agent);
         if (!agent || !allowlistedEndpointPaths.has(endpointPath)) {
@@ -5484,8 +5644,14 @@ def dashboard_html() -> str:
           return;
         }
         parsedBody = localResponseAgentPayloadWithSelectedOutputType(parsedBody, outputTypeSelect.value || '');
+        const memoryOptions = memoryOptionsForSubmission();
+        if (memoryOptions) {
+          parsedBody.memory = memoryOptions;
+        }
+        runButton.disabled = true;
+        renderMemoryContext(null);
+        status.textContent = 'Loading the manually selected allowlisted local response-agent response.';
         bodyInput.value = JSON.stringify(parsedBody, null, 2);
-        status.textContent = 'Calling only the manually selected allowlisted local response-agent endpoint.';
         try {
           const response = await fetch(endpointPath, {
             method: 'POST',
@@ -5500,6 +5666,7 @@ def dashboard_html() -> str:
             responseBody = { rawResponse: responseText };
           }
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
+          renderMemoryContext(responseBody.memoryContext || responseBody.memory_context || null);
           if (response.ok) {
             latestLocalResponseBody = responseBody;
             latestLocalResponseAgent = agent;
@@ -5518,7 +5685,10 @@ def dashboard_html() -> str:
           latestLocalResponseAgent = null;
           status.textContent = `Backend error: ${error.message}`;
           responseOutput.textContent = '';
+          renderMemoryContext(null);
           renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);
+        } finally {
+          runButton.disabled = false;
         }
       };
       renderAgentOptions();

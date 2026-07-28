@@ -203,12 +203,57 @@ create table if not exists memory_events (
   created_at text not null
 );
 
+create table if not exists memory_retrievals (
+  retrieval_id text primary key,
+  purpose text not null,
+  agent_id text,
+  project_name text,
+  query_hash text not null,
+  query_term_count integer not null,
+  include_sensitive integer not null,
+  retrieval_mode text not null,
+  candidate_count integer not null,
+  selected_count integer not null,
+  created_at text not null
+);
+
+create table if not exists memory_retrieval_items (
+  retrieval_id text not null,
+  memory_id text not null,
+  memory_type text not null,
+  scope_type text not null,
+  rank integer not null,
+  text_score numeric not null,
+  scope_priority integer not null,
+  confidence_priority integer not null,
+  created_at text not null,
+  unique(retrieval_id, memory_id)
+);
+
 create index if not exists idx_memories_status on memories(status);
 create index if not exists idx_memories_memory_type on memories(memory_type);
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
 create index if not exists idx_memory_events_memory_date on memory_events(memory_id, created_at);
+create index if not exists idx_memory_retrievals_date on memory_retrievals(created_at);
+create index if not exists idx_memory_retrievals_agent_date on memory_retrievals(agent_id, created_at);
+create index if not exists idx_memory_retrievals_project_date on memory_retrievals(project_name, created_at);
+create index if not exists idx_memory_retrieval_items_memory on memory_retrieval_items(memory_id);
+create index if not exists idx_memory_retrieval_items_rank on memory_retrieval_items(retrieval_id, rank);
+"""
+
+_MEMORY_FTS_COLUMNS = """
+  memory_id unindexed,
+  content,
+  memory_type,
+  scope_type,
+  scope_value,
+  source_type,
+  source_agent_id,
+  source_reference,
+  proposal_reason,
+  tokenize = 'unicode61'
 """
 
 
@@ -221,6 +266,7 @@ def init_db(path: Path) -> sqlite3.Connection:
     _ensure_column(conn, "codex_executions", "check_plan", "text not null default '{}'")
     _ensure_column(conn, "codex_executions", "check_results", "text not null default '{}'")
     _ensure_column(conn, "codex_executions", "repair_results", "text not null default '{}'")
+    _initialize_memory_fts(conn)
     conn.commit()
     return conn
 
@@ -229,3 +275,70 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
     columns = {row[1] for row in conn.execute(f"pragma table_info({table})").fetchall()}
     if column not in columns:
         conn.execute(f"alter table {table} add column {column} {definition}")
+
+
+def _initialize_memory_fts(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute(f"create virtual table if not exists memory_fts using fts5({_MEMORY_FTS_COLUMNS})")
+        conn.executescript(
+            """
+            create trigger if not exists memories_fts_insert
+            after insert on memories begin
+              insert into memory_fts (
+                rowid, memory_id, content, memory_type, scope_type, scope_value,
+                source_type, source_agent_id, source_reference, proposal_reason
+              ) values (
+                new.rowid, new.memory_id, new.content, new.memory_type, new.scope_type,
+                coalesce(new.scope_value, ''), new.source_type,
+                coalesce(new.source_agent_id, ''), coalesce(new.source_reference, ''),
+                coalesce(new.proposal_reason, '')
+              );
+            end;
+
+            create trigger if not exists memories_fts_update
+            after update on memories begin
+              delete from memory_fts where rowid = old.rowid;
+              insert into memory_fts (
+                rowid, memory_id, content, memory_type, scope_type, scope_value,
+                source_type, source_agent_id, source_reference, proposal_reason
+              ) values (
+                new.rowid, new.memory_id, new.content, new.memory_type, new.scope_type,
+                coalesce(new.scope_value, ''), new.source_type,
+                coalesce(new.source_agent_id, ''), coalesce(new.source_reference, ''),
+                coalesce(new.proposal_reason, '')
+              );
+            end;
+
+            create trigger if not exists memories_fts_delete
+            after delete on memories begin
+              delete from memory_fts where rowid = old.rowid;
+            end;
+            """
+        )
+        conn.execute("delete from memory_fts")
+        conn.execute(
+            """
+            insert into memory_fts (
+              rowid, memory_id, content, memory_type, scope_type, scope_value,
+              source_type, source_agent_id, source_reference, proposal_reason
+            )
+            select
+              rowid, memory_id, content, memory_type, scope_type, coalesce(scope_value, ''),
+              source_type, coalesce(source_agent_id, ''), coalesce(source_reference, ''),
+              coalesce(proposal_reason, '')
+            from memories
+            """
+        )
+        return True
+    except sqlite3.OperationalError as exc:
+        if "fts5" not in str(exc).lower():
+            raise
+        return False
+
+
+def memory_fts5_available(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("select count(*) from memory_fts").fetchone()
+        return True
+    except sqlite3.OperationalError:
+        return False

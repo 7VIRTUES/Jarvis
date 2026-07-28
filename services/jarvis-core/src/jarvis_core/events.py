@@ -51,6 +51,7 @@ EVENT_TYPES = {
     "memory.disabled",
     "memory.enabled",
     "memory.deleted",
+    "memory.retrieved",
 }
 
 

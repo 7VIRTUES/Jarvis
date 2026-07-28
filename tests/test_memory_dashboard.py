@@ -39,7 +39,7 @@ def test_page_has_header_navigation_and_complete_safety_banner():
         "Only approved, unexpired memories can be active.",
         "does not automatically save conversations",
         "does not automatically approve memory",
-        "Response agents are not retrieving memory in this batch.",
+        "Memory retrieval is opt-in for exactly six representative pilot agents.",
         "Private-session state is temporary and page-local.",
         "Obvious credentials and secrets are rejected",
     ):
@@ -236,3 +236,42 @@ def test_page_has_no_automatic_agent_or_lifecycle_execution():
     assert 'addEventListener("submit", submitContextPreview)' in text
     assert "Promise.all([loadSummary(), loadMemories()])" in text
     assert "poll" not in text.lower()
+
+
+def test_ranked_preview_and_retrieval_audit_panels_are_explicit_and_redacted():
+    text = page_text()
+
+    assert "Ranked Retrieval Preview" in text
+    assert "Retrieval Audit History" in text
+    for element_id in (
+        "ranked-retrieval-form",
+        "ranked-retrieval-query",
+        "ranked-retrieval-project",
+        "ranked-retrieval-agent",
+        "ranked-retrieval-max-items",
+        "ranked-retrieval-sensitive",
+        "ranked-retrieval-button",
+        "ranked-retrieval-result",
+        "ranked-retrieval-items",
+        "retrieval-audit-agent",
+        "retrieval-audit-purpose",
+        "retrieval-audit-refresh",
+        "retrieval-audit-previous",
+        "retrieval-audit-next",
+        "retrieval-audit-list",
+        "retrieval-audit-detail",
+    ):
+        assert f'id="{element_id}"' in text
+    assert 'requestJson("/api/memory/retrieval-preview"' in text
+    assert 'requestJson(`/api/memory/retrievals?' in text
+    assert "No agent is invoked" in text
+    assert "No memory is modified" in text
+    assert "Raw queries and historical memory content are not stored or displayed." in text
+    assert 'addEventListener("submit", submitRankedRetrieval)' in text
+    assert "loadRetrievalHistory();" in text
+    assert "setInterval" not in text
+    assert "item.content" in text
+    assert "encodeURIComponent(item.content" not in text
+    assert ".innerHTML" not in text
+    assert "Promise.all([loadSummary(), loadMemories()])" in text
+    assert "Promise.all([loadSummary(), loadMemories(), loadRetrievalHistory()])" not in text

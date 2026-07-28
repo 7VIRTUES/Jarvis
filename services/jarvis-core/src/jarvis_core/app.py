@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,6 +68,11 @@ from .memory import (
     MemoryUseContext,
     MemoryValidationError,
 )
+from .memory_retrieval import (
+    MemoryRetrievalNotFoundError,
+    MemoryRetrievalRequest,
+    MemoryRetrievalService,
+)
 from .memory_dashboard import memory_dashboard_html
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -105,6 +110,11 @@ logger = JsonlLogger(DATA_ROOT / "logs")
 events = EventBus(conn, logger)
 projects = ProjectRegistry(conn, WORKSPACE_ROOT)
 memory_service = MemoryService(
+    conn,
+    events,
+    agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
+)
+memory_retrieval_service = MemoryRetrievalService(
     conn,
     events,
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
@@ -279,6 +289,16 @@ class MemoryContextPreviewInput(BaseModel):
     agentId: str | None = Field(default=None, max_length=200)
     limit: int = Field(default=50, ge=1, le=200)
 
+class MemoryRetrievalPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    privateSession: bool = False
+    projectName: str | None = Field(default=None, max_length=200)
+    agentId: str | None = Field(default=None, max_length=200)
+    includeSensitive: bool = False
+    maxItems: int = Field(default=5, ge=1, le=10)
+
 
 
 _MEMORY_EDIT_FIELD_MAP = {
@@ -436,6 +456,20 @@ class LocalResponseAgentInputBase(BaseModel):
     web_context: list[WebContextSourceInput] = Field(default_factory=list)
     prior_agent_context: PriorAgentContextInput | None = None
 
+class MemoryRetrievalOptionsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    privateSession: bool = False
+    query: str = ""
+    projectName: str | None = None
+    includeSensitive: bool = False
+    maxItems: int = Field(default=5, ge=1, le=10)
+
+
+class MemoryAwareResponseAgentInputBase(LocalResponseAgentInputBase):
+    memory: MemoryRetrievalOptionsInput | None = None
+
 
 class LocalResearchBriefInput(LocalResponseAgentInputBase):
     topic: str
@@ -451,7 +485,7 @@ class FileDataSummaryInput(LocalResponseAgentInputBase):
     projectName: str
 
 
-class LocalPlanningInput(LocalResponseAgentInputBase):
+class LocalPlanningInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     goal: str
@@ -463,7 +497,7 @@ class LocalPlanningInput(LocalResponseAgentInputBase):
     desiredOutputType: str = "project_plan"
 
 
-class LocalDraftingInput(LocalResponseAgentInputBase):
+class LocalDraftingInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     purpose: str
@@ -488,7 +522,7 @@ class LocalReviewInput(LocalResponseAgentInputBase):
     severity: str = "balanced"
 
 
-class LocalDecisionInput(LocalResponseAgentInputBase):
+class LocalDecisionInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     decision: str
@@ -731,7 +765,7 @@ class LocalHobbiesAdventureInput(LocalResponseAgentInputBase):
     constraintsOrNotes: str = ""
 
 
-class LocalPersonalKnowledgeMemoryOrganizerInput(LocalResponseAgentInputBase):
+class LocalPersonalKnowledgeMemoryOrganizerInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -749,7 +783,7 @@ class LocalPersonalKnowledgeMemoryOrganizerInput(LocalResponseAgentInputBase):
     constraintsOrNotes: str = ""
 
 
-class LocalLifeDashboardCoordinatorInput(LocalResponseAgentInputBase):
+class LocalLifeDashboardCoordinatorInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     request: str = ""
@@ -856,7 +890,7 @@ class LocalSchoolRoboticsInput(LocalResponseAgentInputBase):
     desiredOutputType: str = "school_brief"
 
 
-class LocalCareerInput(LocalResponseAgentInputBase):
+class LocalCareerInput(MemoryAwareResponseAgentInputBase):
     model_config = ConfigDict(extra="forbid")
 
     profileName: str = ""
@@ -1173,6 +1207,79 @@ def apply_prior_context_response_fields(
     return enriched
 
 
+_MEMORY_CONTEXT_LIMITATIONS = [
+    "Memory context is supplementary; the current request remains authoritative.",
+    "Retrieved memory may be outdated.",
+    "Review sensitive or consequential context before using it.",
+    "No model training occurred.",
+    "No memory was automatically created or changed.",
+]
+
+
+def _pilot_memory_context(
+    payload: MemoryAwareResponseAgentInputBase,
+    agent_id: str,
+) -> dict[str, object]:
+    options = payload.memory
+    if options is None or not options.enabled:
+        return {
+            "requested": False,
+            "used": False,
+            "blocked": False,
+            "blockReason": None,
+            "retrievalId": None,
+            "retrievalMode": None,
+            "projectName": options.projectName if options else None,
+            "includeSensitive": options.includeSensitive if options else False,
+            "selectedCount": 0,
+            "items": [],
+            "considerations": [],
+            "limitations": list(_MEMORY_CONTEXT_LIMITATIONS),
+        }
+    try:
+        retrieval = memory_retrieval_service.retrieve(
+            MemoryRetrievalRequest(
+                query=options.query,
+                agent_id=agent_id,
+                project_name=options.projectName,
+                private_session=options.privateSession,
+                include_sensitive=options.includeSensitive,
+                max_items=options.maxItems,
+                purpose="agent_response",
+                server_known_agent=True,
+            )
+        )
+    except MemoryValidationError as exc:
+        _raise_memory_http_error(exc)
+    items = list(retrieval["items"])
+    considerations = [
+        {
+            "memoryId": item["memoryId"],
+            "memoryType": item["memoryType"],
+            "content": item["content"],
+            "scopeType": item["scopeType"],
+            "scopeValue": item["scopeValue"],
+            "reason": "; ".join(item["matchReasons"]),
+        }
+        for item in items
+    ]
+    return {
+        "requested": True,
+        "used": bool(items) and not retrieval["blocked"],
+        "blocked": retrieval["blocked"],
+        "blockReason": retrieval["blockReason"],
+        "retrievalId": retrieval["retrievalId"],
+        "retrievalMode": retrieval["retrievalMode"],
+        "fts5Available": retrieval["fts5Available"],
+        "projectName": retrieval["projectName"],
+        "includeSensitive": retrieval["includeSensitive"],
+        "selectedCount": retrieval["selectedCount"],
+        "items": items,
+        "considerations": considerations,
+        "limitations": list(retrieval["limitations"]) + list(_MEMORY_CONTEXT_LIMITATIONS),
+    }
+
+
 def _local_response_with_web_context(response: dict[str, object], payload: LocalResponseAgentInputBase) -> dict[str, object]:
     agent_id, category = LOCAL_RESPONSE_AGENT_SOURCE_CONTEXT.get(payload.__class__.__name__, ("local_response_agent", "General"))
     source_response = apply_source_aware_response_fields(
@@ -1181,7 +1288,10 @@ def _local_response_with_web_context(response: dict[str, object], payload: Local
         category,
         [source.model_dump() for source in payload.web_context],
     )
-    return apply_prior_context_response_fields(source_response, payload.prior_agent_context)
+    enriched = apply_prior_context_response_fields(source_response, payload.prior_agent_context)
+    if isinstance(payload, MemoryAwareResponseAgentInputBase):
+        enriched["memoryContext"] = _pilot_memory_context(payload, agent_id)
+    return enriched
 
 
 @app.get("/health")
@@ -2375,6 +2485,8 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
 def _raise_memory_http_error(exc: Exception) -> None:
     if isinstance(exc, MemoryNotFoundError):
         raise HTTPException(status_code=404, detail="memory not found") from exc
+    if isinstance(exc, MemoryRetrievalNotFoundError):
+        raise HTTPException(status_code=404, detail="memory retrieval not found") from exc
     if isinstance(exc, MemoryConflictError):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if isinstance(exc, MemorySecretError):
@@ -2391,7 +2503,9 @@ def _raise_memory_http_error(exc: Exception) -> None:
 def memory_summary(
     _: None = Depends(require_dashboard_lan_access),
 ) -> dict[str, object]:
-    return memory_service.summary()
+    summary = memory_service.summary()
+    summary.update(memory_retrieval_service.status())
+    return summary
 
 
 
@@ -2433,6 +2547,59 @@ def preview_memory_context(
             "Retrieval integration is deferred to Batch 3.",
         ],
     }
+
+@app.post("/api/memory/retrieval-preview")
+def preview_memory_retrieval(
+    payload: MemoryRetrievalPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_retrieval_service.retrieve(
+            MemoryRetrievalRequest(
+                query=payload.query,
+                agent_id=payload.agentId,
+                project_name=payload.projectName,
+                private_session=payload.privateSession,
+                include_sensitive=payload.includeSensitive,
+                max_items=payload.maxItems,
+                purpose="manual_preview",
+            )
+        )
+    except MemoryValidationError as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.get("/api/memory/retrievals")
+def list_memory_retrievals(
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    agentId: str | None = None,
+    projectName: str | None = None,
+    purpose: str | None = None,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return memory_retrieval_service.list_retrievals(
+            limit=limit,
+            offset=offset,
+            agent_id=agentId,
+            project_name=projectName,
+            purpose=purpose,
+        )
+    except MemoryValidationError as exc:
+        _raise_memory_http_error(exc)
+
+
+@app.get("/api/memory/retrievals/{retrieval_id}")
+def get_memory_retrieval(
+    retrieval_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return memory_retrieval_service.get_retrieval(retrieval_id)
+    except (MemoryValidationError, MemoryRetrievalNotFoundError) as exc:
+        _raise_memory_http_error(exc)
+
 
 @app.get("/api/memories")
 def list_memories(
