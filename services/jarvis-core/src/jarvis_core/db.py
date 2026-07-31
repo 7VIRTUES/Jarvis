@@ -326,6 +326,69 @@ create table if not exists knowledge_retrieval_items (
   created_at text not null,
   unique(retrieval_id, chunk_id)
 );
+create table if not exists knowledge_embedding_settings (
+  settings_id text primary key,
+  enabled integer not null,
+  provider text not null,
+  model_name text,
+  active_profile_id text,
+  dimensions integer,
+  configured_at text,
+  updated_at text not null
+);
+
+create table if not exists knowledge_embedding_profiles (
+  profile_id text primary key,
+  provider text not null,
+  model_name text not null,
+  dimensions integer not null,
+  normalization text not null,
+  created_at text not null,
+  last_used_at text,
+  unique(provider, model_name, dimensions)
+);
+
+create table if not exists knowledge_chunk_embeddings (
+  profile_id text not null,
+  chunk_id text not null,
+  source_id text not null,
+  content_hash text not null,
+  dimensions integer not null,
+  vector blob not null,
+  created_at text not null,
+  updated_at text not null,
+  unique(profile_id, chunk_id)
+);
+
+create table if not exists knowledge_embedding_runs (
+  run_id text primary key,
+  operation text not null,
+  profile_id text,
+  provider text not null,
+  model_name text,
+  requested_chunk_count integer not null,
+  embedded_chunk_count integer not null,
+  skipped_chunk_count integer not null,
+  failed_chunk_count integer not null,
+  include_sensitive integer not null,
+  source_id text,
+  status text not null,
+  error_code text,
+  created_at text not null,
+  completed_at text
+);
+
+create table if not exists knowledge_retrieval_scores (
+  retrieval_id text not null,
+  chunk_id text not null,
+  profile_id text,
+  lexical_rank integer,
+  semantic_rank integer,
+  semantic_score real,
+  hybrid_score real,
+  created_at text not null,
+  unique(retrieval_id, chunk_id)
+);
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
@@ -357,6 +420,20 @@ create index if not exists idx_knowledge_retrievals_purpose_date on knowledge_re
 create index if not exists idx_knowledge_retrieval_items_source on knowledge_retrieval_items(source_id);
 create index if not exists idx_knowledge_retrieval_items_chunk on knowledge_retrieval_items(chunk_id);
 create index if not exists idx_knowledge_retrieval_items_rank on knowledge_retrieval_items(retrieval_id, rank);
+create index if not exists idx_knowledge_embedding_settings_profile on knowledge_embedding_settings(active_profile_id);
+create index if not exists idx_knowledge_chunk_embeddings_chunk on knowledge_chunk_embeddings(chunk_id);
+create index if not exists idx_knowledge_chunk_embeddings_source on knowledge_chunk_embeddings(source_id);
+create index if not exists idx_knowledge_chunk_embeddings_hash on knowledge_chunk_embeddings(content_hash);
+create index if not exists idx_knowledge_chunk_embeddings_profile_source on knowledge_chunk_embeddings(profile_id, source_id);
+create index if not exists idx_knowledge_embedding_runs_date on knowledge_embedding_runs(created_at);
+create index if not exists idx_knowledge_embedding_runs_status on knowledge_embedding_runs(status);
+create index if not exists idx_knowledge_retrieval_scores_retrieval on knowledge_retrieval_scores(retrieval_id);
+create index if not exists idx_knowledge_retrieval_scores_chunk on knowledge_retrieval_scores(chunk_id);
+
+create trigger if not exists knowledge_chunk_embeddings_delete
+after delete on knowledge_chunks begin
+  delete from knowledge_chunk_embeddings where chunk_id = old.chunk_id;
+end;
 """
 
 _MEMORY_FTS_COLUMNS = """
@@ -388,6 +465,14 @@ def init_db(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.executescript(SCHEMA)
+    conn.execute(
+        """
+        insert or ignore into knowledge_embedding_settings (
+          settings_id, enabled, provider, model_name, active_profile_id,
+          dimensions, configured_at, updated_at
+        ) values ('default', 0, 'ollama_local', null, null, null, null, current_timestamp)
+        """
+    )
     _ensure_column(conn, "codex_plans", "prompt_content", "text not null default ''")
     _ensure_column(conn, "codex_executions", "post_review", "text not null default '{}'")
     _ensure_column(conn, "codex_executions", "check_plan", "text not null default '{}'")

@@ -63,6 +63,10 @@ EVENT_TYPES = {
     "knowledge.enabled",
     "knowledge.deleted",
     "knowledge.retrieved",
+    "knowledge.embeddings.configured",
+    "knowledge.embeddings.disabled",
+    "knowledge.embeddings.built",
+    "knowledge.embeddings.cleared",
 }
 
 

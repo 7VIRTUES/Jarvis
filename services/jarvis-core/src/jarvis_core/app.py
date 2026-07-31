@@ -39,9 +39,11 @@ from .knowledge import (
     KnowledgeValidationError,
 )
 from .knowledge_dashboard import knowledge_dashboard_html
+from .knowledge_embeddings import KnowledgeEmbeddingError, KnowledgeEmbeddingService
 from .knowledge_retrieval import (
     KnowledgeRetrievalNotFoundError,
     KnowledgeRetrievalRequest,
+    KnowledgeSemanticUnavailableError,
     KnowledgeRetrievalService,
 )
 from .knowledge_ingestion import KnowledgeIngestionService
@@ -138,10 +140,12 @@ knowledge_service = KnowledgeService(
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
     project_exists=lambda project_name: projects.get_project(project_name) is not None,
 )
+knowledge_embedding_service = KnowledgeEmbeddingService(conn, events)
 knowledge_retrieval_service = KnowledgeRetrievalService(
     conn,
     events,
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
+    embedding_service=knowledge_embedding_service,
 )
 knowledge_ingestion = KnowledgeIngestionService(knowledge_service, projects, WORKSPACE_ROOT)
 memory_service = MemoryService(
@@ -459,7 +463,52 @@ class KnowledgeRetrievalPreviewInput(BaseModel):
     agentId: str | None = Field(default=None, max_length=200)
     includeSensitive: bool = False
     maxItems: int = Field(default=5, ge=1, le=10)
+    mode: Literal["lexical", "semantic", "hybrid"] = "lexical"
 
+class KnowledgeEmbeddingProbeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    modelName: str = Field(min_length=1, max_length=120)
+    privateSession: bool = False
+
+
+class KnowledgeEmbeddingConfigureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    modelName: str = Field(min_length=1, max_length=120)
+    confirmation: Literal["ENABLE EMBEDDINGS"]
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class KnowledgeEmbeddingDisableInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: Literal["DISABLE EMBEDDINGS"]
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class KnowledgeEmbeddingClearInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Literal["active_profile", "source", "all_profiles"]
+    sourceId: str | None = Field(default=None, max_length=200)
+    confirmation: Literal["DELETE EMBEDDINGS"]
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class KnowledgeEmbeddingRebuildPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sourceId: str | None = Field(default=None, max_length=200)
+    includeSensitive: bool = False
+    onlyMissing: bool = True
+    limit: int = Field(default=32, ge=1, le=64)
+    cursor: str | None = Field(default=None, max_length=1000)
+
+
+class KnowledgeEmbeddingRebuildInput(KnowledgeEmbeddingRebuildPreviewInput):
+    confirmation: Literal["EMBED"]
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 _MEMORY_EDIT_FIELD_MAP = {
     "memoryType": "memory_type",
@@ -632,6 +681,7 @@ class KnowledgeRetrievalOptionsInput(BaseModel):
     projectName: str | None = Field(default=None, max_length=200)
     includeSensitive: bool = False
     maxItems: int = Field(default=5, ge=1, le=10)
+    mode: Literal["lexical", "semantic", "hybrid"] = "lexical"
 
 
 class MemoryProposalSuggestionOptionsInput(BaseModel):
@@ -1493,10 +1543,8 @@ _KNOWLEDGE_CONTEXT_LIMITATIONS = [
     "Sensitive or consequential material requires review.",
     "No source was modified.",
     "No model training occurred.",
-    "No embeddings were used.",
     "No original project file was opened during retrieval.",
 ]
-
 
 def _knowledge_context(
     payload: LocalResponseAgentInputBase,
@@ -1529,9 +1577,10 @@ def _knowledge_context(
                 max_items=options.maxItems,
                 purpose="agent_response",
                 server_known_agent=True,
+                mode=options.mode,
             )
         )
-    except KnowledgeValidationError as exc:
+    except (KnowledgeValidationError, KnowledgeSemanticUnavailableError) as exc:
         _raise_knowledge_http_error(exc)
     items = list(retrieval["items"])
     considerations = [
@@ -1571,6 +1620,10 @@ def _local_context_summary(
         "knowledgeRequested": bool(knowledge_context.get("requested")),
         "knowledgeUsed": bool(knowledge_context.get("used")),
         "knowledgeRetrievalId": knowledge_context.get("retrievalId"),
+        "knowledgeRequestedMode": knowledge_context.get("requestedMode"),
+        "knowledgeRetrievalMode": knowledge_context.get("retrievalMode"),
+        "knowledgeSemanticUsed": bool(knowledge_context.get("semanticUsed")),
+        "knowledgeEmbeddingModel": knowledge_context.get("embeddingModel") if knowledge_context.get("semanticUsed") else None,
         "knowledgeChunkCount": int(knowledge_context.get("selectedChunkCount") or 0),
         "knowledgeSourceCount": int(knowledge_context.get("selectedSourceCount") or 0),
         "currentRequestAuthoritative": True,
@@ -2866,6 +2919,14 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
 
 
 def _raise_knowledge_http_error(exc: Exception) -> None:
+    if isinstance(exc, KnowledgeSemanticUnavailableError):
+        raise HTTPException(status_code=503, detail=f"semantic retrieval unavailable: {exc.code}") from exc
+    if isinstance(exc, KnowledgeEmbeddingError):
+        provider_codes = {"provider_unavailable", "model_unavailable", "provider_timeout",
+                          "provider_redirect_blocked", "invalid_provider_response",
+                          "embedding_dimension_mismatch", "embedding_input_too_large"}
+        status_code = 503 if exc.code in provider_codes else 409 if exc.code == "provider_disabled" else 422
+        raise HTTPException(status_code=status_code, detail=f"knowledge embedding error: {exc.code}") from exc
     if isinstance(exc, KnowledgeRetrievalNotFoundError):
         raise HTTPException(status_code=404, detail="knowledge retrieval not found") from exc
     if isinstance(exc, KnowledgeNotFoundError):
@@ -2886,8 +2947,94 @@ def _raise_knowledge_http_error(exc: Exception) -> None:
 def knowledge_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     summary = knowledge_service.summary()
     summary.update(knowledge_retrieval_service.status())
+    summary.update(knowledge_embedding_service.status())
     return summary
 
+
+@app.get("/api/knowledge/embeddings/status")
+def knowledge_embedding_status(
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return knowledge_embedding_service.status()
+
+
+@app.post("/api/knowledge/embeddings/probe")
+def probe_knowledge_embeddings(
+    payload: KnowledgeEmbeddingProbeInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.probe(
+            payload.modelName, private_session=payload.privateSession
+        )
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/embeddings/configure")
+def configure_knowledge_embeddings(
+    payload: KnowledgeEmbeddingConfigureInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.configure(
+            payload.modelName, payload.confirmation, payload.actor
+        )
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/embeddings/disable")
+def disable_knowledge_embeddings(
+    payload: KnowledgeEmbeddingDisableInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.disable(payload.confirmation, payload.actor)
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/embeddings/clear")
+def clear_knowledge_embeddings(
+    payload: KnowledgeEmbeddingClearInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.clear(
+            payload.scope, payload.sourceId, payload.confirmation, payload.actor
+        )
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/embeddings/rebuild-preview")
+def preview_knowledge_embedding_rebuild(
+    payload: KnowledgeEmbeddingRebuildPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.rebuild_preview(
+            source_id=payload.sourceId, include_sensitive=payload.includeSensitive,
+            only_missing=payload.onlyMissing, limit=payload.limit, cursor=payload.cursor,
+        )
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
+
+
+@app.post("/api/knowledge/embeddings/rebuild")
+def rebuild_knowledge_embeddings(
+    payload: KnowledgeEmbeddingRebuildInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return knowledge_embedding_service.rebuild(
+            source_id=payload.sourceId, include_sensitive=payload.includeSensitive,
+            only_missing=payload.onlyMissing, limit=payload.limit, cursor=payload.cursor,
+            confirmation=payload.confirmation, actor=payload.actor,
+        )
+    except KnowledgeEmbeddingError as exc:
+        _raise_knowledge_http_error(exc)
 
 @app.post("/api/knowledge/retrieval-preview")
 def preview_knowledge_retrieval(
@@ -2904,9 +3051,10 @@ def preview_knowledge_retrieval(
                 include_sensitive=payload.includeSensitive,
                 max_items=payload.maxItems,
                 purpose="manual_preview",
+                mode=payload.mode,
             )
         )
-    except KnowledgeValidationError as exc:
+    except (KnowledgeValidationError, KnowledgeSemanticUnavailableError) as exc:
         _raise_knowledge_http_error(exc)
 
 

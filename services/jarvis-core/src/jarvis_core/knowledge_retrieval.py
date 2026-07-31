@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -11,11 +12,17 @@ from uuid import uuid4
 from .db import knowledge_fts5_available
 from .events import EventBus
 from .knowledge import KnowledgeValidationError
+from .knowledge_embeddings import (
+    KnowledgeEmbeddingError,
+    KnowledgeEmbeddingService,
+    SEMANTIC_CANDIDATE_LIMIT,
+)
 from .time_utils import utc_now
 
 
 PURPOSES = frozenset({"manual_preview", "agent_response"})
-RETRIEVAL_MODES = frozenset({"fts5", "deterministic_fallback"})
+RETRIEVAL_MODES = frozenset({"fts5", "deterministic_fallback", "semantic", "hybrid", "lexical_fallback"})
+REQUESTED_MODES = frozenset({"lexical", "semantic", "hybrid"})
 MAX_QUERY_LENGTH = 1_000
 MAX_QUERY_TERMS = 24
 MAX_TERM_LENGTH = 64
@@ -23,6 +30,10 @@ MAX_ITEMS = 10
 MAX_HISTORY_LIMIT = 100
 FALLBACK_CANDIDATE_LIMIT = 5_000
 MAX_CHUNKS_PER_SOURCE = 3
+HYBRID_POOL_LIMIT = 100
+RRF_K = 60
+LEXICAL_WEIGHT = 0.55
+SEMANTIC_WEIGHT = 0.45
 _TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
 _ROW_COLUMNS = (
     "chunk_id",
@@ -54,6 +65,12 @@ class KnowledgeRetrievalNotFoundError(KeyError):
     pass
 
 
+class KnowledgeSemanticUnavailableError(RuntimeError):
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class KnowledgeRetrievalRequest:
     query: str
@@ -64,6 +81,7 @@ class KnowledgeRetrievalRequest:
     max_items: int = 5
     purpose: str = "manual_preview"
     server_known_agent: bool = False
+    mode: str = "lexical"
 
 
 @dataclass(frozen=True)
@@ -76,6 +94,7 @@ class _NormalizedRequest:
     include_sensitive: bool
     max_items: int
     purpose: str
+    mode: str
 
 
 class KnowledgeRetrievalService:
@@ -88,11 +107,13 @@ class KnowledgeRetrievalService:
         *,
         agent_exists: Callable[[str], bool] | None = None,
         fts5_available: bool | None = None,
+        embedding_service: KnowledgeEmbeddingService | None = None,
     ):
         self.conn = conn
         self.event_bus = event_bus
         self.agent_exists = agent_exists
         self._fts5_override = fts5_available
+        self.embedding_service = embedding_service
 
     @property
     def fts5_available(self) -> bool:
@@ -112,8 +133,13 @@ class KnowledgeRetrievalService:
             "fts5Available": self.fts5_available,
             "retrievalMode": self.retrieval_mode,
             "recentRetrievalCount": retrieval_count,
-            "knowledgeRetrievalStatus": "implemented_all_response_agents",
-            "knowledgeRetrievalMode": "fts5_with_deterministic_fallback",
+            "knowledgeRetrievalStatus": "lexical_semantic_hybrid",
+            "knowledgeRetrievalMode": "lexical_semantic_hybrid",
+            "knowledgeLexicalRetrievalEnabled": True,
+            "knowledgeSemanticRetrievalImplemented": True,
+            "knowledgeSemanticRetrievalEnabledByDefault": False,
+            "knowledgeHybridRetrievalImplemented": True,
+            "knowledgeHybridRetrievalEnabledByDefault": False,
             "knowledgeRetrievalAuditImplemented": True,
             "knowledgeAgentRetrievalEnabled": True,
             "knowledgeAgentRetrievalAgentCount": 37,
@@ -127,42 +153,187 @@ class KnowledgeRetrievalService:
     def retrieve(self, request: KnowledgeRetrievalRequest) -> dict[str, Any]:
         normalized = self._normalize_request(request)
         retrieved_at = utc_now()
-        mode = self.retrieval_mode
         if normalized.private_session:
             return self._result(
-                normalized,
-                blocked=True,
-                block_reason="private_session",
-                retrieval_id=None,
-                retrieved_at=retrieved_at,
-                mode=mode,
-                candidates=[],
-                items=[],
+                normalized, blocked=True, block_reason="private_session", retrieval_id=None,
+                retrieved_at=retrieved_at, mode=self.retrieval_mode, candidates=[], items=[],
                 candidate_limit_reached=False,
             )
+        if normalized.mode == "semantic":
+            return self._retrieve_semantic(normalized, retrieved_at)
+        if normalized.mode == "hybrid":
+            return self._retrieve_hybrid(normalized, retrieved_at)
+        return self._retrieve_lexical(normalized, retrieved_at)
 
-        if mode == "fts5":
-            candidates = self._fts_candidates(normalized)
-            candidate_limit_reached = False
-        else:
-            candidates, candidate_limit_reached = self._fallback_candidates(normalized)
-        ranked = self._rank(candidates)
-        selected = self._select_diverse(ranked, normalized.max_items)
+    def _retrieve_lexical(self, request: _NormalizedRequest, retrieved_at: str,
+                          *, actual_mode: str | None = None,
+                          limitations: list[str] | None = None) -> dict[str, Any]:
+        lexical_mode, ranked, candidate_limit_reached = self._lexical_ranked(request)
+        for rank, candidate in enumerate(ranked, 1):
+            candidate["lexical_rank"] = rank
+        selected = self._select_diverse(ranked, request.max_items)
         items = self._serialize_items(selected)
         retrieval_id = str(uuid4())
-        self._audit(normalized, retrieval_id, retrieved_at, mode, candidates, items)
+        mode = actual_mode or lexical_mode
+        self._audit(request, retrieval_id, retrieved_at, mode, ranked, items)
         return self._result(
-            normalized,
-            blocked=False,
-            block_reason=None,
-            retrieval_id=retrieval_id,
-            retrieved_at=retrieved_at,
-            mode=mode,
-            candidates=candidates,
-            items=items,
+            request, blocked=False, block_reason=None, retrieval_id=retrieval_id,
+            retrieved_at=retrieved_at, mode=mode, candidates=ranked, items=items,
             candidate_limit_reached=candidate_limit_reached,
+            additional_limitations=limitations or [], lexical_candidate_count=len(ranked),
         )
 
+    def _retrieve_semantic(self, request: _NormalizedRequest,
+                           retrieved_at: str) -> dict[str, Any]:
+        try:
+            ranked, metadata = self._semantic_ranked(request)
+        except KnowledgeEmbeddingError as exc:
+            raise KnowledgeSemanticUnavailableError(exc.code) from None
+        selected = self._select_diverse(ranked, request.max_items)
+        items = self._serialize_items(selected)
+        retrieval_id = str(uuid4())
+        self._audit(request, retrieval_id, retrieved_at, "semantic", ranked, items,
+                    profile_id=metadata["profileId"])
+        return self._result(
+            request, blocked=False, block_reason=None, retrieval_id=retrieval_id,
+            retrieved_at=retrieved_at, mode="semantic", candidates=ranked, items=items,
+            candidate_limit_reached=False, semantic_metadata=metadata,
+            semantic_candidate_count=len(ranked),
+            semantic_candidate_limit_reached=metadata["candidateLimitReached"],
+        )
+
+    def _retrieve_hybrid(self, request: _NormalizedRequest,
+                         retrieved_at: str) -> dict[str, Any]:
+        lexical_mode, lexical_ranked, candidate_limit_reached = self._lexical_ranked(request)
+        for rank, candidate in enumerate(lexical_ranked, 1):
+            candidate["lexical_rank"] = rank
+        lexical_pool = lexical_ranked[:HYBRID_POOL_LIMIT]
+        try:
+            semantic_ranked, metadata = self._semantic_ranked(request)
+        except KnowledgeEmbeddingError as exc:
+            limitation = ("Hybrid semantic capability was unavailable (" + exc.code +
+                          "); actual retrieval used lexical ranking only.")
+            return self._retrieve_lexical(
+                request, retrieved_at, actual_mode="lexical_fallback",
+                limitations=[limitation],
+            )
+        semantic_pool = semantic_ranked[:HYBRID_POOL_LIMIT]
+        union: dict[str, dict[str, Any]] = {}
+        for candidate in lexical_pool:
+            union[candidate["chunk_id"]] = dict(candidate)
+        for candidate in semantic_pool:
+            existing = union.get(candidate["chunk_id"])
+            if existing is None:
+                union[candidate["chunk_id"]] = dict(candidate)
+            else:
+                for key in ("semantic_rank", "semantic_score", "ranking_signals"):
+                    existing[key] = candidate.get(key)
+        for candidate in union.values():
+            lexical_rank = candidate.get("lexical_rank")
+            semantic_rank = candidate.get("semantic_rank")
+            candidate["hybrid_score"] = (
+                (LEXICAL_WEIGHT / (RRF_K + lexical_rank) if lexical_rank else 0.0)
+                + (SEMANTIC_WEIGHT / (RRF_K + semantic_rank) if semantic_rank else 0.0)
+            )
+            signals = list(candidate.get("ranking_signals") or [])
+            if lexical_rank:
+                signals.append(f"lexical reciprocal rank {lexical_rank}")
+            if semantic_rank:
+                signals.append(f"semantic reciprocal rank {semantic_rank}")
+            candidate["ranking_signals"] = signals
+        ranked = sorted(
+            union.values(),
+            key=lambda item: (
+                -item["hybrid_score"], -item["scope_priority"],
+                -(item.get("semantic_score") if item.get("semantic_score") is not None else -2.0),
+                item.get("lexical_rank") or 10**9, _DescendingText(item["updated_at"]),
+                item["chunk_index"], item["source_id"], item["chunk_id"],
+            ),
+        )
+        selected = self._select_diverse(ranked, request.max_items)
+        items = self._serialize_items(selected)
+        retrieval_id = str(uuid4())
+        self._audit(request, retrieval_id, retrieved_at, "hybrid", ranked, items,
+                    profile_id=metadata["profileId"])
+        return self._result(
+            request, blocked=False, block_reason=None, retrieval_id=retrieval_id,
+            retrieved_at=retrieved_at, mode="hybrid", candidates=ranked, items=items,
+            candidate_limit_reached=candidate_limit_reached,
+            semantic_metadata=metadata, lexical_candidate_count=len(lexical_ranked),
+            semantic_candidate_count=len(semantic_ranked),
+            semantic_candidate_limit_reached=metadata["candidateLimitReached"],
+        )
+
+    def _lexical_ranked(self, request: _NormalizedRequest) -> tuple[str, list[dict[str, Any]], bool]:
+        mode = self.retrieval_mode
+        if mode == "fts5":
+            candidates, limit_reached = self._fts_candidates(request), False
+        else:
+            candidates, limit_reached = self._fallback_candidates(request)
+        return mode, self._rank(candidates), limit_reached
+
+    def _semantic_ranked(self, request: _NormalizedRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        if self.embedding_service is None:
+            raise KnowledgeEmbeddingError("provider_disabled")
+        query = self.embedding_service.embed_query(request.query, private_session=False)
+        query_vector = query["vector"]
+        try:
+            records = self.embedding_service.current_semantic_candidates(
+                agent_id=request.agent_id, project_name=request.project_name,
+                include_sensitive=request.include_sensitive,
+                limit=SEMANTIC_CANDIDATE_LIMIT + 1,
+            )
+            limit_reached = len(records) > SEMANTIC_CANDIDATE_LIMIT
+            candidates: list[dict[str, Any]] = []
+            for record in records[:SEMANTIC_CANDIDATE_LIMIT]:
+                vector = record.pop("vector")
+                score = sum(left * right for left, right in zip(query_vector, vector, strict=True))
+                for index in range(len(vector)):
+                    vector[index] = 0.0
+                if not math.isfinite(score) or score < -1.000001 or score > 1.000001:
+                    continue
+                score = max(-1.0, min(1.0, score))
+                candidate = self._semantic_candidate(record, score, request)
+                candidates.append(candidate)
+            ranked = sorted(
+                candidates,
+                key=lambda item: (
+                    -item["semantic_score"], -item["scope_priority"],
+                    _DescendingText(item["updated_at"]), item["chunk_index"],
+                    item["source_id"], item["chunk_id"],
+                ),
+            )
+            for rank, candidate in enumerate(ranked, 1):
+                candidate["semantic_rank"] = rank
+            return ranked, {
+                "available": True, "used": True, "provider": query["provider"],
+                "model": query["model"], "profileId": query["profileId"],
+                "dimensions": query["dimensions"], "candidateLimitReached": limit_reached,
+            }
+        finally:
+            for index in range(len(query_vector)):
+                query_vector[index] = 0.0
+
+    def _semantic_candidate(self, record: dict[str, Any], score: float,
+                            request: _NormalizedRequest) -> dict[str, Any]:
+        candidate = dict(record)
+        candidate["scope_priority"] = self._scope_priority(candidate, request)
+        candidate["semantic_score"] = round(score, 8)
+        candidate["text_score"] = 0.0
+        candidate["matched_term_count"] = 0
+        candidate["match_reasons"] = [
+            "local semantic similarity rank",
+            "exact agent scope" if candidate["scope_priority"] == 3 else
+            "exact project scope" if candidate["scope_priority"] == 2 else "global scope",
+            "sensitive source explicitly included" if candidate["sensitivity"] == "sensitive"
+            else "standard source",
+        ]
+        candidate["ranking_signals"] = list(candidate["match_reasons"])
+        try:
+            candidate["tags_list"] = json.loads(candidate["tags"])
+        except (TypeError, json.JSONDecodeError):
+            candidate["tags_list"] = []
+        return candidate
     def list_retrievals(
         self,
         *,
@@ -226,10 +397,13 @@ class KnowledgeRetrievalService:
             select item.chunk_id, item.source_id, item.rank, item.text_score,
               item.scope_priority, item.source_rank, item.chunk_index, item.created_at,
               source.title, source.status, source.scope_type, source.scope_value,
-              source.sensitivity, chunk.chunk_id
+              source.sensitivity, chunk.chunk_id, score.profile_id, score.lexical_rank,
+              score.semantic_rank, score.semantic_score, score.hybrid_score
             from knowledge_retrieval_items as item
             left join knowledge_sources as source on source.source_id = item.source_id
             left join knowledge_chunks as chunk on chunk.chunk_id = item.chunk_id
+            left join knowledge_retrieval_scores as score on score.retrieval_id = item.retrieval_id
+              and score.chunk_id = item.chunk_id
             where item.retrieval_id = ?
             order by item.rank, item.source_id, item.chunk_id
             """,
@@ -252,6 +426,11 @@ class KnowledgeRetrievalService:
                 "currentScopeType": item[10],
                 "currentScopeValue": item[11],
                 "currentSensitivity": item[12],
+                "profileId": item[14],
+                "lexicalRank": item[15],
+                "semanticRank": item[16],
+                "semanticScore": item[17],
+                "hybridScore": item[18],
             }
             for item in item_rows
         ]
@@ -262,6 +441,8 @@ class KnowledgeRetrievalService:
             raise KnowledgeValidationError("unsupported retrieval purpose")
         if request.purpose == "agent_response" and not request.server_known_agent:
             raise KnowledgeValidationError("agent response retrieval requires a server-known agent ID")
+        if request.mode not in REQUESTED_MODES:
+            raise KnowledgeValidationError("unsupported requested retrieval mode")
         if not isinstance(request.query, str):
             raise KnowledgeValidationError("retrieval query must be text")
         query = " ".join(request.query.split())
@@ -293,6 +474,7 @@ class KnowledgeRetrievalService:
             include_sensitive=bool(request.include_sensitive),
             max_items=request.max_items,
             purpose=request.purpose,
+            mode=request.mode,
         )
 
     def _query_terms(self, value: str) -> tuple[str, ...]:
@@ -489,6 +671,11 @@ class KnowledgeRetrievalService:
                     "scopePriority": record["scope_priority"],
                     "matchedTermCount": record["matched_term_count"],
                     "matchReasons": list(record["match_reasons"]),
+                    "lexicalRank": record.get("lexical_rank"),
+                    "semanticRank": record.get("semantic_rank"),
+                    "semanticScore": record.get("semantic_score"),
+                    "hybridScore": record.get("hybrid_score"),
+                    "rankingSignals": list(record.get("ranking_signals") or record["match_reasons"]),
                     "sourceUpdatedAt": record["updated_at"],
                     "citationLabel": f"[K{rank}]",
                     "sourceRank": source_ranks[source_id],
@@ -509,63 +696,77 @@ class KnowledgeRetrievalService:
         candidates: list[dict[str, Any]],
         items: list[dict[str, Any]],
         candidate_limit_reached: bool,
+        semantic_metadata: dict[str, Any] | None = None,
+        lexical_candidate_count: int = 0,
+        semantic_candidate_count: int = 0,
+        semantic_candidate_limit_reached: bool = False,
+        additional_limitations: list[str] | None = None,
     ) -> dict[str, Any]:
         source_ids = {item["sourceId"] for item in items}
         diversity: list[dict[str, Any]] = []
-        for source_id in sorted(source_ids, key=lambda value: min(item["rank"] for item in items if item["sourceId"] == value)):
+        for source_id in sorted(
+            source_ids,
+            key=lambda value: min(item["rank"] for item in items if item["sourceId"] == value),
+        ):
             source_items = [item for item in items if item["sourceId"] == source_id]
-            diversity.append(
-                {
-                    "sourceId": source_id,
-                    "selectedChunkCount": len(source_items),
-                    "bestRank": min(item["rank"] for item in source_items),
-                }
-            )
+            diversity.append({"sourceId": source_id, "selectedChunkCount": len(source_items),
+                              "bestRank": min(item["rank"] for item in source_items)})
         limitations = [
             "Retrieval searched active stored SQLite chunks only.",
             "No knowledge source was modified.",
             "No original project file was opened during retrieval.",
             "No model training occurred.",
-            "No embeddings or vector database were used.",
             "No local generative model was used.",
         ]
+        if request.mode == "lexical":
+            limitations.append("Lexical retrieval did not contact an embedding provider.")
+        if mode in {"semantic", "hybrid"}:
+            limitations.extend([
+                "Semantic similarity does not prove correctness.",
+                "Embeddings were produced by a user-enabled local model.",
+                "No cloud model was contacted.",
+            ])
+        if mode == "hybrid":
+            limitations.append("Hybrid retrieval combined lexical and semantic rank signals.")
         if request.purpose == "manual_preview":
             limitations.append("No response agent was invoked.")
         if mode == "deterministic_fallback":
             limitations.append("SQLite FTS5 is unavailable; deterministic lexical ranking was used.")
         if candidate_limit_reached:
-            limitations.append(
-                "Deterministic fallback candidates were bounded at 5000 chunks; ranking is not exhaustive."
-            )
+            limitations.append("Deterministic fallback candidates were bounded at 5000 chunks; ranking is not exhaustive.")
+        if semantic_candidate_limit_reached:
+            limitations.append("Semantic candidates were bounded at 10000 current vectors; ranking is not exhaustive.")
         if blocked:
-            limitations.append(
-                "Private session blocked retrieval and auditing; stored sources were not deleted."
-            )
+            limitations.append("Private session blocked retrieval and auditing; stored sources were not deleted.")
+        limitations.extend(additional_limitations or [])
+        semantic = semantic_metadata or {}
+        capability = (self.embedding_service.capability()
+                      if self.embedding_service is not None and not blocked else {"available": False})
+        semantic_used = mode in {"semantic", "hybrid"} and bool(semantic.get("used"))
         return {
-            "requested": True,
-            "used": bool(items) and not blocked,
-            "blocked": blocked,
-            "blockReason": block_reason,
-            "retrievalId": retrieval_id,
-            "retrievedAt": retrieved_at,
-            "purpose": request.purpose,
-            "agentId": request.agent_id,
-            "projectName": request.project_name,
-            "privateSession": request.private_session,
+            "requested": True, "used": bool(items) and not blocked,
+            "blocked": blocked, "blockReason": block_reason,
+            "retrievalId": retrieval_id, "retrievedAt": retrieved_at,
+            "purpose": request.purpose, "agentId": request.agent_id,
+            "projectName": request.project_name, "privateSession": request.private_session,
             "includeSensitive": request.include_sensitive,
-            "fts5Available": mode == "fts5",
-            "retrievalMode": mode,
-            "querySource": "explicit",
-            "query": request.query,
+            "requestedMode": request.mode, "fts5Available": self.fts5_available,
+            "retrievalMode": mode, "semanticAvailable": bool(semantic.get("available", capability.get("available"))),
+            "semanticUsed": semantic_used,
+            "embeddingProvider": semantic.get("provider") if semantic_used else None,
+            "embeddingModel": semantic.get("model") if semantic_used else None,
+            "embeddingProfileId": semantic.get("profileId") if semantic_used else None,
+            "embeddingDimensions": semantic.get("dimensions") if semantic_used else None,
+            "querySource": "explicit", "query": request.query,
             "queryTermCount": len(request.terms),
             "candidateChunkCount": 0 if blocked else len(candidates),
             "candidateSourceCount": 0 if blocked else len({item["source_id"] for item in candidates}),
             "candidateLimitReached": candidate_limit_reached,
-            "selectedChunkCount": len(items),
-            "selectedSourceCount": len(source_ids),
-            "sourceDiversity": diversity,
-            "items": items,
-            "limitations": limitations,
+            "lexicalCandidateCount": 0 if blocked else lexical_candidate_count,
+            "semanticCandidateCount": 0 if blocked else semantic_candidate_count,
+            "semanticCandidateLimitReached": semantic_candidate_limit_reached,
+            "selectedChunkCount": len(items), "selectedSourceCount": len(source_ids),
+            "sourceDiversity": diversity, "items": items, "limitations": limitations,
         }
 
     def _audit(
@@ -576,6 +777,8 @@ class KnowledgeRetrievalService:
         mode: str,
         candidates: list[dict[str, Any]],
         items: list[dict[str, Any]],
+        *,
+        profile_id: str | None = None,
     ) -> None:
         query_hash = hashlib.sha256(request.query.encode("utf-8")).hexdigest()
         candidate_source_count = len({candidate["source_id"] for candidate in candidates})
@@ -619,6 +822,16 @@ class KnowledgeRetrievalService:
                         created_at,
                     ),
                 )
+                if (item.get("lexicalRank") is not None or item.get("semanticRank") is not None
+                        or item.get("hybridScore") is not None):
+                    self.conn.execute(
+                        "insert into knowledge_retrieval_scores "
+                        "(retrieval_id, chunk_id, profile_id, lexical_rank, semantic_rank, "
+                        "semantic_score, hybrid_score, created_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (retrieval_id, item["chunkId"], profile_id, item.get("lexicalRank"),
+                         item.get("semanticRank"), item.get("semanticScore"),
+                         item.get("hybridScore"), created_at),
+                    )
             for source_id in dict.fromkeys(item["sourceId"] for item in items):
                 source_items = [item for item in items if item["sourceId"] == source_id]
                 metadata = {
@@ -628,7 +841,9 @@ class KnowledgeRetrievalService:
                     "projectPresent": request.project_name is not None,
                     "queryHash": query_hash,
                     "queryTermCount": len(request.terms),
+                    "requestedMode": request.mode,
                     "retrievalMode": mode,
+                    "profileId": profile_id,
                     "candidateChunkCount": len(candidates),
                     "candidateSourceCount": candidate_source_count,
                     "selectedChunkCount": len(items),
@@ -657,7 +872,9 @@ class KnowledgeRetrievalService:
                     "projectPresent": request.project_name is not None,
                     "queryHash": query_hash,
                     "queryTermCount": len(request.terms),
+                    "requestedMode": request.mode,
                     "retrievalMode": mode,
+                    "profileId": profile_id,
                     "candidateChunkCount": len(candidates),
                     "candidateSourceCount": candidate_source_count,
                     "selectedChunkCount": len(items),
