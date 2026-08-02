@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote
 
 from . import APP_NAME, VERSION
@@ -33,12 +33,20 @@ from .validation_agent import ValidationAgentService
 
 
 class DashboardService:
-    def __init__(self, conn: sqlite3.Connection, workspace_root: Path, data_root: Path, connector_root: Path):
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        workspace_root: Path,
+        data_root: Path,
+        connector_root: Path,
+        generation_status: Callable[[], dict[str, Any]] | None = None,
+    ):
         self.conn = conn
         self.workspace_root = workspace_root
         self.data_root = data_root
         self.connector_root = connector_root
         self.reports_root = data_root / "reports"
+        self.generation_status = generation_status
 
     def summary(self) -> dict[str, Any]:
         reports = self.list_reports()
@@ -66,9 +74,10 @@ class DashboardService:
         local_classification = self.local_classification_agent_summary()
         local_transformation = self.local_transformation_agent_summary()
         local_response_agents_index = self.local_response_agents_index_summary()
+        local_generation = self.local_generation_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1E Batch 3", "status": "local semantic embeddings and hybrid knowledge retrieval"},
+            "phase": {"current": "v0.1E Batch 4", "status": "controlled local generation and prompt assembly"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -100,6 +109,8 @@ class DashboardService:
                 "localResponseAgentsIndex": "read_only_index",
                 "memoryCenter": "explicit_user_controlled_persistence",
                 "knowledgeLibrary": "implemented_with_optional_local_embeddings",
+                "localGeneration": "implemented_disabled_by_default",
+                "modelsCenter": "/models",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -110,6 +121,7 @@ class DashboardService:
                 "codexPlans": self._count("codex_plans"),
                 "codexExecutions": self._count("codex_executions"),
                 "validationRuns": self._count("validation_runs"),
+                "localGenerationRuns": self._count("local_generation_runs"),
                 "reports": len(reports),
                 "connectors": len(connectors),
             },
@@ -151,6 +163,7 @@ class DashboardService:
             "localClassificationAgent": local_classification,
             "localTransformationAgent": local_transformation,
             "localResponseAgentsIndex": local_response_agents_index,
+            "localGeneration": local_generation,
             "activeTasks": self.active_tasks(),
             "lanProtection": lan_protection_status(),
             "lanSetup": lan_setup_status(),
@@ -163,12 +176,20 @@ class DashboardService:
             "select enabled from knowledge_embedding_settings where settings_id = 'default'"
         ).fetchone()
         embeddings_enabled = bool(embedding_row and embedding_row[0])
+        generation_row = self.conn.execute(
+            """
+            select enabled, provider, model_name, active_profile_id, context_char_limit,
+              max_output_chars, default_temperature, keep_alive_seconds
+            from local_generation_settings where settings_id = 'default'
+            """
+        ).fetchone()
+        generation_enabled = bool(generation_row and generation_row[0])
         return {
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1E Batch 3",
-            "currentSlice": "local semantic embeddings and hybrid knowledge retrieval",
+            "phase": "v0.1E Batch 4",
+            "currentSlice": "controlled local generation and prompt assembly",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -191,7 +212,42 @@ class DashboardService:
             "feedbackDerivedPreferenceApprovalAutomatic": False,
             "automaticMemoryApprovalEnabled": False,
             "embeddingsEnabled": embeddings_enabled,
-            "localGenerativeModelEnabled": False,
+            "localGenerativeModelEnabled": generation_enabled,
+            "localGenerationImplemented": True,
+            "localGenerationDisabledByDefault": True,
+            "localGenerationProvider": "ollama_local",
+            "localGenerationFixedLoopbackOnly": True,
+            "localGenerationExplicitConfiguration": True,
+            "localGenerationExplicitPerRequestUse": True,
+            "localGenerationAutomaticEnabled": False,
+            "localGenerationBackgroundEnabled": False,
+            "localGenerationStreamingEnabled": False,
+            "localGenerationToolCallingEnabled": False,
+            "localGenerationThinkingReturned": False,
+            "localGenerationThinkingPersisted": False,
+            "localGenerationPromptPersistence": False,
+            "localGenerationOutputPersistence": False,
+            "localGenerationModelInstallationEnabled": False,
+            "localGenerationModelPullingEnabled": False,
+            "localGenerationCloudEnabled": False,
+            "localGenerationApiKeysEnabled": False,
+            "localGenerationTrainingEnabled": False,
+            "localGenerationPrivateEphemeralSupported": True,
+            "localGenerationPrivateAuditEnabled": False,
+            "localGenerationStructuredOutputMode": "json_schema",
+            "localGenerationDeterministicFallbackSupported": True,
+            "localGenerationAgentCount": 37,
+            "localGenerationMaximumConcurrency": 1,
+            "localGenerationQueueEnabled": False,
+            "localGenerationCancellationEnabled": False,
+            "localGenerationModelsCenter": "/models",
+            "localGenerationSettingsEditableInModelsCenter": True,
+            "localGenerationConfiguredModel": generation_row[2] if generation_row else None,
+            "localGenerationActiveProfileId": generation_row[3] if generation_row else None,
+            "localGenerationContextCharacterLimit": generation_row[4] if generation_row else 24000,
+            "localGenerationMaximumOutputCharacters": generation_row[5] if generation_row else 4000,
+            "localGenerationTemperature": generation_row[6] if generation_row else 0.2,
+            "localGenerationKeepAliveSeconds": generation_row[7] if generation_row else 300,
             "selfModifyingCodeEnabled": False,
             "documentKnowledgeIngestionEnabled": True,
             "knowledgeLibraryStatus": "implemented_with_optional_local_embeddings",
@@ -425,6 +481,39 @@ class DashboardService:
 
     def local_response_agents_index_summary(self) -> dict[str, Any]:
         return local_response_agents_summary()
+
+    def local_generation_summary(self) -> dict[str, Any]:
+        if self.generation_status is not None:
+            return self.generation_status()
+        row = self.conn.execute(
+            """
+            select enabled, provider, model_name, active_profile_id, context_char_limit,
+              max_output_chars, default_temperature, keep_alive_seconds
+            from local_generation_settings where settings_id = 'default'
+            """
+        ).fetchone()
+        return {
+            "implemented": True,
+            "enabled": bool(row and row[0]),
+            "provider": row[1] if row else "ollama_local",
+            "modelName": row[2] if row else None,
+            "activeProfileId": row[3] if row else None,
+            "contextCharacterLimit": row[4] if row else 24000,
+            "maximumOutputCharacters": row[5] if row else 4000,
+            "temperature": row[6] if row else 0.2,
+            "keepAliveSeconds": row[7] if row else 300,
+            "activeGenerationCount": 0,
+            "recentCompletedCount": 0,
+            "recentFailedCount": 0,
+            "automaticGeneration": False,
+            "backgroundGeneration": False,
+            "toolCalling": False,
+            "cloud": False,
+            "apiKeys": False,
+            "modelInstallOrPull": False,
+            "promptPersistence": False,
+            "outputPersistence": False,
+        }
 
     def private_alpha_packaging_summary(self) -> dict[str, Any]:
         return {
@@ -848,6 +937,7 @@ def dashboard_html() -> str:
       <div class="home-grid" aria-label="Dashboard section navigation">
         <div class="home-card"><a href="/memory">Open Memory Center</a><span class="muted">Approval-gated local memory management.</span></div>
         <div class="home-card"><a href="/knowledge">Open Knowledge Library</a><span class="muted">Explicit local document ingestion and provenance.</span></div>
+        <div class="home-card"><a href="/models">Open Models Center</a><span class="muted">Controlled local generation configuration and metadata.</span></div>
         <div class="home-card"><a href="#safety-summary">View Safety Summary</a><span class="muted">Read-only safety posture.</span></div>
         <div class="home-card"><a href="#project-profiles">View Project Profiles</a><span class="muted">Registered project metadata.</span></div>
         <div class="home-card"><a href="#security-safety-review">View Security/Safety Reviews</a><span class="muted">Registered project review surface.</span></div>
@@ -899,9 +989,17 @@ def dashboard_html() -> str:
       <h2>Knowledge Library</h2>
       <div id="knowledge-library-status" class="muted" aria-live="polite">Loading Knowledge Library status...</div>
       <div id="knowledge-library-metrics" class="grid" aria-busy="true"></div>
-      <div class="row"><strong>Explicit source ingestion and optional explicit local semantic retrieval.</strong><div class="muted">Fixed IPv4 loopback only · No automatic or background embedding · No cloud, API keys, model pulling, or generative model.</div></div>
-      <div class="actions"><button id="knowledge-library-refresh-button" type="button">Refresh knowledge status</button><a class="button-link" href="/knowledge">Open Knowledge Library</a></div>
-    </section>    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
+      <div class="row"><strong>Explicit source ingestion and optional explicit local semantic retrieval.</strong><div class="muted">Fixed IPv4 loopback only · No automatic or background embedding · No cloud, API keys, or model pulling · Embedding and generation configuration remain separate.</div></div>
+      <div class="actions"><button id="knowledge-library-refresh-button" type="button">Refresh knowledge status</button><a class="button-link" href="/knowledge">Open Knowledge Library</a><a class="button-link" href="/models">Open Models Center</a></div>
+    </section>
+    <section id="local-generation-status" class="stack dashboard-section" data-section-title="Local Generation" data-section-keywords="local generation models provider prompt structured response">
+      <h2>Controlled Local Generation</h2>
+      <div class="row notice"><strong>Implementation is available and disabled by default.</strong><div class="muted">Explicit per-request use only · Fixed IPv4 loopback · No automatic or background generation · No tools, cloud, API keys, model pulling, prompt persistence, or output persistence.</div></div>
+      <div id="local-generation-metrics" class="grid"></div>
+      <div class="actions"><a class="button-link" href="/models">Open Models Center</a></div>
+      <div class="muted">Configuration mutations are available only in the Models Center. This main-dashboard section is status-only.</div>
+    </section>
+    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
       <pre id="settings">Loading settings/status summary...</pre>
     </section>
@@ -1444,7 +1542,7 @@ def dashboard_html() -> str:
               <input id="local-response-agents-memory-private-session" type="checkbox">
               Private session
             </label>
-            <div class="muted">Private session is page-local. It blocks retrieval, suggestion generation, and feedback persistence; it does not delete stored memories.</div>
+            <div class="muted">Private session is page-local. It blocks retrieval, suggestion generation, feedback persistence, and full prompt preview; explicit local generation may run ephemerally without a generation audit. It does not delete stored memories.</div>
             <label>
               Explicit retrieval query
               <input id="local-response-agents-memory-query" type="text" maxlength="1000" autocomplete="off">
@@ -1502,6 +1600,20 @@ def dashboard_html() -> str:
             <div class="muted">Lexical uses SQLite text matching. Semantic sends only the explicit query to the configured fixed-loopback embedding model. Hybrid combines lexical and semantic rank signals. Semantic similarity does not prove correctness.</div>
             <div id="local-response-agents-knowledge-control-status" class="muted">Active knowledge is disabled by default.</div>
           </div>
+        </div>
+        <div id="local-response-agents-generation-controls" class="row stack">
+          <h3>Controlled Local Generation</h3>
+          <div class="notice row stack"><strong>Disabled by default and explicit per request.</strong><div class="muted">Fixed IPv4 loopback only · No cloud or API keys · No tools or actions · No automatic/background generation · Prompt and output are not persisted · Deterministic response remains visible.</div></div>
+          <label><input id="local-response-agents-generation-enabled" type="checkbox"> Enable local generation for this manual request</label>
+          <label>Mode<select id="local-response-agents-generation-mode"><option value="deterministic" selected>Deterministic</option><option value="local_model">Local model (no silent fallback)</option><option value="local_model_with_fallback">Local model with deterministic fallback</option></select></label>
+          <label>Model profile<select id="local-response-agents-generation-profile"><option value="">Active configured profile</option></select></label>
+          <label>Output style<select id="local-response-agents-generation-style"><option value="concise">Concise</option><option value="standard" selected>Standard</option><option value="detailed">Detailed</option></select></label>
+          <label>Maximum output characters<input id="local-response-agents-generation-max-output" type="number" min="500" max="12000" value="4000"></label>
+          <label>Temperature<input id="local-response-agents-generation-temperature" type="number" min="0" max="1" step="0.1" value="0.2"></label>
+          <label><input id="local-response-agents-generation-preview" type="checkbox"> Prompt-preview-only (no provider call and no audit)</label>
+          <label><input id="local-response-agents-generation-full-preview" type="checkbox"> Include full prompt preview (blocked in private sessions; never persisted)</label>
+          <div id="local-response-agents-generation-control-status" class="muted">Deterministic mode is selected. No provider call will occur.</div>
+          <div><a href="/models">Open Models Center</a> to configure, probe, disable, unload, or review metadata-only history.</div>
         </div>
         <div id="local-response-agents-memory-suggestions" class="row stack">
           <h3>Reviewable Memory Suggestions</h3>
@@ -1648,6 +1760,7 @@ def dashboard_html() -> str:
         <div id="local-response-agents-memory-result" class="row stack muted">No memory retrieval result yet.</div>
         <div id="local-response-agents-knowledge-result" class="row stack muted">No knowledge retrieval result yet.</div>
         <div id="local-response-agents-local-context-result" class="row stack muted">No combined local-context summary yet.</div>
+        <div id="local-response-agents-generation-result" class="row stack muted">No local generation or prompt preview requested yet.</div>
         <div id="local-response-agents-memory-suggestion-result" class="row stack muted">No memory suggestions requested yet.</div>
         <div id="local-response-agents-response-context" class="row stack muted">No ephemeral response context yet.</div>
         <div id="local-response-agents-feedback-panel" class="row stack">
@@ -1906,6 +2019,7 @@ def dashboard_html() -> str:
       document.getElementById('local-classification-agent-status').textContent = JSON.stringify(summary.localClassificationAgent, null, 2);
       document.getElementById('local-transformation-agent-status').textContent = JSON.stringify(summary.localTransformationAgent, null, 2);
       document.getElementById('local-response-agents-index-status').textContent = JSON.stringify(summary.localResponseAgentsIndex, null, 2);
+      renderLocalGenerationStatus(summary.localGeneration || {});
       renderReadinessSnapshotSummary(summary.privateAlphaReadinessSnapshot);
       bindReadinessSnapshotControls();
       renderDiagnosticsBundleSummary(summary.redactedDiagnosticsBundle);
@@ -1969,11 +2083,39 @@ def dashboard_html() -> str:
         connectors: summary.counts && summary.counts.connectors,
         lan: summary.lanProtection && summary.lanProtection.status,
         docs: summary.docsCenter && summary.docsCenter.totalDocs,
+        generation: summary.localGeneration && (summary.localGeneration.enabled ? 'enabled' : 'disabled'),
       };
       document.getElementById('dashboard-home-status-chips').innerHTML = Object.entries(chips)
         .filter(([, value]) => value !== undefined && value !== null && value !== '')
         .map(([key, value]) => `<span class="chip"><strong>${escapeHtml(key)}</strong>: ${escapeHtml(value)}</span>`)
         .join('') || '<span class="chip">No status loaded.</span>';
+    }
+    function renderLocalGenerationStatus(generation) {
+      const target = document.getElementById('local-generation-metrics');
+      if (!target) return;
+      target.replaceChildren();
+      const values = [
+        ['Implementation available', generation.implemented ? 'yes' : 'no'],
+        ['Runtime enabled', generation.enabled ? 'yes' : 'no'],
+        ['Provider configured', generation.modelName ? 'yes' : 'no'],
+        ['Model / profile', `${generation.modelName || 'not configured'} / ${generation.activeProfileId || 'none'}`],
+        ['Context / output limits', `${generation.contextCharacterLimit || 24000} / ${generation.maximumOutputCharacters || 4000}`],
+        ['Recent success / failure', `${generation.recentCompletedCount || 0} / ${generation.recentFailedCount || 0}`],
+        ['Active / maximum', `${generation.activeGenerationCount || 0} / ${generation.maximumConcurrency || 1}`],
+        ['Automatic / background', 'no / no'],
+        ['Tools / cloud / API keys / pull', 'no / no / no / no'],
+        ['Prompt / output persistence', 'no / no'],
+      ];
+      values.forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        const title = document.createElement('span');
+        title.textContent = label;
+        const strong = document.createElement('strong');
+        strong.textContent = String(value);
+        card.append(title, strong);
+        target.append(card);
+      });
     }
     function dashboardSections() {
       return Array.from(document.querySelectorAll('main section.dashboard-section'));
@@ -2882,6 +3024,12 @@ def dashboard_html() -> str:
       usedKeys.add('memory_proposal_suggestions');
       usedKeys.add('responseContext');
       usedKeys.add('response_context');
+      usedKeys.add('generationContext');
+      usedKeys.add('generation_context');
+      usedKeys.add('generatedResponse');
+      usedKeys.add('generated_response');
+      usedKeys.add('primaryResponseSource');
+      usedKeys.add('primary_response_source');
       const rows = fields
         .map((field) => [field, localResponseKnownValue(responseBody, field)])
         .filter(([, value]) => value !== undefined)
@@ -3061,6 +3209,16 @@ def dashboard_html() -> str:
       const knowledgeControlStatus = document.getElementById('local-response-agents-knowledge-control-status');
       const knowledgeResult = document.getElementById('local-response-agents-knowledge-result');
       const localContextResult = document.getElementById('local-response-agents-local-context-result');
+      const generationEnabled = document.getElementById('local-response-agents-generation-enabled');
+      const generationMode = document.getElementById('local-response-agents-generation-mode');
+      const generationProfile = document.getElementById('local-response-agents-generation-profile');
+      const generationStyle = document.getElementById('local-response-agents-generation-style');
+      const generationMaxOutput = document.getElementById('local-response-agents-generation-max-output');
+      const generationTemperature = document.getElementById('local-response-agents-generation-temperature');
+      const generationPreview = document.getElementById('local-response-agents-generation-preview');
+      const generationFullPreview = document.getElementById('local-response-agents-generation-full-preview');
+      const generationControlStatus = document.getElementById('local-response-agents-generation-control-status');
+      const generationResult = document.getElementById('local-response-agents-generation-result');
       const memorySuggestionsEnabled = document.getElementById('local-response-agents-memory-suggestions-enabled');
       const memorySuggestionTypeControls = Array.from(document.querySelectorAll('[data-memory-suggestion-type]'));
       const memorySuggestionsProject = document.getElementById('local-response-agents-memory-suggestions-project');
@@ -3236,6 +3394,16 @@ def dashboard_html() -> str:
         status,
         structuredResponse,
         responseOutput,
+        generationEnabled,
+        generationMode,
+        generationProfile,
+        generationStyle,
+        generationMaxOutput,
+        generationTemperature,
+        generationPreview,
+        generationFullPreview,
+        generationControlStatus,
+        generationResult,
         sessionBoardAddButton,
         sessionBoardCompareButton,
         sessionBoardPacketButton,
@@ -3392,6 +3560,59 @@ def dashboard_html() -> str:
             ? 'Suggestions will be generated deterministically only from explicit structured request fields.'
             : 'Memory suggestions are disabled by default.';
         syncFeedbackAvailability();
+        updateGenerationControls();
+      }
+      function updateGenerationControls() {
+        const requested = generationEnabled.checked;
+        const privateSession = memoryPrivateSession.checked;
+        const previewOnly = generationPreview.checked;
+        [generationMode, generationProfile, generationStyle, generationMaxOutput, generationTemperature, generationPreview].forEach((control) => {
+          control.disabled = !requested;
+        });
+        generationFullPreview.disabled = !requested || !previewOnly || privateSession;
+        if (privateSession && generationFullPreview.checked) generationFullPreview.checked = false;
+        if (!requested) {
+          generationControlStatus.textContent = 'Controlled local generation is disabled for this request. Deterministic mode will not call the provider.';
+        } else if (previewOnly) {
+          generationControlStatus.textContent = privateSession
+            ? 'Metadata-only prompt preview is selected. No provider call or audit will occur; full preview is blocked in private sessions.'
+            : 'Prompt-preview-only is selected. No provider call or generation audit will occur.';
+        } else if (generationMode.value === 'deterministic') {
+          generationControlStatus.textContent = 'Deterministic mode is selected. No provider call or generation audit will occur.';
+        } else {
+          generationControlStatus.textContent = 'One explicit local generation call will be requested when you manually run this agent. No queue or retry exists.';
+        }
+      }
+      function generationOptionsForSubmission() {
+        return {
+          enabled: generationEnabled.checked,
+          privateSession: memoryPrivateSession.checked,
+          mode: generationMode.value || 'deterministic',
+          modelProfileId: generationProfile.value || null,
+          outputStyle: generationStyle.value || 'standard',
+          maxOutputCharacters: Number(generationMaxOutput.value || 4000),
+          temperature: Number(generationTemperature.value || 0.2),
+          previewOnly: generationPreview.checked,
+          includeFullPromptPreview: generationFullPreview.checked,
+        };
+      }
+      async function loadGenerationProfiles() {
+        generationProfile.replaceChildren();
+        const active = document.createElement('option');
+        active.value = '';
+        active.textContent = 'Active configured profile';
+        generationProfile.append(active);
+        try {
+          const profiles = await fetch('/api/generation/profiles').then((response) => response.json());
+          (Array.isArray(profiles) ? profiles : []).forEach((profile) => {
+            const option = document.createElement('option');
+            option.value = profile.profileId;
+            option.textContent = `${profile.modelName} (${profile.profileId})`;
+            generationProfile.append(option);
+          });
+        } catch {
+          generationControlStatus.textContent = 'Generation profiles could not be loaded. Deterministic mode remains available.';
+        }
       }
       function memoryOptionsForSubmission() {
         return {
@@ -3589,6 +3810,82 @@ def dashboard_html() -> str:
         const limitations = memoryResultElement('ul');
         (localContext.limitations || []).forEach((limitation) => limitations.append(memoryResultElement('li', limitation)));
         localContextResult.append(metadata, memoryResultElement('strong', 'Limitations'), limitations);
+      }
+
+      function renderGenerationResult(generationContext, generatedResponse, primarySource) {
+        generationResult.replaceChildren();
+        if (!generationContext) {
+          generationResult.className = 'row stack muted';
+          generationResult.append(memoryResultElement('div', 'No local generation or prompt preview requested yet.'));
+          return;
+        }
+        generationResult.className = 'row stack';
+        generationResult.append(memoryResultElement('h3', 'Controlled local generation result'));
+        if (generationContext.highStakes) {
+          const warning = memoryResultElement('div', '', 'row stack notice');
+          warning.append(
+            memoryResultElement('strong', 'High-stakes manual review required'),
+            memoryResultElement('div', 'Material uncertainty remains. Verify important details and seek qualified professional review where relevant.')
+          );
+          generationResult.append(warning);
+        }
+        const metadata = [
+          ['Primary source', primarySource || generationContext.primarySource || 'deterministic'],
+          ['Requested / actual mode', `${generationContext.requestedMode || 'deterministic'} / ${generationContext.actualMode || 'deterministic'}`],
+          ['Provider / model / profile', `${generationContext.provider || 'not called'} / ${generationContext.modelName || 'not used'} / ${generationContext.profileId || 'none'}`],
+          ['Provider called', generationContext.providerCalled ? 'yes' : 'no'],
+          ['Private session', generationContext.privateSession ? 'yes' : 'no'],
+          ['Prompt preview only', generationContext.previewOnly ? 'yes' : 'no'],
+          ['Prompt hash', generationContext.promptHash || 'not assembled'],
+          ['Prompt characters', generationContext.promptCharacterCount || 0],
+          ['Output characters', generationContext.outputCharacterCount || 0],
+          ['Thinking discarded', generationContext.thinkingDiscarded ? 'yes' : 'no'],
+          ['Fallback used', generationContext.fallbackUsed ? 'yes' : 'no'],
+          ['Run ID', generationContext.runId || 'not created'],
+          ['Audit persisted', generationContext.persisted ? 'metadata only' : 'no'],
+          ['Status / error', `${generationContext.status || 'not requested'} / ${generationContext.error || 'none'}`],
+          ['Automatic generation / tool calling', 'no / no'],
+        ];
+        const metadataList = memoryResultElement('div', '', 'stack');
+        metadata.forEach(([label, value]) => {
+          const row = memoryResultElement('div', '', 'muted');
+          row.append(memoryResultElement('strong', `${label}: `), document.createTextNode(String(value)));
+          metadataList.append(row);
+        });
+        generationResult.append(metadataList);
+        if (generationContext.errorMessage) generationResult.append(memoryResultElement('div', generationContext.errorMessage, 'notice row'));
+        const sectionMetadata = memoryResultElement('pre', JSON.stringify(generationContext.sectionStats || {}, null, 2));
+        generationResult.append(memoryResultElement('strong', 'Prompt section metadata'), sectionMetadata);
+        const truncation = memoryResultElement('ul');
+        (generationContext.truncationDisclosures || []).forEach((item) => truncation.append(memoryResultElement('li', item)));
+        generationResult.append(memoryResultElement('strong', 'Truncation and deduplication disclosures'), truncation);
+        if (Array.isArray(generationContext.messages)) {
+          const preview = memoryResultElement('div', '', 'stack');
+          generationContext.messages.forEach((message) => {
+            preview.append(memoryResultElement('strong', `${message.role} message`), memoryResultElement('pre', message.content));
+          });
+          generationResult.append(memoryResultElement('strong', 'Explicit full prompt preview (not persisted)'), preview);
+        }
+        if (!generatedResponse) {
+          generationResult.append(memoryResultElement('div', 'No generated response was returned. The deterministic response remains visible above.', 'muted'));
+        } else {
+          generationResult.append(memoryResultElement('h3', 'Generated response'), memoryResultElement('div', generatedResponse.response));
+          const listSection = (title, values) => {
+            const list = memoryResultElement('ul');
+            (values || []).forEach((value) => list.append(memoryResultElement('li', value)));
+            generationResult.append(memoryResultElement('strong', title), list);
+          };
+          listSection('Key points', generatedResponse.keyPoints);
+          const citations = memoryResultElement('div', '', 'stack');
+          (generatedResponse.citations || []).forEach((citation) => {
+            const card = memoryResultElement('div', '', 'row stack');
+            card.append(memoryResultElement('strong', citation.label), memoryResultElement('div', citation.supports));
+            citations.append(card);
+          });
+          generationResult.append(memoryResultElement('strong', 'Server-validated citations'), citations);
+          listSection('Limitations', generatedResponse.limitations);
+          listSection('Safety notes', generatedResponse.safetyNotes);
+        }
       }
 
       function renderResponseContext(responseContext) {
@@ -4386,6 +4683,7 @@ def dashboard_html() -> str:
         responseOutput.textContent = 'No local response-agent result yet.';
         latestLocalResponseBody = null;
         latestLocalResponseAgent = null;
+        renderGenerationResult(null, null, 'deterministic');
         renderReviewedWebContextPreview();
         updateReadinessUi();
       }
@@ -6110,6 +6408,14 @@ def dashboard_html() -> str:
       bindDashboardChange(knowledgeMaxItems, updateMemoryControls);
       bindDashboardChange(knowledgeMode, updateMemoryControls);
       bindDashboardInput(knowledgeQuery, updateMemoryControls);
+      bindDashboardChange(generationEnabled, updateGenerationControls);
+      bindDashboardChange(generationMode, updateGenerationControls);
+      bindDashboardChange(generationProfile, updateGenerationControls);
+      bindDashboardChange(generationStyle, updateGenerationControls);
+      bindDashboardChange(generationMaxOutput, updateGenerationControls);
+      bindDashboardChange(generationTemperature, updateGenerationControls);
+      bindDashboardChange(generationPreview, updateGenerationControls);
+      bindDashboardChange(generationFullPreview, updateGenerationControls);
       bindDashboardChange(memorySuggestionsEnabled, updateMemoryControls);
       bindDashboardChange(memorySuggestionsMax, updateMemoryControls);
       memorySuggestionTypeControls.forEach((control) => bindDashboardChange(control, updateMemoryControls));
@@ -6388,12 +6694,14 @@ def dashboard_html() -> str:
         parsedBody.memory = memoryOptions;
         parsedBody.knowledge = knowledgeOptionsForSubmission();
         parsedBody.memoryProposalSuggestions = memorySuggestionOptionsForSubmission();
+        parsedBody.generation = generationOptionsForSubmission();
         runButton.disabled = true;
         renderMemoryContext(null);
         renderKnowledgeContext(null);
         renderLocalContext(null);
         renderMemorySuggestions(null);
         renderResponseContext(null);
+        renderGenerationResult(null, null, 'deterministic');
         status.textContent = 'Loading the manually selected allowlisted local response-agent response.';
         bodyInput.value = JSON.stringify(parsedBody, null, 2);
         try {
@@ -6417,6 +6725,11 @@ def dashboard_html() -> str:
           renderLocalContext(responseBody.localContext || responseBody.local_context || null);
           renderMemorySuggestions(responseBody.memoryProposalSuggestions || responseBody.memory_proposal_suggestions || null);
           renderResponseContext(responseBody.responseContext || responseBody.response_context || null);
+          renderGenerationResult(
+            responseBody.generationContext || responseBody.generation_context || null,
+            responseBody.generatedResponse || responseBody.generated_response || null,
+            responseBody.primaryResponseSource || responseBody.primary_response_source || 'deterministic'
+          );
           responseOutput.textContent = JSON.stringify(responseBody, null, 2);
           if (response.ok) {
             latestLocalResponseBody = responseBody;
@@ -6441,12 +6754,15 @@ def dashboard_html() -> str:
           renderMemoryContext(null);
           renderKnowledgeContext(null);
           renderLocalContext(null);
+          renderGenerationResult(null, null, 'deterministic');
           renderWorkbenchError(structuredResponse, 'Backend error', error.message, null);
         } finally {
           runButton.disabled = false;
         }
       };
       renderAgentOptions();
+      loadGenerationProfiles();
+      updateGenerationControls();
       loadDiscoveryCatalogMetadata();
       loadCategoryMetadata();
       enhanceWorkbenchPanels();

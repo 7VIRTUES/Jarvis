@@ -249,6 +249,7 @@ def memory_dashboard_html() -> str:
       </div>
       <div class="actions">
         <a class="button-link" href="/knowledge">Open Knowledge Library</a>
+        <a class="button-link" href="/models">Open Models Center</a>
         <a class="button-link" href="/dashboard">Back to Dashboard</a>
       </div>
     </div>
@@ -263,6 +264,10 @@ def memory_dashboard_html() -> str:
         <li>Only approved, unexpired memories can be active.</li>
         <li>Jarvis does not automatically save conversations.</li>
         <li>Jarvis does not automatically approve memory.</li>
+        <li>Generated output is not memory and is never automatically stored as memory.</li>
+        <li>Feedback does not train the local generation model.</li>
+        <li>Memory remains approval-gated, and generation cannot approve memory.</li>
+        <li>Private local generation creates no generation audit.</li>
         <li>Memory retrieval is explicit and opt-in for all 37 local response agents.</li>
         <li>Private-session state is temporary and page-local.</li>
         <li>Sensitive memories should be used sparingly.</li>

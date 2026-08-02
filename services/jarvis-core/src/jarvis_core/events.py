@@ -67,6 +67,12 @@ EVENT_TYPES = {
     "knowledge.embeddings.disabled",
     "knowledge.embeddings.built",
     "knowledge.embeddings.cleared",
+    "generation.probed",
+    "generation.configured",
+    "generation.disabled",
+    "generation.completed",
+    "generation.failed",
+    "generation.unloaded",
 }
 
 

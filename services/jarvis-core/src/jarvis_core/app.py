@@ -97,6 +97,9 @@ from .memory_retrieval import (
     MemoryRetrievalService,
 )
 from .memory_dashboard import memory_dashboard_html
+from .local_generation import LocalGenerationError, LocalGenerationService
+from .models_dashboard import models_dashboard_html
+from .prompt_assembly import classify_high_stakes
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
 from .local_review_agent import LocalReviewAgentService, LocalReviewRequest
@@ -158,6 +161,7 @@ memory_retrieval_service = MemoryRetrievalService(
     events,
     agent_exists=lambda agent_id: bool(local_response_agent_metadata(agent_id).get("found")),
 )
+local_generation = LocalGenerationService(conn, events)
 runtime = SafeActionRuntime(logger, conn, events)
 memory_proposal_suggestions = MemoryProposalSuggestionService()
 feedback_service = FeedbackService(
@@ -172,7 +176,13 @@ task_control = TaskControlService(tasks)
 codex_plans = CodexPlanService(conn, events, runtime, approvals, projects)
 codex_execution = CodexExecutionService(conn, events, runtime, approvals, projects, codex_plans)
 diagnostics = DiagnosticExporter(conn, WORKSPACE_ROOT, DATA_ROOT / "logs", WORKSPACE_ROOT / "connectors")
-dashboard = DashboardService(conn, WORKSPACE_ROOT, DATA_ROOT, WORKSPACE_ROOT / "connectors")
+dashboard = DashboardService(
+    conn,
+    WORKSPACE_ROOT,
+    DATA_ROOT,
+    WORKSPACE_ROOT / "connectors",
+    generation_status=local_generation.status,
+)
 security_reviews = SecurityReviewService(DATA_ROOT / "reports", WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 project_profiles = ProjectProfileService(WORKSPACE_ROOT, WORKSPACE_ROOT / "connectors")
 validation_agent = ValidationAgentService(conn, DATA_ROOT / "reports")
@@ -695,6 +705,20 @@ class MemoryProposalSuggestionOptionsInput(BaseModel):
     maxSuggestions: int = Field(default=3, ge=1, le=3)
 
 
+class GenerationOptionsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    privateSession: bool = False
+    mode: Literal["deterministic", "local_model", "local_model_with_fallback"] = "deterministic"
+    modelProfileId: str | None = Field(default=None, max_length=200)
+    outputStyle: Literal["concise", "standard", "detailed"] = "standard"
+    maxOutputCharacters: int = Field(default=4000, ge=500, le=12000)
+    temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+    previewOnly: bool = False
+    includeFullPromptPreview: bool = False
+
+
 class LocalResponseAgentInputBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -703,6 +727,41 @@ class LocalResponseAgentInputBase(BaseModel):
     memory: MemoryRetrievalOptionsInput | None = None
     knowledge: KnowledgeRetrievalOptionsInput | None = None
     memoryProposalSuggestions: MemoryProposalSuggestionOptionsInput | None = None
+    generation: GenerationOptionsInput | None = None
+
+
+class GenerationProbeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    modelName: str = Field(min_length=1, max_length=120)
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class GenerationConfigureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    modelName: str = Field(min_length=1, max_length=120)
+    contextCharacterLimit: int = Field(default=24000, ge=8000, le=120000)
+    maximumOutputCharacters: int = Field(default=4000, ge=500, le=12000)
+    temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+    keepAliveSeconds: int = Field(default=300, ge=0, le=3600)
+    confirmation: str
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class GenerationDisableInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: str
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class GenerationUnloadInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: str
+    modelProfileId: str | None = Field(default=None, max_length=200)
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 
 class LocalResearchBriefInput(LocalResponseAgentInputBase):
@@ -1456,7 +1515,8 @@ def _private_session_requested(payload: LocalResponseAgentInputBase) -> bool:
     suggestions_private = bool(
         payload.memoryProposalSuggestions and payload.memoryProposalSuggestions.privateSession
     )
-    return memory_private or knowledge_private or suggestions_private
+    generation_private = bool(payload.generation and payload.generation.privateSession)
+    return memory_private or knowledge_private or suggestions_private or generation_private
 
 
 def _memory_context(
@@ -1669,6 +1729,7 @@ def _memory_proposal_suggestion_context(
         )
     request_fields = payload.model_dump(exclude_unset=True)
     request_fields.pop("knowledge", None)
+    request_fields.pop("generation", None)
     try:
         return memory_proposal_suggestions.suggest(
             request_fields=request_fields,
@@ -1722,9 +1783,34 @@ def _local_response_with_web_context(
     enriched["memoryContext"] = memory_context
     knowledge_context = _knowledge_context(payload, agent_id, private_session=private_session)
     enriched["knowledgeContext"] = knowledge_context
-    enriched["localContext"] = _local_context_summary(
+    local_context = _local_context_summary(
         memory_context, knowledge_context, private_session=private_session
     )
+    enriched["localContext"] = local_context
+    agent_metadata = local_response_agent_metadata(agent_id)
+    agent_name = str(
+        agent_metadata.get("displayName")
+        or agent_metadata.get("display_name")
+        or agent_metadata.get("name")
+        or agent_id.replace("_", " ").title()
+    )
+    generation_result = local_generation.process_agent_response(
+        deterministic_response=response,
+        request_fields=payload.model_dump(exclude_unset=True),
+        agent_id=agent_id,
+        agent_name=agent_name,
+        category=category,
+        web_context=[source.model_dump() for source in payload.web_context],
+        prior_agent_context=normalize_prior_agent_context(payload.prior_agent_context),
+        memory_context=memory_context,
+        knowledge_context=knowledge_context,
+        local_context_summary=local_context,
+        generation_options=payload.generation.model_dump() if payload.generation else None,
+        response_id=response_id,
+        private_session=private_session,
+        high_stakes=classify_high_stakes(agent_id, category),
+    )
+    enriched.update(generation_result)
     enriched["memoryProposalSuggestions"] = _memory_proposal_suggestion_context(
         payload,
         agent_id,
@@ -1758,6 +1844,11 @@ def knowledge_library_page(_: None = Depends(require_dashboard_lan_access)) -> H
     return HTMLResponse(knowledge_dashboard_html())
 
 
+@app.get("/models", response_class=HTMLResponse)
+def models_center_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
+    return HTMLResponse(models_dashboard_html())
+
+
 @app.get("/setup/lan", response_class=HTMLResponse)
 def lan_setup_page(_: None = Depends(require_loopback_request)) -> HTMLResponse:
     return HTMLResponse(lan_setup_html())
@@ -1771,6 +1862,107 @@ def first_run_setup_page(_: None = Depends(require_loopback_request)) -> HTMLRes
 @app.get("/api/dashboard/summary")
 def dashboard_summary(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
     return dashboard.summary()
+
+
+def _raise_generation_http_error(exc: LocalGenerationError) -> None:
+    if exc.code in {"generation_in_progress", "generation_state_changed"}:
+        status_code = 409
+    elif exc.code in {"provider_unavailable", "model_unavailable", "provider_timeout"}:
+        status_code = 503
+    elif exc.code == "profile_not_found":
+        status_code = 404
+    else:
+        status_code = 400
+    raise HTTPException(status_code=status_code, detail=exc.safe_detail()) from exc
+
+
+@app.get("/api/generation/status")
+def generation_status(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return local_generation.status()
+
+
+@app.post("/api/generation/probe")
+def generation_probe(
+    payload: GenerationProbeInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.probe(model_name=payload.modelName, actor=payload.actor)
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.post("/api/generation/configure")
+def generation_configure(
+    payload: GenerationConfigureInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.configure(
+            model_name=payload.modelName,
+            context_char_limit=payload.contextCharacterLimit,
+            max_output_chars=payload.maximumOutputCharacters,
+            temperature=payload.temperature,
+            keep_alive_seconds=payload.keepAliveSeconds,
+            confirmation=payload.confirmation,
+            actor=payload.actor,
+        )
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.post("/api/generation/disable")
+def generation_disable(
+    payload: GenerationDisableInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.disable(confirmation=payload.confirmation, actor=payload.actor)
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.post("/api/generation/unload")
+def generation_unload(
+    payload: GenerationUnloadInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.unload(
+            confirmation=payload.confirmation,
+            profile_id=payload.modelProfileId,
+            actor=payload.actor,
+        )
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.get("/api/generation/profiles")
+def generation_profiles(_: None = Depends(require_dashboard_lan_access)) -> list[dict[str, object]]:
+    return local_generation.list_profiles()
+
+
+@app.get("/api/generation/runs")
+def generation_runs(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=100000),
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return local_generation.list_runs(limit=limit, offset=offset)
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.get("/api/generation/runs/{run_id}")
+def generation_run_detail(
+    run_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.get_run(run_id)
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
 
 
 @app.get("/agents/local-response-agents/catalog")

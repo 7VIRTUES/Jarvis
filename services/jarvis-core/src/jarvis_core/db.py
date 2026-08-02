@@ -389,6 +389,62 @@ create table if not exists knowledge_retrieval_scores (
   created_at text not null,
   unique(retrieval_id, chunk_id)
 );
+
+create table if not exists local_generation_settings (
+  settings_id text primary key,
+  enabled integer not null,
+  provider text not null,
+  model_name text,
+  active_profile_id text,
+  context_char_limit integer not null,
+  max_output_chars integer not null,
+  default_temperature real not null,
+  keep_alive_seconds integer not null,
+  configured_at text,
+  updated_at text not null
+);
+
+create table if not exists local_generation_profiles (
+  profile_id text primary key,
+  provider text not null,
+  model_name text not null,
+  context_char_limit integer not null,
+  max_output_chars integer not null,
+  default_temperature real not null,
+  keep_alive_seconds integer not null,
+  structured_output_mode text not null,
+  created_at text not null,
+  last_used_at text
+);
+
+create table if not exists local_generation_runs (
+  run_id text primary key,
+  response_id text,
+  agent_id text,
+  purpose text not null,
+  profile_id text,
+  provider text not null,
+  model_name text,
+  requested_mode text not null,
+  actual_mode text not null,
+  output_style text not null,
+  status text not null,
+  prompt_hash text,
+  prompt_char_count integer not null,
+  current_request_char_count integer not null,
+  deterministic_response_char_count integer not null,
+  memory_item_count integer not null,
+  knowledge_chunk_count integer not null,
+  web_source_count integer not null,
+  prior_context_present integer not null,
+  section_stats text not null,
+  output_char_count integer not null,
+  fallback_used integer not null,
+  thinking_discarded integer not null,
+  error_code text,
+  created_at text not null,
+  completed_at text
+);
 create index if not exists idx_memories_scope on memories(scope_type, scope_value);
 create index if not exists idx_memories_expiration on memories(expires_at);
 create index if not exists idx_memories_content_hash on memories(content_hash);
@@ -429,6 +485,11 @@ create index if not exists idx_knowledge_embedding_runs_date on knowledge_embedd
 create index if not exists idx_knowledge_embedding_runs_status on knowledge_embedding_runs(status);
 create index if not exists idx_knowledge_retrieval_scores_retrieval on knowledge_retrieval_scores(retrieval_id);
 create index if not exists idx_knowledge_retrieval_scores_chunk on knowledge_retrieval_scores(chunk_id);
+create index if not exists idx_local_generation_runs_date on local_generation_runs(created_at);
+create index if not exists idx_local_generation_runs_agent_date on local_generation_runs(agent_id, created_at);
+create index if not exists idx_local_generation_runs_status_date on local_generation_runs(status, created_at);
+create index if not exists idx_local_generation_runs_profile_date on local_generation_runs(profile_id, created_at);
+create index if not exists idx_local_generation_runs_response on local_generation_runs(response_id);
 
 create trigger if not exists knowledge_chunk_embeddings_delete
 after delete on knowledge_chunks begin
@@ -471,6 +532,15 @@ def init_db(path: Path) -> sqlite3.Connection:
           settings_id, enabled, provider, model_name, active_profile_id,
           dimensions, configured_at, updated_at
         ) values ('default', 0, 'ollama_local', null, null, null, null, current_timestamp)
+        """
+    )
+    conn.execute(
+        """
+        insert or ignore into local_generation_settings (
+          settings_id, enabled, provider, model_name, active_profile_id,
+          context_char_limit, max_output_chars, default_temperature,
+          keep_alive_seconds, configured_at, updated_at
+        ) values ('default', 0, 'ollama_local', null, null, 24000, 4000, 0.2, 300, null, current_timestamp)
         """
     )
     _ensure_column(conn, "codex_plans", "prompt_content", "text not null default ''")

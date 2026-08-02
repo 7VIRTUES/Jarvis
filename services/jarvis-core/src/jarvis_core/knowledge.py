@@ -339,6 +339,12 @@ class KnowledgeService:
             "retrievalRequiresExplicitOptIn": True, "automaticInjectionEnabled": False,
             "embeddingsEnabled": bool(embedding_row and embedding_row[0]),
             "localModelEnabled": False,
+            "retrievalAndGenerationSeparate": True,
+            "knowledgeSuppliedOnlyWhenExplicitlyEnabled": True,
+            "generationModifiesKnowledge": False,
+            "generationCreatesEmbeddings": False,
+            "generatedOutputBecomesSource": False,
+            "embeddingAndGenerationModelsSeparatelyConfigured": True,
         }
 
     def edit_metadata(self, source_id: str, updates: dict[str, Any], *, actor: str = "local_user") -> dict[str, Any]:

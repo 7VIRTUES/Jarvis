@@ -45,7 +45,7 @@ def knowledge_dashboard_html() -> str:
 </head>
 <body>
 <header>
-  <div class="nav"><div><h1>Jarvis Knowledge Library</h1><p>Local · Explicitly imported · Provenance-aware · User-controlled</p></div><div class="actions"><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/memory">Memory Center</a></div></div>
+  <div class="nav"><div><h1>Jarvis Knowledge Library</h1><p>Local · Explicitly imported · Provenance-aware · User-controlled</p></div><div class="actions"><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/memory">Memory Center</a><a class="button-link" href="/models">Models Center</a></div></div>
 </header>
 <main>
   <section class="banner"><h2>Knowledge safety boundaries</h2><ul>
@@ -53,6 +53,9 @@ def knowledge_dashboard_html() -> str:
     <li>File import requires preview and typed confirmation.</li><li>Protected, binary, oversized, symlinked, and out-of-bound files are blocked.</li>
     <li>Imported content is stored locally in SQLite.</li><li>Sensitive sources are excluded from future retrieval unless explicitly allowed.</li>
     <li>Knowledge retrieval requires explicit enablement and an explicit query for every response.</li><li>Optional embeddings are disabled by default and use only the fixed IPv4 loopback provider.</li>
+    <li>Retrieval and generation are separate. Knowledge is supplied to generation only when explicitly enabled for that response.</li>
+    <li>Generation does not modify knowledge, create embeddings, or turn generated output into a source.</li>
+    <li>Embedding models and generation models are configured separately in the Knowledge Library and Models Center.</li>
     <li>Deleting a knowledge source does not delete the original project file.</li>
   </ul></section>
   <div id="page-status" class="status" role="status" aria-live="polite">Knowledge Library ready. No action occurs without an explicit control.</div>
@@ -63,7 +66,7 @@ def knowledge_dashboard_html() -> str:
     <li>Jarvis does not install or start Ollama and does not pull models.</li>
     <li>Content is sent only during explicit embedding operations; sensitive chunks require explicit inclusion.</li>
     <li>Vectors stay in local SQLite. Lexical retrieval works without embeddings.</li>
-    <li>No generative model, automatic embedding, background embedding, or scheduling is present.</li>
+    <li>Embedding controls do not call the separately configured generation model. No automatic embedding, background embedding, or scheduling is present.</li>
   </ul></div>
   <div class="nav"><div><h3>Status</h3><p class="muted">Status reads local SQLite only and never contacts Ollama.</p></div><button id="embedding-status-refresh" class="secondary" type="button">Refresh embedding status</button></div>
   <div id="embedding-status-state" class="status">Embedding status has not been refreshed.</div><div id="embedding-status-metrics" class="metrics"></div>
