@@ -57,15 +57,18 @@ class LocalOllamaEmbeddingProvider:
     @staticmethod
     def validate_model_name(value: Any) -> str:
         if not isinstance(value, str) or not _MODEL_PATTERN.fullmatch(value):
-            raise LocalEmbeddingProviderError("model_unavailable")
+            raise LocalEmbeddingProviderError("invalid_model_name")
+        lowered = value.casefold()
         if (
             any(character.isspace() or ord(character) < 32 for character in value)
             or "?" in value
             or "#" in value
             or "\\" in value
             or "://" in value
+            or "cloud" in lowered
+            or lowered.startswith(("http:", "https:", "http/", "https/"))
         ):
-            raise LocalEmbeddingProviderError("model_unavailable")
+            raise LocalEmbeddingProviderError("invalid_model_name")
         return value
 
     def embed(
@@ -112,7 +115,7 @@ class LocalOllamaEmbeddingProvider:
         except (urllib.error.URLError, OSError):
             raise LocalEmbeddingProviderError("provider_unavailable") from None
         if len(raw) > MAX_RESPONSE_BYTES:
-            raise LocalEmbeddingProviderError("invalid_provider_response")
+            raise LocalEmbeddingProviderError("provider_response_too_large")
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):

@@ -256,7 +256,7 @@ def memory_dashboard_html() -> str:
   <main id="main-content">
     <section class="safety-banner" aria-labelledby="memory-safety-title">
       <h2 id="memory-safety-title">Memory safety boundaries</h2>
-      <p><strong>Memory and knowledge remain separate.</strong> Memory stores approved user facts, preferences, and instructions. Knowledge stores explicitly imported source material and now supports explicit ranked retrieval through agent controls. Knowledge retrieval does not create memory, and memory retrieval does not import documents. Their provenance, retrieval IDs, databases, and management controls are not merged.</p>
+      <p><strong>Memory and knowledge remain separate.</strong> Memory stores approval-gated user facts, preferences, and instructions. Knowledge stores explicitly imported source material and can optionally use explicit local semantic retrieval. Embedding knowledge does not create memory, and memory retrieval does not import knowledge. Semantic retrieval does not persist queries or modify sources. Their provenance, retrieval IDs, databases, and management controls are not merged, and no automatic learning occurs.</p>
       <ul>
         <li>Memory is stored locally in Jarvis SQLite.</li>
         <li>New memories begin as pending, and pending memories are inactive.</li>
@@ -783,6 +783,7 @@ def memory_dashboard_html() -> str:
         <strong>Learning boundary</strong>
         <ul>
           <li>Feedback does not retrain a model or automatically modify agent behavior.</li>
+          <li>Feedback does not retrain the local embedding model.</li>
           <li>Feedback-derived preferences require a separate pending-memory creation action.</li>
           <li>Pending memory still requires approval.</li>
           <li>Jarvis does not silently learn from every response.</li>

@@ -68,7 +68,7 @@ class DashboardService:
         local_response_agents_index = self.local_response_agents_index_summary()
         return {
             "app": {"name": APP_NAME, "version": VERSION, "mode": "local"},
-            "phase": {"current": "v0.1E Batch 2", "status": "ranked knowledge retrieval and all-agent knowledge context"},
+            "phase": {"current": "v0.1E Batch 3", "status": "local semantic embeddings and hybrid knowledge retrieval"},
             "capabilities": {
                 "dashboard": "local_operations_with_explicit_memory_controls",
                 "reports": "read_only",
@@ -99,7 +99,7 @@ class DashboardService:
                 "localTransformationAgent": "implemented_local_only",
                 "localResponseAgentsIndex": "read_only_index",
                 "memoryCenter": "explicit_user_controlled_persistence",
-                "knowledgeLibrary": "implemented_with_ranked_retrieval",
+                "knowledgeLibrary": "implemented_with_optional_local_embeddings",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -159,12 +159,16 @@ class DashboardService:
         }
 
     def settings_summary(self) -> dict[str, Any]:
+        embedding_row = self.conn.execute(
+            "select enabled from knowledge_embedding_settings where settings_id = 'default'"
+        ).fetchone()
+        embeddings_enabled = bool(embedding_row and embedding_row[0])
         return {
             "appName": APP_NAME,
             "productName": "Jarvis PC Local",
             "version": VERSION,
-            "phase": "v0.1E Batch 2",
-            "currentSlice": "ranked knowledge retrieval and all-agent knowledge context",
+            "phase": "v0.1E Batch 3",
+            "currentSlice": "local semantic embeddings and hybrid knowledge retrieval",
             "localFirst": True,
             "settingsEditable": False,
             "settingsPersistence": "not_implemented_in_this_slice",
@@ -186,16 +190,21 @@ class DashboardService:
             "feedbackDerivedPreferenceProposalImplemented": True,
             "feedbackDerivedPreferenceApprovalAutomatic": False,
             "automaticMemoryApprovalEnabled": False,
-            "embeddingsEnabled": False,
+            "embeddingsEnabled": embeddings_enabled,
             "localGenerativeModelEnabled": False,
             "selfModifyingCodeEnabled": False,
             "documentKnowledgeIngestionEnabled": True,
-            "knowledgeLibraryStatus": "implemented_with_ranked_retrieval",
+            "knowledgeLibraryStatus": "implemented_with_optional_local_embeddings",
             "knowledgePersistenceImplemented": True,
             "knowledgePastedTextIngestionImplemented": True,
             "knowledgeRegisteredProjectFileIngestionImplemented": True,
-            "knowledgeRetrievalStatus": "implemented_all_response_agents",
-            "knowledgeRetrievalMode": "fts5_with_deterministic_fallback",
+            "knowledgeRetrievalStatus": "lexical_semantic_hybrid",
+            "knowledgeRetrievalMode": "lexical_semantic_hybrid",
+            "knowledgeLexicalRetrievalEnabled": True,
+            "knowledgeSemanticRetrievalImplemented": True,
+            "knowledgeSemanticRetrievalEnabledByDefault": False,
+            "knowledgeHybridRetrievalImplemented": True,
+            "knowledgeHybridRetrievalEnabledByDefault": False,
             "knowledgeRetrievalAuditImplemented": True,
             "knowledgeAgentRetrievalEnabled": True,
             "knowledgeAgentRetrievalAgentCount": 37,
@@ -210,8 +219,20 @@ class DashboardService:
             "knowledgeFileUploadsEnabled": False,
             "knowledgeUrlIngestionEnabled": False,
             "knowledgeFtsIndexImplemented": True,
-            "knowledgeEmbeddingsEnabled": False,
+            "knowledgeEmbeddingsEnabled": embeddings_enabled,
+            "knowledgeEmbeddingProvider": "ollama_local",
+            "knowledgeEmbeddingEndpointPolicy": "fixed_loopback_only",
+            "knowledgeEmbeddingConfigurationExplicit": True,
+            "knowledgeEmbeddingAutomaticBuildEnabled": False,
+            "knowledgeEmbeddingBackgroundJobsEnabled": False,
+            "knowledgeEmbeddingModelPullingImplemented": False,
+            "knowledgeEmbeddingModelInstallationImplemented": False,
+            "knowledgeEmbeddingApiKeysSupported": False,
+            "knowledgeEmbeddingCloudProvidersSupported": False,
+            "knowledgeVectorStorage": "sqlite_float32_blob",
             "knowledgeVectorDatabaseEnabled": False,
+            "knowledgeOriginalFileReadsDuringEmbedding": False,
+            "knowledgeLocalGenerativeModelEnabled": False,
             "knowledgeLocalModelEnabled": False,
             "knowledgeModelTrainingEnabled": False,
             "knowledgeCenterEndpoint": "/knowledge",
@@ -878,7 +899,7 @@ def dashboard_html() -> str:
       <h2>Knowledge Library</h2>
       <div id="knowledge-library-status" class="muted" aria-live="polite">Loading Knowledge Library status...</div>
       <div id="knowledge-library-metrics" class="grid" aria-busy="true"></div>
-      <div class="row"><strong>Explicit source ingestion and explicit per-request retrieval.</strong><div class="muted">No automatic source scanning · No embeddings · No local model.</div></div>
+      <div class="row"><strong>Explicit source ingestion and optional explicit local semantic retrieval.</strong><div class="muted">Fixed IPv4 loopback only · No automatic or background embedding · No cloud, API keys, model pulling, or generative model.</div></div>
       <div class="actions"><button id="knowledge-library-refresh-button" type="button">Refresh knowledge status</button><a class="button-link" href="/knowledge">Open Knowledge Library</a></div>
     </section>    <section id="settings-status" class="dashboard-section" data-section-title="Settings Status" data-section-keywords="settings status lan local read only">
       <h2>Settings / Status</h2>
@@ -1470,6 +1491,15 @@ def dashboard_html() -> str:
               Maximum knowledge chunks
               <input id="local-response-agents-knowledge-max-items" type="number" min="1" max="10" value="5">
             </label>
+            <label>
+              Retrieval mode
+              <select id="local-response-agents-knowledge-mode">
+                <option value="lexical" selected>Lexical</option>
+                <option value="semantic">Semantic</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </label>
+            <div class="muted">Lexical uses SQLite text matching. Semantic sends only the explicit query to the configured fixed-loopback embedding model. Hybrid combines lexical and semantic rank signals. Semantic similarity does not prove correctness.</div>
             <div id="local-response-agents-knowledge-control-status" class="muted">Active knowledge is disabled by default.</div>
           </div>
         </div>
@@ -2146,9 +2176,25 @@ def dashboard_html() -> str:
         if (!response.ok) throw new Error('Knowledge Library summary request failed.');
         const summary = await response.json();
         metrics.replaceChildren();
-        const values = { activeSources: summary.activeSources || 0, totalChunks: summary.totalChunks || 0, fts5Available: summary.fts5Available ? 'yes' : 'no', retrievalMode: summary.retrievalMode || 'deterministic_fallback', recentRetrievalCount: summary.recentRetrievalCount || 0, allAgentKnowledgeRetrieval: summary.knowledgeAgentRetrievalAllAgents ? 'enabled for 37' : 'not enabled', sensitiveRetrievalDefault: 'excluded' };
+        const values = {
+          semanticImplementation: summary.knowledgeSemanticRetrievalImplemented ? 'available' : 'unavailable',
+          runtimeEnabled: summary.enabled ? 'yes' : 'no',
+          providerConfigured: summary.providerConfigured ? 'yes' : 'no',
+          endpointPolicy: summary.knowledgeEmbeddingEndpointPolicy || 'fixed_loopback_only',
+          model: summary.model || 'not configured',
+          dimensions: summary.dimensions || 'not configured',
+          activeProfile: summary.activeProfileId || 'not configured',
+          currentEmbedded: summary.embeddedCurrentChunks || 0,
+          missingStaleInvalid: `${summary.missingChunks || 0} / ${summary.staleContentChunks || 0} / ${summary.invalidVectorChunks || 0}`,
+          hybridAvailable: summary.hybridRetrievalAvailable ? 'yes' : 'no',
+          automaticEmbedding: summary.automaticEmbeddingEnabled ? 'yes' : 'no',
+          backgroundEmbedding: summary.backgroundEmbeddingEnabled ? 'yes' : 'no',
+          cloud: summary.cloudProviderSupported ? 'yes' : 'no',
+          apiKeys: summary.apiKeySupported ? 'yes' : 'no',
+          modelPulling: summary.modelPullingSupported ? 'yes' : 'no',
+        };
         Object.entries(values).forEach(([label, value]) => { const card = document.createElement('div'); card.className = 'metric'; const labelNode = document.createElement('span'); labelNode.textContent = label; const valueNode = document.createElement('strong'); valueNode.textContent = String(value); card.append(labelNode, valueNode); metrics.append(card); });
-        status.textContent = summary.totalSources ? 'Explicit ingestion remains required. Ranked retrieval runs only after explicit enablement and submission.' : 'No knowledge sources have been imported; retrieval remains explicit and returns no source content.';
+        status.textContent = summary.totalSources ? 'Explicit ingestion remains required. Lexical is the default; semantic and hybrid run only after explicit configuration and per-request selection.' : 'No knowledge sources have been imported; retrieval remains explicit and returns no source content.';
       } catch (error) { metrics.replaceChildren(); status.textContent = error instanceof Error ? error.message : 'Knowledge Library status is unavailable.'; }
       finally { metrics.setAttribute('aria-busy', 'false'); }
       const refreshButton = document.getElementById('knowledge-library-refresh-button');
@@ -3011,6 +3057,7 @@ def dashboard_html() -> str:
       const knowledgeProject = document.getElementById('local-response-agents-knowledge-project');
       const knowledgeIncludeSensitive = document.getElementById('local-response-agents-knowledge-include-sensitive');
       const knowledgeMaxItems = document.getElementById('local-response-agents-knowledge-max-items');
+      const knowledgeMode = document.getElementById('local-response-agents-knowledge-mode');
       const knowledgeControlStatus = document.getElementById('local-response-agents-knowledge-control-status');
       const knowledgeResult = document.getElementById('local-response-agents-knowledge-result');
       const localContextResult = document.getElementById('local-response-agents-local-context-result');
@@ -3323,7 +3370,7 @@ def dashboard_html() -> str:
         [memoryQuery, memoryProject, memoryIncludeSensitive, memoryMaxItems].forEach((control) => {
           control.disabled = privateBlocked || !retrievalEnabled;
         });
-        [knowledgeQuery, knowledgeProject, knowledgeIncludeSensitive, knowledgeMaxItems].forEach((control) => {
+        [knowledgeQuery, knowledgeProject, knowledgeIncludeSensitive, knowledgeMaxItems, knowledgeMode].forEach((control) => {
           control.disabled = privateBlocked || !knowledgeRetrievalEnabled;
         });
         [memorySuggestionsProject, memorySuggestionsMax, ...memorySuggestionTypeControls].forEach((control) => {
@@ -3364,6 +3411,7 @@ def dashboard_html() -> str:
           projectName: knowledgeProject.value.trim() || null,
           includeSensitive: knowledgeIncludeSensitive.checked,
           maxItems: Number(knowledgeMaxItems.value || 5),
+          mode: knowledgeMode.value || 'lexical',
         };
       }
       function memorySuggestionOptionsForSubmission() {
@@ -3446,10 +3494,19 @@ def dashboard_html() -> str:
           ['Blocked', knowledgeContext.blocked ? 'yes' : 'no'],
           ['Block reason', knowledgeContext.blockReason || 'none'],
           ['Retrieval ID', knowledgeContext.retrievalId || 'not created'],
-          ['Retrieval mode', knowledgeContext.retrievalMode || 'not requested'],
+          ['Requested mode', knowledgeContext.requestedMode || 'lexical'],
+          ['Actual mode', knowledgeContext.actualMode || knowledgeContext.retrievalMode || 'not requested'],
+          ['Semantic available', knowledgeContext.semanticAvailable ? 'yes' : 'no'],
+          ['Semantic used', knowledgeContext.semanticUsed ? 'yes' : 'no'],
+          ['Provider', knowledgeContext.embeddingProvider || 'not used'],
+          ['Model', knowledgeContext.embeddingModel || 'not used'],
+          ['Profile', knowledgeContext.embeddingProfileId || 'not used'],
+          ['Dimensions', knowledgeContext.embeddingDimensions || 'not used'],
           ['FTS5 available', knowledgeContext.fts5Available ? 'yes' : 'no'],
           ['Candidate chunks', knowledgeContext.candidateChunkCount || 0],
           ['Candidate sources', knowledgeContext.candidateSourceCount || 0],
+          ['Lexical candidates', knowledgeContext.lexicalCandidateCount || 0],
+          ['Semantic candidates', knowledgeContext.semanticCandidateCount || 0],
           ['Candidate limit reached', knowledgeContext.candidateLimitReached ? 'yes' : 'no'],
           ['Selected chunks', knowledgeContext.selectedChunkCount || 0],
           ['Selected sources', knowledgeContext.selectedSourceCount || 0],
@@ -3459,6 +3516,15 @@ def dashboard_html() -> str:
           metadata.append(row);
         });
         knowledgeResult.append(metadata);
+        if (knowledgeContext.retrievalMode === 'lexical_fallback') {
+          knowledgeResult.append(memoryResultElement('div', `Hybrid semantic capability was unavailable (${knowledgeContext.semanticUnavailableReason || 'unavailable'}); lexical ranking was used.`, 'notice'));
+        }
+        if (knowledgeContext.retrievalMode === 'unavailable') {
+          knowledgeResult.append(memoryResultElement('div', `Semantic retrieval was unavailable (${knowledgeContext.errorCode || 'unavailable'}); lexical results were not substituted.`, 'notice'));
+        }
+        if (knowledgeContext.candidateLimitReached || knowledgeContext.semanticCandidateLimitReached) {
+          knowledgeResult.append(memoryResultElement('div', 'Candidate limit reached; ranking is not exhaustive.', 'notice'));
+        }
         const diversity = Array.isArray(knowledgeContext.sourceDiversity) ? knowledgeContext.sourceDiversity : [];
         if (diversity.length) {
           const diversityList = memoryResultElement('ul');
@@ -3472,12 +3538,15 @@ def dashboard_html() -> str:
             memoryResultElement('strong', `${item.citationLabel} ${item.sourceTitle}`),
             memoryResultElement('div', `Source ${item.sourceId} · chunk ${item.chunkId} · rank ${item.rank}`, 'muted'),
             memoryResultElement('div', `Scope: ${item.scopeType}${item.scopeValue ? `:${item.scopeValue}` : ''} · sensitivity: ${item.sensitivity} · project: ${item.projectName || 'none'}`, 'muted'),
-            memoryResultElement('div', `Relative path: ${item.relativePath || 'none'} · score ${item.textScore} · scope priority ${item.scopePriority}`, 'muted'),
+            memoryResultElement('div', `Relative path: ${item.relativePath || 'none'} · lexical rank ${item.lexicalRank ?? 'none'} · semantic rank ${item.semanticRank ?? 'none'} · semantic score ${item.semanticScore ?? 'none'} · hybrid score ${item.hybridScore ?? 'none'} · scope priority ${item.scopePriority}`, 'muted'),
             memoryResultElement('pre', item.content, 'content-full')
           );
           const reasons = memoryResultElement('ul');
           (item.matchReasons || []).forEach((reason) => reasons.append(memoryResultElement('li', reason)));
-          card.append(memoryResultElement('strong', 'Match reasons'), reasons);
+          const signals = memoryResultElement('ul');
+          (item.rankingSignals || []).forEach((signal) => signals.append(memoryResultElement('li', signal)));
+          card.append(memoryResultElement('strong', 'Match reasons'), reasons,
+                      memoryResultElement('strong', 'Ranking signals'), signals);
           knowledgeResult.append(card);
         });
         if (!items.length) {
@@ -3503,6 +3572,9 @@ def dashboard_html() -> str:
           ['Memory retrieval ID', localContext.memoryRetrievalId || 'not created'],
           ['Memory items', localContext.memoryItemCount || 0],
           ['Knowledge requested / used', `${localContext.knowledgeRequested ? 'yes' : 'no'} / ${localContext.knowledgeUsed ? 'yes' : 'no'}`],
+          ['Knowledge requested / actual mode', `${localContext.knowledgeRequestedMode || 'lexical'} / ${localContext.knowledgeActualMode || localContext.knowledgeRetrievalMode || 'not used'}`],
+          ['Knowledge semantic used', localContext.knowledgeSemanticUsed ? 'yes' : 'no'],
+          ['Embedding model actually used', localContext.knowledgeEmbeddingModel || 'not used'],
           ['Knowledge retrieval ID', localContext.knowledgeRetrievalId || 'not created'],
           ['Knowledge chunks / sources', `${localContext.knowledgeChunkCount || 0} / ${localContext.knowledgeSourceCount || 0}`],
           ['Current request authoritative', localContext.currentRequestAuthoritative ? 'yes' : 'no'],
@@ -6036,6 +6108,7 @@ def dashboard_html() -> str:
       bindDashboardInput(memoryQuery, updateMemoryControls);
       bindDashboardChange(knowledgeEnabled, updateMemoryControls);
       bindDashboardChange(knowledgeMaxItems, updateMemoryControls);
+      bindDashboardChange(knowledgeMode, updateMemoryControls);
       bindDashboardInput(knowledgeQuery, updateMemoryControls);
       bindDashboardChange(memorySuggestionsEnabled, updateMemoryControls);
       bindDashboardChange(memorySuggestionsMax, updateMemoryControls);
@@ -6337,7 +6410,10 @@ def dashboard_html() -> str:
             responseBody = { rawResponse: responseText };
           }
           renderMemoryContext(responseBody.memoryContext || responseBody.memory_context || null);
-          renderKnowledgeContext(responseBody.knowledgeContext || responseBody.knowledge_context || null);
+          const semanticErrorContext = responseBody.detail && responseBody.detail.error === 'semantic_unavailable'
+            ? responseBody.detail
+            : null;
+          renderKnowledgeContext(responseBody.knowledgeContext || responseBody.knowledge_context || semanticErrorContext);
           renderLocalContext(responseBody.localContext || responseBody.local_context || null);
           renderMemorySuggestions(responseBody.memoryProposalSuggestions || responseBody.memory_proposal_suggestions || null);
           renderResponseContext(responseBody.responseContext || responseBody.response_context || null);

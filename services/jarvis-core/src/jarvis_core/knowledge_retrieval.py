@@ -155,8 +155,8 @@ class KnowledgeRetrievalService:
         retrieved_at = utc_now()
         if normalized.private_session:
             return self._result(
-                normalized, blocked=True, block_reason="private_session", retrieval_id=None,
-                retrieved_at=retrieved_at, mode=self.retrieval_mode, candidates=[], items=[],
+                normalized, blocked=True, block_reason="private_session_blocked", retrieval_id=None,
+                retrieved_at=retrieved_at, mode="blocked", candidates=[], items=[],
                 candidate_limit_reached=False,
             )
         if normalized.mode == "semantic":
@@ -197,7 +197,7 @@ class KnowledgeRetrievalService:
         return self._result(
             request, blocked=False, block_reason=None, retrieval_id=retrieval_id,
             retrieved_at=retrieved_at, mode="semantic", candidates=ranked, items=items,
-            candidate_limit_reached=False, semantic_metadata=metadata,
+            candidate_limit_reached=metadata["candidateLimitReached"], semantic_metadata=metadata,
             semantic_candidate_count=len(ranked),
             semantic_candidate_limit_reached=metadata["candidateLimitReached"],
         )
@@ -212,10 +212,21 @@ class KnowledgeRetrievalService:
             semantic_ranked, metadata = self._semantic_ranked(request)
         except KnowledgeEmbeddingError as exc:
             limitation = ("Hybrid semantic capability was unavailable (" + exc.code +
-                          "); actual retrieval used lexical ranking only.")
-            return self._retrieve_lexical(
-                request, retrieved_at, actual_mode="lexical_fallback",
-                limitations=[limitation],
+                           "); actual retrieval used lexical ranking only.")
+            selected = self._select_diverse(lexical_ranked, request.max_items)
+            items = self._serialize_items(selected)
+            retrieval_id = str(uuid4())
+            self._audit(request, retrieval_id, retrieved_at, "lexical_fallback",
+                        lexical_ranked, items)
+            return self._result(
+                request, blocked=False, block_reason=None, retrieval_id=retrieval_id,
+                retrieved_at=retrieved_at, mode="lexical_fallback",
+                candidates=lexical_ranked, items=items,
+                candidate_limit_reached=candidate_limit_reached,
+                additional_limitations=[limitation],
+                lexical_candidate_count=len(lexical_ranked),
+                semantic_metadata={"available": False, "used": False,
+                                   "errorCode": exc.code},
             )
         semantic_pool = semantic_ranked[:HYBRID_POOL_LIMIT]
         union: dict[str, dict[str, Any]] = {}
@@ -275,14 +286,16 @@ class KnowledgeRetrievalService:
     def _semantic_ranked(self, request: _NormalizedRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if self.embedding_service is None:
             raise KnowledgeEmbeddingError("provider_disabled")
+        records = self.embedding_service.current_semantic_candidates(
+            agent_id=request.agent_id, project_name=request.project_name,
+            include_sensitive=request.include_sensitive,
+            limit=SEMANTIC_CANDIDATE_LIMIT + 1,
+        )
+        if not records:
+            raise KnowledgeEmbeddingError("no_current_embeddings")
         query = self.embedding_service.embed_query(request.query, private_session=False)
         query_vector = query["vector"]
         try:
-            records = self.embedding_service.current_semantic_candidates(
-                agent_id=request.agent_id, project_name=request.project_name,
-                include_sensitive=request.include_sensitive,
-                limit=SEMANTIC_CANDIDATE_LIMIT + 1,
-            )
             limit_reached = len(records) > SEMANTIC_CANDIDATE_LIMIT
             candidates: list[dict[str, Any]] = []
             for record in records[:SEMANTIC_CANDIDATE_LIMIT]:
@@ -318,7 +331,7 @@ class KnowledgeRetrievalService:
                             request: _NormalizedRequest) -> dict[str, Any]:
         candidate = dict(record)
         candidate["scope_priority"] = self._scope_priority(candidate, request)
-        candidate["semantic_score"] = round(score, 8)
+        candidate["semantic_score"] = float(score)
         candidate["text_score"] = 0.0
         candidate["matched_term_count"] = 0
         candidate["match_reasons"] = [
@@ -711,7 +724,7 @@ class KnowledgeRetrievalService:
             source_items = [item for item in items if item["sourceId"] == source_id]
             diversity.append({"sourceId": source_id, "selectedChunkCount": len(source_items),
                               "bestRank": min(item["rank"] for item in source_items)})
-        limitations = [
+        limitations = [] if blocked else [
             "Retrieval searched active stored SQLite chunks only.",
             "No knowledge source was modified.",
             "No original project file was opened during retrieval.",
@@ -732,7 +745,7 @@ class KnowledgeRetrievalService:
             limitations.append("No response agent was invoked.")
         if mode == "deterministic_fallback":
             limitations.append("SQLite FTS5 is unavailable; deterministic lexical ranking was used.")
-        if candidate_limit_reached:
+        if candidate_limit_reached and request.mode in {"lexical", "hybrid"}:
             limitations.append("Deterministic fallback candidates were bounded at 5000 chunks; ranking is not exhaustive.")
         if semantic_candidate_limit_reached:
             limitations.append("Semantic candidates were bounded at 10000 current vectors; ranking is not exhaustive.")
@@ -740,9 +753,23 @@ class KnowledgeRetrievalService:
             limitations.append("Private session blocked retrieval and auditing; stored sources were not deleted.")
         limitations.extend(additional_limitations or [])
         semantic = semantic_metadata or {}
-        capability = (self.embedding_service.capability()
-                      if self.embedding_service is not None and not blocked else {"available": False})
+        if blocked:
+            capability: dict[str, Any] = {"available": False, "provider": None,
+                                          "model": None, "profileId": None,
+                                          "dimensions": None}
+            fts5_available = False
+        else:
+            capability = (self.embedding_service.capability()
+                          if self.embedding_service is not None else {"available": False})
+            fts5_available = self.fts5_available
         semantic_used = mode in {"semantic", "hybrid"} and bool(semantic.get("used"))
+        semantic_available = bool(
+            semantic["available"] if "available" in semantic else capability.get("available")
+        )
+        provider = semantic.get("provider", capability.get("provider"))
+        model = semantic.get("model", capability.get("model"))
+        profile_id = semantic.get("profileId", capability.get("profileId"))
+        dimensions = semantic.get("dimensions", capability.get("dimensions"))
         return {
             "requested": True, "used": bool(items) and not blocked,
             "blocked": blocked, "blockReason": block_reason,
@@ -750,18 +777,20 @@ class KnowledgeRetrievalService:
             "purpose": request.purpose, "agentId": request.agent_id,
             "projectName": request.project_name, "privateSession": request.private_session,
             "includeSensitive": request.include_sensitive,
-            "requestedMode": request.mode, "fts5Available": self.fts5_available,
-            "retrievalMode": mode, "semanticAvailable": bool(semantic.get("available", capability.get("available"))),
+            "requestedMode": request.mode, "actualMode": mode,
+            "fts5Available": fts5_available,
+            "retrievalMode": mode, "semanticAvailable": semantic_available,
             "semanticUsed": semantic_used,
-            "embeddingProvider": semantic.get("provider") if semantic_used else None,
-            "embeddingModel": semantic.get("model") if semantic_used else None,
-            "embeddingProfileId": semantic.get("profileId") if semantic_used else None,
-            "embeddingDimensions": semantic.get("dimensions") if semantic_used else None,
+            "semanticUnavailableReason": semantic.get("errorCode"),
+            "embeddingProvider": provider,
+            "embeddingModel": model,
+            "embeddingProfileId": profile_id,
+            "embeddingDimensions": dimensions,
             "querySource": "explicit", "query": request.query,
             "queryTermCount": len(request.terms),
             "candidateChunkCount": 0 if blocked else len(candidates),
             "candidateSourceCount": 0 if blocked else len({item["source_id"] for item in candidates}),
-            "candidateLimitReached": candidate_limit_reached,
+            "candidateLimitReached": candidate_limit_reached or semantic_candidate_limit_reached,
             "lexicalCandidateCount": 0 if blocked else lexical_candidate_count,
             "semanticCandidateCount": 0 if blocked else semantic_candidate_count,
             "semanticCandidateLimitReached": semantic_candidate_limit_reached,

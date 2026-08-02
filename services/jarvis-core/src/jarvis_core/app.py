@@ -504,6 +504,7 @@ class KnowledgeEmbeddingRebuildPreviewInput(BaseModel):
     onlyMissing: bool = True
     limit: int = Field(default=32, ge=1, le=64)
     cursor: str | None = Field(default=None, max_length=1000)
+    privateSession: bool = False
 
 
 class KnowledgeEmbeddingRebuildInput(KnowledgeEmbeddingRebuildPreviewInput):
@@ -1560,6 +1561,15 @@ def _knowledge_context(
             "blocked": False,
             "blockReason": None,
             "retrievalId": None,
+            "requestedMode": options.mode if options is not None else "lexical",
+            "actualMode": None,
+            "retrievalMode": None,
+            "semanticAvailable": False,
+            "semanticUsed": False,
+            "embeddingProvider": None,
+            "embeddingModel": None,
+            "embeddingProfileId": None,
+            "embeddingDimensions": None,
             "selectedChunkCount": 0,
             "selectedSourceCount": 0,
             "items": [],
@@ -1597,6 +1607,7 @@ def _knowledge_context(
         for item in items
     ]
     context = dict(retrieval)
+    context.pop("query", None)
     context["used"] = bool(items) and not bool(retrieval["blocked"])
     context["considerations"] = considerations
     context["limitations"] = list(retrieval["limitations"]) + list(
@@ -1621,6 +1632,7 @@ def _local_context_summary(
         "knowledgeUsed": bool(knowledge_context.get("used")),
         "knowledgeRetrievalId": knowledge_context.get("retrievalId"),
         "knowledgeRequestedMode": knowledge_context.get("requestedMode"),
+        "knowledgeActualMode": knowledge_context.get("actualMode") or knowledge_context.get("retrievalMode"),
         "knowledgeRetrievalMode": knowledge_context.get("retrievalMode"),
         "knowledgeSemanticUsed": bool(knowledge_context.get("semanticUsed")),
         "knowledgeEmbeddingModel": knowledge_context.get("embeddingModel") if knowledge_context.get("semanticUsed") else None,
@@ -2920,12 +2932,30 @@ def get_doc_detail(doc_id: str, _: None = Depends(require_dashboard_lan_access))
 
 def _raise_knowledge_http_error(exc: Exception) -> None:
     if isinstance(exc, KnowledgeSemanticUnavailableError):
-        raise HTTPException(status_code=503, detail=f"semantic retrieval unavailable: {exc.code}") from exc
+        raise HTTPException(status_code=503, detail={
+            "error": "semantic_unavailable", "errorCode": exc.code,
+            "requested": True, "used": False, "blocked": False,
+            "blockReason": None, "requestedMode": "semantic",
+            "actualMode": "unavailable", "retrievalMode": "unavailable",
+            "semanticAvailable": False, "semanticUsed": False,
+            "embeddingProvider": "ollama_local", "embeddingModel": None,
+            "embeddingProfileId": None, "embeddingDimensions": None,
+            "lexicalCandidateCount": 0, "semanticCandidateCount": 0,
+            "candidateChunkCount": 0, "candidateSourceCount": 0,
+            "candidateLimitReached": False, "semanticCandidateLimitReached": False,
+            "selectedChunkCount": 0, "selectedSourceCount": 0,
+            "retrievalId": None, "items": [], "sourceDiversity": [],
+            "limitations": [f"Semantic retrieval was unavailable ({exc.code}); lexical results were not substituted."],
+        }) from exc
     if isinstance(exc, KnowledgeEmbeddingError):
         provider_codes = {"provider_unavailable", "model_unavailable", "provider_timeout",
-                          "provider_redirect_blocked", "invalid_provider_response",
-                          "embedding_dimension_mismatch", "embedding_input_too_large"}
-        status_code = 503 if exc.code in provider_codes else 409 if exc.code == "provider_disabled" else 422
+                           "provider_redirect_blocked", "invalid_provider_response",
+                           "provider_response_too_large", "embedding_dimension_mismatch",
+                           "embedding_input_too_large", "no_current_embeddings",
+                           "embedding_write_failed"}
+        conflict_codes = {"provider_disabled", "embedding_rebuild_in_progress",
+                          "embedding_state_changed", "private_session_blocked"}
+        status_code = 503 if exc.code in provider_codes else 409 if exc.code in conflict_codes else 422
         raise HTTPException(status_code=status_code, detail=f"knowledge embedding error: {exc.code}") from exc
     if isinstance(exc, KnowledgeRetrievalNotFoundError):
         raise HTTPException(status_code=404, detail="knowledge retrieval not found") from exc
@@ -3017,6 +3047,7 @@ def preview_knowledge_embedding_rebuild(
         return knowledge_embedding_service.rebuild_preview(
             source_id=payload.sourceId, include_sensitive=payload.includeSensitive,
             only_missing=payload.onlyMissing, limit=payload.limit, cursor=payload.cursor,
+            private_session=payload.privateSession,
         )
     except KnowledgeEmbeddingError as exc:
         _raise_knowledge_http_error(exc)
@@ -3032,6 +3063,7 @@ def rebuild_knowledge_embeddings(
             source_id=payload.sourceId, include_sensitive=payload.includeSensitive,
             only_missing=payload.onlyMissing, limit=payload.limit, cursor=payload.cursor,
             confirmation=payload.confirmation, actor=payload.actor,
+            private_session=payload.privateSession,
         )
     except KnowledgeEmbeddingError as exc:
         _raise_knowledge_http_error(exc)

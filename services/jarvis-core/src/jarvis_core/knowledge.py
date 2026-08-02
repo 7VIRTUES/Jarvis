@@ -325,6 +325,9 @@ class KnowledgeService:
             """
         ).fetchone()
         available = knowledge_fts5_available(self.conn)
+        embedding_row = self.conn.execute(
+            "select enabled from knowledge_embedding_settings where settings_id = 'default'"
+        ).fetchone()
         return {
             "totalSources": row[0], "activeSources": row[1] or 0,
             "disabledSources": row[2] or 0, "pastedSources": row[3] or 0,
@@ -334,7 +337,8 @@ class KnowledgeService:
             "indexMode": "fts5" if available else "deterministic_fallback_available",
             "automaticScanningEnabled": False, "agentRetrievalEnabled": True,
             "retrievalRequiresExplicitOptIn": True, "automaticInjectionEnabled": False,
-            "embeddingsEnabled": False, "localModelEnabled": False,
+            "embeddingsEnabled": bool(embedding_row and embedding_row[0]),
+            "localModelEnabled": False,
         }
 
     def edit_metadata(self, source_id: str, updates: dict[str, Any], *, actor: str = "local_user") -> dict[str, Any]:

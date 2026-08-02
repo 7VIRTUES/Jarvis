@@ -5,6 +5,8 @@ import json
 import math
 import sqlite3
 import struct
+import threading
+from contextlib import contextmanager
 from typing import Any
 from uuid import uuid4
 
@@ -18,6 +20,9 @@ PROFILE_NORMALIZATION = "l2_unit"
 MAX_BATCH_SIZE = 64
 SEMANTIC_CANDIDATE_LIMIT = 10_000
 _PROBE_TEXT = "Jarvis local embedding capability probe."
+# Float32 L2 accumulation can drift slightly at 4,096 dimensions. Five parts in
+# 100,000 accepts normal round-off while rejecting materially non-unit vectors.
+FLOAT32_UNIT_TOLERANCE = 5e-5
 
 
 class KnowledgeEmbeddingError(RuntimeError):
@@ -34,6 +39,7 @@ class KnowledgeEmbeddingService:
         self.conn = conn
         self.event_bus = event_bus
         self.provider = provider or LocalOllamaEmbeddingProvider()
+        self._mutation_lock = threading.Lock()
 
     def status(self) -> dict[str, Any]:
         settings = self._settings()
@@ -44,7 +50,15 @@ class KnowledgeEmbeddingService:
             "source_id, status, error_code, created_at, completed_at from knowledge_embedding_runs "
             "order by created_at desc, run_id desc limit 1"
         ).fetchone()
-        configured = bool(settings["modelName"] and settings["activeProfileId"] and settings["dimensions"])
+        profile = self._active_profile(settings)
+        configured = bool(
+            settings["provider"] == PROVIDER and settings["modelName"]
+            and settings["activeProfileId"] and settings["dimensions"]
+            and profile is not None and profile["provider"] == PROVIDER
+            and profile["modelName"] == settings["modelName"]
+            and profile["dimensions"] == settings["dimensions"]
+            and profile["normalization"] == PROFILE_NORMALIZATION
+        )
         return {
             "provider": PROVIDER, "fixedEndpoint": self.provider.endpoint_label,
             "enabled": settings["enabled"], "embeddingsEnabled": settings["enabled"],
@@ -52,12 +66,21 @@ class KnowledgeEmbeddingService:
             "activeProfileId": settings["activeProfileId"],
             "providerConfigured": configured, **counts,
             "latestRun": self._run_dict(latest_row) if latest_row else None,
+            "recentRuns": self._recent_runs(),
             "automaticEmbeddingEnabled": False, "backgroundEmbeddingEnabled": False,
+            "schedulingEnabled": False,
             "modelInstallationSupported": False, "modelPullingSupported": False,
-            "cloudProviderSupported": False,
+            "cloudProviderSupported": False, "apiKeySupported": False,
             "hybridRetrievalAvailable": bool(settings["enabled"] and configured),
+            "phase": "v0.1E Batch 3",
+            "currentSlice": "local semantic embeddings and hybrid knowledge retrieval",
             "knowledgeLibraryStatus": "implemented_with_optional_local_embeddings",
             "knowledgeRetrievalStatus": "lexical_semantic_hybrid",
+            "knowledgeLexicalRetrievalEnabled": True,
+            "knowledgeSemanticRetrievalImplemented": True,
+            "knowledgeSemanticRetrievalEnabledByDefault": False,
+            "knowledgeHybridRetrievalImplemented": True,
+            "knowledgeHybridRetrievalEnabledByDefault": False,
             "knowledgeEmbeddingProvider": "ollama_local",
             "knowledgeEmbeddingEndpointPolicy": "fixed_loopback_only",
             "knowledgeEmbeddingConfigurationExplicit": True,
@@ -79,8 +102,18 @@ class KnowledgeEmbeddingService:
 
     def capability(self) -> dict[str, Any]:
         settings = self._settings()
-        available = bool(settings["enabled"] and settings["activeProfileId"]
-                         and settings["modelName"] and settings["dimensions"])
+        profile = self._active_profile(settings)
+        available = bool(
+            settings["enabled"]
+            and settings["provider"] == PROVIDER
+            and settings["modelName"]
+            and settings["dimensions"]
+            and profile is not None
+            and profile["provider"] == PROVIDER
+            and profile["modelName"] == settings["modelName"]
+            and profile["dimensions"] == settings["dimensions"]
+            and profile["normalization"] == PROFILE_NORMALIZATION
+        )
         return {
             "available": available, "enabled": settings["enabled"], "provider": PROVIDER,
             "model": settings["modelName"], "profileId": settings["activeProfileId"],
@@ -106,6 +139,10 @@ class KnowledgeEmbeddingService:
         }
 
     def configure(self, model_name: str, confirmation: str, actor: str) -> dict[str, Any]:
+        with self._exclusive_mutation():
+            return self._configure(model_name, confirmation, actor)
+
+    def _configure(self, model_name: str, confirmation: str, actor: str) -> dict[str, Any]:
         if confirmation != "ENABLE EMBEDDINGS":
             raise KnowledgeEmbeddingError("confirmation_required")
         model = self._model(model_name)
@@ -133,8 +170,11 @@ class KnowledgeEmbeddingService:
                     (profile_id, PROVIDER, model, response.dimensions, PROFILE_NORMALIZATION, now, now),
                 )
             else:
-                self.conn.execute("update knowledge_embedding_profiles set last_used_at = ? where profile_id = ?",
-                                  (now, profile_id))
+                self.conn.execute(
+                    "update knowledge_embedding_profiles set normalization = ?, last_used_at = ? "
+                    "where profile_id = ?",
+                    (PROFILE_NORMALIZATION, now, profile_id),
+                )
             self.conn.execute(
                 "update knowledge_embedding_settings set enabled = 1, provider = ?, model_name = ?, "
                 "active_profile_id = ?, dimensions = ?, configured_at = ?, updated_at = ? "
@@ -150,6 +190,10 @@ class KnowledgeEmbeddingService:
         return self.status()
 
     def disable(self, confirmation: str, actor: str) -> dict[str, Any]:
+        with self._exclusive_mutation():
+            return self._disable(confirmation, actor)
+
+    def _disable(self, confirmation: str, actor: str) -> dict[str, Any]:
         if confirmation != "DISABLE EMBEDDINGS":
             raise KnowledgeEmbeddingError("confirmation_required")
         actor, settings, now = self._actor(actor), self._settings(), utc_now()
@@ -166,6 +210,10 @@ class KnowledgeEmbeddingService:
         return self.status()
 
     def clear(self, scope: str, source_id: str | None, confirmation: str, actor: str) -> dict[str, Any]:
+        with self._exclusive_mutation():
+            return self._clear(scope, source_id, confirmation, actor)
+
+    def _clear(self, scope: str, source_id: str | None, confirmation: str, actor: str) -> dict[str, Any]:
         if confirmation != "DELETE EMBEDDINGS":
             raise KnowledgeEmbeddingError("confirmation_required")
         if scope not in {"active_profile", "source", "all_profiles"}:
@@ -208,7 +256,10 @@ class KnowledgeEmbeddingService:
 
     def rebuild_preview(self, *, source_id: str | None = None,
                         include_sensitive: bool = False, only_missing: bool = True,
-                        limit: int = 32, cursor: str | None = None) -> dict[str, Any]:
+                        limit: int = 32, cursor: str | None = None,
+                        private_session: bool = False) -> dict[str, Any]:
+        if private_session:
+            raise KnowledgeEmbeddingError("private_session_blocked")
         settings = self._settings()
         self._batch_limit(limit)
         source_id = self._optional_source_id(source_id)
@@ -226,13 +277,37 @@ class KnowledgeEmbeddingService:
     def rebuild(self, *, source_id: str | None = None,
                 include_sensitive: bool = False, only_missing: bool = True,
                 limit: int = 32, cursor: str | None = None,
-                confirmation: str, actor: str) -> dict[str, Any]:
+                confirmation: str, actor: str,
+                private_session: bool = False) -> dict[str, Any]:
+        if confirmation != "EMBED":
+            raise KnowledgeEmbeddingError("confirmation_required")
+        if private_session:
+            raise KnowledgeEmbeddingError("private_session_blocked")
+        with self._exclusive_mutation():
+            return self._rebuild(
+                source_id=source_id, include_sensitive=include_sensitive,
+                only_missing=only_missing, limit=limit, cursor=cursor,
+                confirmation=confirmation, actor=actor,
+            )
+
+    def _rebuild(self, *, source_id: str | None = None,
+                 include_sensitive: bool = False, only_missing: bool = True,
+                 limit: int = 32, cursor: str | None = None,
+                 confirmation: str, actor: str) -> dict[str, Any]:
         if confirmation != "EMBED":
             raise KnowledgeEmbeddingError("confirmation_required")
         actor, settings = self._actor(actor), self._settings()
-        if not settings["enabled"] or not settings["activeProfileId"] \
+        if not settings["enabled"] or settings["provider"] != PROVIDER \
+                or not settings["activeProfileId"] \
                 or not settings["modelName"] or not settings["dimensions"]:
             raise KnowledgeEmbeddingError("provider_disabled")
+        profile = self._active_profile(settings)
+        if (profile is None or profile["provider"] != PROVIDER
+                or profile["modelName"] != settings["modelName"]
+                or profile["normalization"] != PROFILE_NORMALIZATION):
+            raise KnowledgeEmbeddingError("provider_disabled")
+        if profile["dimensions"] != settings["dimensions"]:
+            raise KnowledgeEmbeddingError("embedding_dimension_mismatch")
         self._batch_limit(limit)
         source_id = self._optional_source_id(source_id)
         if source_id and not self.conn.execute(
@@ -261,10 +336,42 @@ class KnowledgeEmbeddingService:
                 include_sensitive=include_sensitive, source_id=source_id, status="failed",
                 error_code=exc.code, created_at=created)
             raise KnowledgeEmbeddingError(exc.code) from None
+        try:
+            blobs = [
+                self.serialize_vector(vector, settings["dimensions"])
+                for vector in response.vectors
+            ]
+        except KnowledgeEmbeddingError as exc:
+            self._record_run(
+                "embed_batch", profile_id=settings["activeProfileId"],
+                model_name=settings["modelName"], requested=len(selected), failed=len(selected),
+                include_sensitive=include_sensitive, source_id=source_id, status="failed",
+                error_code=exc.code, created_at=created)
+            raise
         now, run_id = utc_now(), str(uuid4())
-        with self.conn:
-            for row, vector in zip(selected, response.vectors, strict=True):
-                blob = self.serialize_vector(vector, settings["dimensions"])
+        try:
+            self.conn.execute("begin immediate")
+            current_settings = self._settings()
+            if not self._same_configuration(settings, current_settings):
+                raise KnowledgeEmbeddingError("embedding_state_changed")
+            current_profile = self._active_profile(current_settings)
+            if (current_profile is None or current_profile["provider"] != PROVIDER
+                    or current_profile["modelName"] != settings["modelName"]
+                    or current_profile["dimensions"] != settings["dimensions"]
+                    or current_profile["normalization"] != PROFILE_NORMALIZATION):
+                raise KnowledgeEmbeddingError("embedding_state_changed")
+            for row in selected:
+                current = self.conn.execute(
+                    "select chunk.source_id, chunk.content_hash, source.status, source.sensitivity "
+                    "from knowledge_chunks as chunk join knowledge_sources as source "
+                    "on source.source_id = chunk.source_id where chunk.chunk_id = ?",
+                    (row["chunkId"],),
+                ).fetchone()
+                if (current is None or current[0] != row["sourceId"]
+                        or current[1] != row["contentHash"] or current[2] != "active"
+                        or (not include_sensitive and current[3] != "standard")):
+                    raise KnowledgeEmbeddingError("embedding_state_changed")
+            for row, blob in zip(selected, blobs, strict=True):
                 self.conn.execute(
                     "insert into knowledge_chunk_embeddings "
                     "(profile_id, chunk_id, source_id, content_hash, dimensions, vector, created_at, updated_at) "
@@ -287,7 +394,14 @@ class KnowledgeEmbeddingService:
                      "modelName": settings["modelName"], "profileId": settings["activeProfileId"],
                      "dimensions": settings["dimensions"], "sourceId": affected_source,
                      "embeddedCount": source_count, "includeSensitive": bool(include_sensitive),
-                     "actor": actor, "timestamp": now}, now)
+                      "actor": actor, "timestamp": now}, now)
+            self.conn.commit()
+        except KnowledgeEmbeddingError:
+            self.conn.rollback()
+            raise
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise KnowledgeEmbeddingError("embedding_write_failed") from None
         self._emit("knowledge.embeddings.built",
                    {"runId": run_id, "provider": PROVIDER,
                     "modelName": settings["modelName"], "profileId": settings["activeProfileId"],
@@ -301,10 +415,18 @@ class KnowledgeEmbeddingService:
 
     def embed_query(self, query: str, *, private_session: bool = False) -> dict[str, Any]:
         if private_session:
-            raise KnowledgeEmbeddingError("private_session")
+            raise KnowledgeEmbeddingError("private_session_blocked")
         settings = self._settings()
-        if not settings["enabled"] or not settings["activeProfileId"]:
+        profile = self._active_profile(settings)
+        if (not settings["enabled"] or settings["provider"] != PROVIDER
+                or not settings["activeProfileId"] or not settings["modelName"]
+                or not settings["dimensions"] or profile is None
+                or profile["provider"] != PROVIDER
+                or profile["modelName"] != settings["modelName"]
+                or profile["normalization"] != PROFILE_NORMALIZATION):
             raise KnowledgeEmbeddingError("provider_disabled")
+        if profile["dimensions"] != settings["dimensions"]:
+            raise KnowledgeEmbeddingError("embedding_dimension_mismatch")
         if not isinstance(query, str) or not query:
             raise KnowledgeEmbeddingError("embedding_input_too_large")
         try:
@@ -320,8 +442,16 @@ class KnowledgeEmbeddingService:
                                     project_name: str | None, include_sensitive: bool,
                                     limit: int = SEMANTIC_CANDIDATE_LIMIT + 1) -> list[dict[str, Any]]:
         settings = self._settings()
-        if not settings["enabled"] or not settings["activeProfileId"]:
+        profile = self._active_profile(settings)
+        if (not settings["enabled"] or settings["provider"] != PROVIDER
+                or not settings["activeProfileId"] or not settings["modelName"]
+                or not settings["dimensions"] or profile is None
+                or profile["provider"] != PROVIDER
+                or profile["modelName"] != settings["modelName"]
+                or profile["normalization"] != PROFILE_NORMALIZATION):
             raise KnowledgeEmbeddingError("provider_disabled")
+        if profile["dimensions"] != settings["dimensions"]:
+            raise KnowledgeEmbeddingError("embedding_dimension_mismatch")
         clauses = ["source.scope_type = 'global'"]
         parameters: list[Any] = [settings["activeProfileId"]]
         if project_name:
@@ -336,20 +466,20 @@ class KnowledgeEmbeddingService:
             "chunk.content_hash, chunk.char_start, chunk.char_end, source.title, source.source_type, "
             "source.scope_type, source.scope_value, source.sensitivity, source.media_type, "
             "source.project_name, source.relative_path, source.tags, source.updated_at, "
-            "embedding.content_hash, embedding.dimensions, embedding.vector "
+            "embedding.source_id, embedding.content_hash, embedding.dimensions, embedding.vector "
             "from knowledge_chunk_embeddings as embedding "
             "join knowledge_chunks as chunk on chunk.chunk_id = embedding.chunk_id "
             "join knowledge_sources as source on source.source_id = chunk.source_id "
             "where embedding.profile_id = ? and source.status = 'active' and (" +
             " or ".join(clauses) + ")" + sensitivity +
-            " order by source.source_id, chunk.chunk_index, chunk.chunk_id limit ?",
-            (*parameters, limit)).fetchall()
+            " order by source.source_id, chunk.chunk_index, chunk.chunk_id",
+            tuple(parameters))
         result: list[dict[str, Any]] = []
         for row in rows:
-            if row[4] != row[17] or row[18] != settings["dimensions"]:
+            if row[17] != row[1] or row[4] != row[18] or row[19] != settings["dimensions"]:
                 continue
             try:
-                vector = self.deserialize_vector(row[19], row[18])
+                vector = self.deserialize_vector(row[20], row[19])
             except KnowledgeEmbeddingError:
                 continue
             result.append({
@@ -359,24 +489,65 @@ class KnowledgeEmbeddingService:
                 "scope_type": row[9], "scope_value": row[10], "sensitivity": row[11],
                 "media_type": row[12], "project_name": row[13], "relative_path": row[14],
                 "tags": row[15], "updated_at": row[16], "vector": vector})
+            if len(result) >= limit:
+                break
         return result
 
     @staticmethod
     def serialize_vector(vector: tuple[float, ...] | list[float], dimensions: int) -> bytes:
-        if len(vector) != dimensions or not 8 <= dimensions <= 4096:
+        if (not isinstance(dimensions, int) or isinstance(dimensions, bool)
+                or not 8 <= dimensions <= 4096):
             raise KnowledgeEmbeddingError("embedding_dimension_mismatch")
-        if any(not math.isfinite(float(value)) for value in vector):
+        if not isinstance(vector, (list, tuple)) or len(vector) != dimensions:
+            raise KnowledgeEmbeddingError("embedding_dimension_mismatch")
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in vector):
             raise KnowledgeEmbeddingError("invalid_provider_response")
-        return struct.pack(f"<{dimensions}f", *(float(value) for value in vector))
+        values = [float(value) for value in vector]
+        if any(not math.isfinite(value) for value in values):
+            raise KnowledgeEmbeddingError("invalid_provider_response")
+        magnitude = math.sqrt(sum(value * value for value in values))
+        if not math.isfinite(magnitude) or magnitude == 0.0:
+            raise KnowledgeEmbeddingError("invalid_provider_response")
+        normalized = [value / magnitude for value in values]
+        try:
+            blob = struct.pack(f"<{dimensions}f", *normalized)
+            float32_values = struct.unpack(f"<{dimensions}f", blob)
+        except (OverflowError, struct.error):
+            raise KnowledgeEmbeddingError("invalid_provider_response") from None
+        if any(not math.isfinite(value) for value in float32_values):
+            raise KnowledgeEmbeddingError("invalid_provider_response")
+        float32_magnitude = math.sqrt(sum(value * value for value in float32_values))
+        if (not math.isfinite(float32_magnitude) or float32_magnitude == 0.0
+                or abs(float32_magnitude - 1.0) > FLOAT32_UNIT_TOLERANCE):
+            raise KnowledgeEmbeddingError("invalid_provider_response")
+        return blob
 
     @staticmethod
     def deserialize_vector(value: Any, dimensions: int) -> list[float]:
-        if not isinstance(value, (bytes, bytearray, memoryview)) or len(value) != dimensions * 4:
-            raise KnowledgeEmbeddingError("invalid_provider_response")
-        vector = list(struct.unpack(f"<{dimensions}f", bytes(value)))
+        if (not isinstance(dimensions, int) or isinstance(dimensions, bool)
+                or not 8 <= dimensions <= 4096):
+            raise KnowledgeEmbeddingError("wrong_dimension")
+        if not isinstance(value, (bytes, bytearray, memoryview)):
+            raise KnowledgeEmbeddingError("invalid_vector_blob_length")
+        raw = bytes(value)
+        if len(raw) != dimensions * 4:
+            raise KnowledgeEmbeddingError("invalid_vector_blob_length")
+        try:
+            vector = list(struct.unpack(f"<{dimensions}f", raw))
+        except struct.error:
+            raise KnowledgeEmbeddingError("invalid_vector_blob_length") from None
+        if len(vector) != dimensions:
+            raise KnowledgeEmbeddingError("invalid_vector_blob_length")
         if any(not math.isfinite(item) for item in vector):
-            raise KnowledgeEmbeddingError("invalid_provider_response")
-        return vector
+            raise KnowledgeEmbeddingError("non_finite_vector")
+        magnitude = math.sqrt(sum(item * item for item in vector))
+        if not math.isfinite(magnitude):
+            raise KnowledgeEmbeddingError("non_finite_vector")
+        if magnitude == 0.0:
+            raise KnowledgeEmbeddingError("zero_vector")
+        if abs(magnitude - 1.0) > FLOAT32_UNIT_TOLERANCE:
+            raise KnowledgeEmbeddingError("non_unit_vector")
+        return [item / magnitude for item in vector]
 
     def _settings(self) -> dict[str, Any]:
         row = self.conn.execute(
@@ -388,6 +559,35 @@ class KnowledgeEmbeddingService:
                 "activeProfileId": row[3], "dimensions": row[4],
                 "configuredAt": row[5], "updatedAt": row[6]}
 
+    def _active_profile(self, settings: dict[str, Any]) -> dict[str, Any] | None:
+        profile_id = settings.get("activeProfileId")
+        if not profile_id:
+            return None
+        row = self.conn.execute(
+            "select profile_id, provider, model_name, dimensions, normalization "
+            "from knowledge_embedding_profiles where profile_id = ?",
+            (profile_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {"profileId": row[0], "provider": row[1], "modelName": row[2],
+                "dimensions": row[3], "normalization": row[4]}
+
+    @staticmethod
+    def _same_configuration(before: dict[str, Any], after: dict[str, Any]) -> bool:
+        keys = ("enabled", "provider", "modelName", "activeProfileId", "dimensions", "updatedAt")
+        return all(before.get(key) == after.get(key) for key in keys)
+
+    def _recent_runs(self, limit: int = 25) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "select run_id, operation, profile_id, provider, model_name, requested_chunk_count, "
+            "embedded_chunk_count, skipped_chunk_count, failed_chunk_count, include_sensitive, "
+            "source_id, status, error_code, created_at, completed_at "
+            "from knowledge_embedding_runs order by created_at desc, run_id desc limit ?",
+            (limit,),
+        ).fetchall()
+        return [self._run_dict(row) for row in rows]
+
     def _counts(self, settings: dict[str, Any]) -> dict[str, int]:
         total = int(self.conn.execute("select count(*) from knowledge_chunks").fetchone()[0])
         active = int(self.conn.execute(
@@ -397,29 +597,82 @@ class KnowledgeEmbeddingService:
             "select count(*) from knowledge_chunks as chunk join knowledge_sources as source "
             "on source.source_id = chunk.source_id where source.status = 'active' "
             "and source.sensitivity = 'sensitive'").fetchone()[0])
-        current = stale = 0
-        if settings["activeProfileId"] and settings["dimensions"]:
-            rows = self.conn.execute(
-                "select chunk.content_hash, embedding.content_hash, embedding.dimensions, embedding.vector "
-                "from knowledge_chunks as chunk join knowledge_sources as source "
-                "on source.source_id = chunk.source_id join knowledge_chunk_embeddings as embedding "
-                "on embedding.chunk_id = chunk.chunk_id and embedding.profile_id = ? "
-                "where source.status = 'active'", (settings["activeProfileId"],)).fetchall()
-            for row in rows:
-                valid = row[0] == row[1] and row[2] == settings["dimensions"]
-                if valid:
-                    try:
-                        self.deserialize_vector(row[3], row[2])
-                    except KnowledgeEmbeddingError:
-                        valid = False
-                if valid:
-                    current += 1
+        active_profile_id = settings["activeProfileId"]
+        profile = self._active_profile(settings)
+        profile_current = bool(
+            profile is not None and settings["provider"] == PROVIDER
+            and profile["provider"] == PROVIDER
+            and profile["modelName"] == settings["modelName"]
+            and profile["dimensions"] == settings["dimensions"]
+            and profile["normalization"] == PROFILE_NORMALIZATION
+        )
+        rows = self.conn.execute(
+            "select chunk.source_id, chunk.content_hash, embedding.source_id, "
+            "embedding.content_hash, embedding.dimensions, embedding.vector "
+            "from knowledge_chunks as chunk join knowledge_sources as source "
+            "on source.source_id = chunk.source_id left join knowledge_chunk_embeddings as embedding "
+            "on embedding.chunk_id = chunk.chunk_id and embedding.profile_id = ? "
+            "where source.status = 'active' order by chunk.chunk_id",
+            (active_profile_id,),
+        ).fetchall()
+        current = missing = stale_content = invalid = wrong_dimension = 0
+        invalid_blob_length = non_finite = zero = non_unit = wrong_source = 0
+        for row in rows:
+            if row[2] is None:
+                missing += 1
+                continue
+            if row[2] != row[0]:
+                wrong_source += 1
+                invalid += 1
+                continue
+            if row[3] != row[1]:
+                stale_content += 1
+                continue
+            if not profile_current or row[4] != settings["dimensions"]:
+                wrong_dimension += 1
+                invalid += 1
+                continue
+            try:
+                self.deserialize_vector(row[5], row[4])
+            except KnowledgeEmbeddingError as exc:
+                invalid += 1
+                if exc.code == "invalid_vector_blob_length":
+                    invalid_blob_length += 1
+                elif exc.code == "non_finite_vector":
+                    non_finite += 1
+                elif exc.code == "zero_vector":
+                    zero += 1
+                elif exc.code == "non_unit_vector":
+                    non_unit += 1
                 else:
-                    stale += 1
-        missing = max(0, active - current - stale)
+                    wrong_dimension += 1
+                continue
+            current += 1
+        total_stored = int(self.conn.execute(
+            "select count(*) from knowledge_chunk_embeddings").fetchone()[0])
+        if active_profile_id:
+            wrong_profile = int(self.conn.execute(
+                "select count(*) from knowledge_chunk_embeddings where profile_id <> ?",
+                (active_profile_id,),
+            ).fetchone()[0])
+        else:
+            wrong_profile = total_stored
+        disabled_vectors = int(self.conn.execute(
+            "select count(*) from knowledge_chunk_embeddings as embedding "
+            "join knowledge_chunks as chunk on chunk.chunk_id = embedding.chunk_id "
+            "join knowledge_sources as source on source.source_id = chunk.source_id "
+            "where source.status <> 'active'").fetchone()[0])
         return {"totalChunks": total, "activeSourceChunks": active,
                 "embeddedCurrentChunks": current, "missingChunks": missing,
-                "staleChunks": stale, "sensitiveActiveChunks": sensitive,
+                "staleChunks": stale_content, "staleContentChunks": stale_content,
+                "invalidVectorChunks": invalid, "wrongProfileVectorCount": wrong_profile,
+                "disabledSourceVectorCount": disabled_vectors,
+                "wrongDimensionVectorCount": wrong_dimension,
+                "invalidBlobLengthVectorCount": invalid_blob_length,
+                "nonFiniteVectorCount": non_finite, "zeroVectorCount": zero,
+                "nonUnitVectorCount": non_unit, "wrongSourceVectorCount": wrong_source,
+                "totalStoredVectors": total_stored,
+                "sensitiveActiveChunks": sensitive,
                 "sensitiveChunksExcluded": sensitive}
 
     def _selection(self, settings: dict[str, Any], source_id: str | None,
@@ -427,8 +680,9 @@ class KnowledgeEmbeddingService:
                    cursor: str | None) -> tuple[dict[str, int], list[dict[str, Any]], str | None]:
         if not settings["activeProfileId"]:
             return ({"eligibleChunkCount": 0, "currentEmbeddedCount": 0,
-                     "missingCount": 0, "staleCount": 0,
-                     "sensitiveChunksExcludedCount": 0}, [], None)
+                      "missingCount": 0, "staleCount": 0,
+                      "invalidVectorCount": 0,
+                      "sensitiveChunksExcludedCount": 0}, [], None)
         after = self._decode_cursor(cursor)
         parameters: list[Any] = [settings["activeProfileId"]]
         where = ["source.status = 'active'"]
@@ -449,31 +703,46 @@ class KnowledgeEmbeddingService:
             where.append("source.sensitivity = 'standard'")
         rows = self.conn.execute(
             "select chunk.chunk_id, chunk.source_id, chunk.chunk_index, chunk.content, "
-            "chunk.content_hash, embedding.content_hash, embedding.dimensions, embedding.vector "
+            "chunk.content_hash, embedding.source_id, embedding.content_hash, "
+            "embedding.dimensions, embedding.vector "
             "from knowledge_chunks as chunk join knowledge_sources as source "
             "on source.source_id = chunk.source_id left join knowledge_chunk_embeddings as embedding "
             "on embedding.chunk_id = chunk.chunk_id and embedding.profile_id = ? where " +
             " and ".join(where) + " order by chunk.source_id, chunk.chunk_index, chunk.chunk_id",
             tuple(parameters)).fetchall()
-        eligible = current = missing = stale = 0
+        profile = self._active_profile(settings)
+        profile_current = bool(
+            profile is not None and settings["provider"] == PROVIDER
+            and profile["provider"] == PROVIDER
+            and profile["modelName"] == settings["modelName"]
+            and profile["dimensions"] == settings["dimensions"]
+            and profile["normalization"] == PROFILE_NORMALIZATION
+        )
+        eligible = current = missing = stale = invalid = 0
         selectable: list[dict[str, Any]] = []
         for row in rows:
             eligible += 1
             state = "missing"
             if row[5] is not None:
-                valid = row[4] == row[5] and row[6] == settings["dimensions"]
-                if valid:
+                if row[5] != row[1] or not profile_current or row[7] != settings["dimensions"]:
+                    state = "invalid"
+                elif row[4] != row[6]:
+                    state = "stale"
+                else:
                     try:
-                        self.deserialize_vector(row[7], row[6])
+                        self.deserialize_vector(row[8], row[7])
                     except KnowledgeEmbeddingError:
-                        valid = False
-                state = "current" if valid else "stale"
+                        state = "invalid"
+                    else:
+                        state = "current"
             if state == "current":
                 current += 1
             elif state == "missing":
                 missing += 1
-            else:
+            elif state == "stale":
                 stale += 1
+            else:
+                invalid += 1
             key = (row[1], int(row[2]), row[0])
             if after is not None and key <= after:
                 continue
@@ -485,8 +754,9 @@ class KnowledgeEmbeddingService:
         has_more, selected = len(selectable) > limit, selectable[:limit]
         next_cursor = self._encode_cursor(selected[-1]) if has_more and selected else None
         counts = {"eligibleChunkCount": eligible, "currentEmbeddedCount": current,
-                  "missingCount": missing, "staleCount": stale,
-                  "sensitiveChunksExcludedCount": sensitive_excluded}
+                   "missingCount": missing, "staleCount": stale,
+                   "invalidVectorCount": invalid,
+                   "sensitiveChunksExcludedCount": sensitive_excluded}
         return counts, selected, next_cursor
 
     @staticmethod
@@ -560,6 +830,15 @@ class KnowledgeEmbeddingService:
     def _emit(self, event_type: str, metadata: dict[str, Any]) -> None:
         if self.event_bus is not None:
             self.event_bus.emit(event_type, payload=metadata)
+
+    @contextmanager
+    def _exclusive_mutation(self):
+        if not self._mutation_lock.acquire(blocking=False):
+            raise KnowledgeEmbeddingError("embedding_rebuild_in_progress")
+        try:
+            yield
+        finally:
+            self._mutation_lock.release()
 
     def _model(self, value: Any) -> str:
         try:
