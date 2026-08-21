@@ -788,6 +788,14 @@ class GenerationUnloadInput(BaseModel):
     actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 
+class GenerationCancelInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: str
+    expectedRuntimeId: str | None = Field(default=None, max_length=200)
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
 class LocalResearchBriefInput(LocalResponseAgentInputBase):
     topic: str
     userProvidedNotes: str
@@ -1960,6 +1968,26 @@ def generation_unload(
         return local_generation.unload(
             confirmation=payload.confirmation,
             profile_id=payload.modelProfileId,
+            actor=payload.actor,
+        )
+    except LocalGenerationError as exc:
+        _raise_generation_http_error(exc)
+
+
+@app.get("/api/generation/active")
+def generation_active(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return local_generation.active_runtime_status()
+
+
+@app.post("/api/generation/cancel")
+def generation_cancel(
+    payload: GenerationCancelInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return local_generation.cancel_active(
+            confirmation=payload.confirmation,
+            expected_runtime_id=payload.expectedRuntimeId,
             actor=payload.actor,
         )
     except LocalGenerationError as exc:

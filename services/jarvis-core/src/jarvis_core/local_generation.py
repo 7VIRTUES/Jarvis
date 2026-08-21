@@ -11,6 +11,7 @@ from uuid import uuid4
 from .events import EventBus
 from .local_generation_provider import (
     GENERATION_ENDPOINT,
+    GenerationCancelHandle,
     LocalGenerationProvider,
     LocalGenerationProviderError,
     validate_model_name,
@@ -41,6 +42,10 @@ _ERROR_MESSAGES = {
     "profile_not_found": "The requested local generation profile was not found.",
     "generation_state_changed": "Generation settings changed while the response was being produced.",
     "full_prompt_preview_blocked_private_session": "Full prompt preview is blocked in private sessions.",
+    "generation_cancelled": "Local generation was cancelled by the user.",
+    "no_active_generation": "No active local generation was found to cancel.",
+    "cancellation_not_available": "The active generation cannot be cancelled.",
+    "expected_runtime_id_mismatch": "The requested runtime ID does not match the active generation.",
 }
 
 
@@ -51,6 +56,56 @@ class LocalGenerationError(RuntimeError):
 
     def safe_detail(self) -> dict[str, str]:
         return {"error": self.code, "message": _ERROR_MESSAGES.get(self.code, "Local generation failed safely.")}
+
+
+class ActiveGenerationRuntime:
+    """Ephemeral process-memory representation of the single active generation."""
+
+    def __init__(
+        self,
+        *,
+        runtime_id: str,
+        run_id: str | None = None,
+        response_id: str | None = None,
+        agent_id: str | None = None,
+        profile_id: str | None = None,
+        model_name: str,
+        purpose: str,
+        phase: str = "acquiring",
+        started_at: str,
+        private_session: bool = False,
+        cancel_handle: GenerationCancelHandle | None = None,
+    ) -> None:
+        self.runtime_id = runtime_id
+        self.run_id = run_id
+        self.response_id = response_id
+        self.agent_id = agent_id
+        self.profile_id = profile_id
+        self.model_name = model_name
+        self.purpose = purpose
+        self.phase = phase
+        self.started_at = started_at
+        self.cancellation_requested = False
+        self.cancellable = True
+        self.private_session = private_session
+        self.cancel_handle = cancel_handle
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "active": True,
+            "runtimeId": self.runtime_id,
+            "runId": self.run_id,
+            "responseId": self.response_id,
+            "agentId": self.agent_id,
+            "profileId": self.profile_id,
+            "modelName": self.model_name,
+            "purpose": self.purpose,
+            "phase": self.phase,
+            "startedAt": self.started_at,
+            "cancellationRequested": self.cancellation_requested,
+            "cancellable": self.cancellable,
+            "privateSession": self.private_session,
+        }
 
 
 class LocalGenerationService:
@@ -66,6 +121,8 @@ class LocalGenerationService:
         self._generation_lock = threading.Lock()
         self._active_count = 0
         self._active_count_lock = threading.Lock()
+        self._active_runtime: ActiveGenerationRuntime | None = None
+        self._runtime_lock = threading.Lock()
 
     def status(self) -> dict[str, Any]:
         settings = self._settings()
@@ -101,10 +158,12 @@ class LocalGenerationService:
             "recentCompletedCount": int((recent or (0, 0))[0] or 0),
             "recentFailedCount": int((recent or (0, 0))[1] or 0),
             "latestRun": self._serialize_run(latest) if latest else None,
+            "activeRuntime": self.active_runtime_status(),
             "automaticGeneration": False,
             "backgroundGeneration": False,
             "queue": False,
-            "cancellation": False,
+            "cancellation": True,
+            "cancellationImplemented": True,
             "automaticRetry": False,
             "streaming": False,
             "toolCalling": False,
@@ -118,11 +177,76 @@ class LocalGenerationService:
             "privateAudit": False,
         }
 
+    def active_runtime_status(self) -> dict[str, Any]:
+        with self._runtime_lock:
+            if self._active_runtime is not None:
+                return self._active_runtime.to_dict()
+            return {"active": False, "status": "idle"}
+
+    def cancel_active(
+        self,
+        *,
+        confirmation: str,
+        expected_runtime_id: str | None = None,
+        actor: str = "local_user",
+    ) -> dict[str, Any]:
+        if confirmation != "CANCEL LOCAL GENERATION":
+            raise LocalGenerationError("invalid_structured_output")
+        with self._runtime_lock:
+            if self._active_runtime is None or self._active_runtime.phase in ("completed", "failed", "cancelled"):
+                return {
+                    "cancelled": False,
+                    "status": "no_active_generation",
+                    "message": "No active local generation was found to cancel.",
+                }
+            if expected_runtime_id and expected_runtime_id.strip():
+                if self._active_runtime.runtime_id != expected_runtime_id.strip():
+                    return {
+                        "cancelled": False,
+                        "status": "runtime_id_mismatch",
+                        "message": "The expected runtime ID does not match the active generation.",
+                    }
+            runtime = self._active_runtime
+            runtime.cancellation_requested = True
+            runtime.phase = "cancelling"
+            if runtime.cancel_handle is not None:
+                runtime.cancel_handle.cancel()
+            if not runtime.private_session and runtime.run_id:
+                self._emit(
+                    "generation.cancellation_requested",
+                    {
+                        "runId": runtime.run_id,
+                        "runtimeId": runtime.runtime_id,
+                        "modelName": runtime.model_name,
+                        "actor": self._actor(actor),
+                    },
+                )
+            return {
+                "cancelled": True,
+                "status": "cancelling",
+                "runtimeId": runtime.runtime_id,
+                "modelName": runtime.model_name,
+            }
+
     def probe(self, *, model_name: str, actor: str = "local_user") -> dict[str, Any]:
         model = self._model(model_name)
         self._acquire_generation()
         run_id = str(uuid4())
+        runtime_id = str(uuid4())
         started = utc_now()
+        cancel_handle = GenerationCancelHandle()
+        self._set_active_runtime(
+            ActiveGenerationRuntime(
+                runtime_id=runtime_id,
+                run_id=run_id,
+                model_name=model,
+                purpose="probe",
+                phase="probing",
+                started_at=started,
+                private_session=False,
+                cancel_handle=cancel_handle,
+            )
+        )
         try:
             self._insert_run(
                 run_id=run_id,
@@ -135,7 +259,7 @@ class LocalGenerationService:
                 status="started",
                 created_at=started,
             )
-            result = self.provider.probe(model=model)
+            result = self.provider.probe(model=model, cancel_handle=cancel_handle)
             completed = utc_now()
             self._complete_run(
                 run_id,
@@ -159,13 +283,15 @@ class LocalGenerationService:
             }
         except (LocalGenerationProviderError, LocalGenerationError) as exc:
             error = self._as_error(exc)
-            self._complete_run(run_id, status="failed", error_code=error.code, completed_at=utc_now())
+            status = "cancelled" if error.code == "generation_cancelled" else "failed"
+            self._complete_run(run_id, status=status, error_code=error.code, completed_at=utc_now())
             self._emit(
                 "generation.failed",
                 {"runId": run_id, "purpose": "probe", "provider": PROVIDER, "modelName": model, "errorCode": error.code},
             )
             raise error from None
         finally:
+            self._clear_active_runtime()
             self._release_generation()
 
     def configure(
@@ -188,7 +314,21 @@ class LocalGenerationService:
         keep_alive = self._bounded_int(keep_alive_seconds, 0, 3_600, "invalid_structured_output")
         self._acquire_generation()
         probe_run_id = str(uuid4())
+        runtime_id = str(uuid4())
         started = utc_now()
+        cancel_handle = GenerationCancelHandle()
+        self._set_active_runtime(
+            ActiveGenerationRuntime(
+                runtime_id=runtime_id,
+                run_id=probe_run_id,
+                model_name=model,
+                purpose="configure_probe",
+                phase="probing",
+                started_at=started,
+                private_session=False,
+                cancel_handle=cancel_handle,
+            )
+        )
         try:
             self._insert_run(
                 run_id=probe_run_id,
@@ -201,7 +341,7 @@ class LocalGenerationService:
                 status="started",
                 created_at=started,
             )
-            probe = self.provider.probe(model=model)
+            probe = self.provider.probe(model=model, cancel_handle=cancel_handle)
             self._complete_run(
                 probe_run_id,
                 status="completed",
@@ -262,13 +402,15 @@ class LocalGenerationService:
             return self.status()
         except (LocalGenerationProviderError, LocalGenerationError) as exc:
             error = self._as_error(exc)
-            self._complete_run(probe_run_id, status="failed", error_code=error.code, completed_at=utc_now())
+            status = "cancelled" if error.code == "generation_cancelled" else "failed"
+            self._complete_run(probe_run_id, status=status, error_code=error.code, completed_at=utc_now())
             self._emit(
                 "generation.failed",
                 {"runId": probe_run_id, "purpose": "configure_probe", "provider": PROVIDER, "modelName": model, "errorCode": error.code},
             )
             raise error from None
         finally:
+            self._clear_active_runtime()
             self._release_generation()
 
     def disable(self, *, confirmation: str, actor: str = "local_user") -> dict[str, Any]:
@@ -294,8 +436,21 @@ class LocalGenerationService:
         settings = self._settings()
         profile = self._profile(profile_id or settings["activeProfileId"])
         self._acquire_generation()
+        runtime_id = str(uuid4())
+        cancel_handle = GenerationCancelHandle()
+        self._set_active_runtime(
+            ActiveGenerationRuntime(
+                runtime_id=runtime_id,
+                model_name=profile["modelName"],
+                profile_id=profile["profileId"],
+                purpose="unload",
+                phase="unloading",
+                started_at=utc_now(),
+                cancel_handle=cancel_handle,
+            )
+        )
         try:
-            result = self.provider.unload(model=profile["modelName"])
+            result = self.provider.unload(model=profile["modelName"], cancel_handle=cancel_handle)
             self._emit(
                 "generation.unloaded",
                 {"provider": PROVIDER, "modelName": profile["modelName"], "profileId": profile["profileId"], "actor": self._actor(actor)},
@@ -304,6 +459,7 @@ class LocalGenerationService:
         except (LocalGenerationProviderError, LocalGenerationError) as exc:
             raise self._as_error(exc) from None
         finally:
+            self._clear_active_runtime()
             self._release_generation()
 
     def list_profiles(self) -> list[dict[str, Any]]:
@@ -475,12 +631,31 @@ class LocalGenerationService:
         high_stakes: bool,
     ) -> dict[str, Any]:
         run_id: str | None = None
+        runtime_id = str(uuid4())
         acquired = False
+        cancel_handle = GenerationCancelHandle()
         try:
             self._acquire_generation()
             acquired = True
+            started_at = utc_now()
+            self._set_active_runtime(
+                ActiveGenerationRuntime(
+                    runtime_id=runtime_id,
+                    run_id=None,
+                    response_id=response_id,
+                    agent_id=agent_id,
+                    profile_id=profile["profileId"],
+                    model_name=profile["modelName"],
+                    purpose="agent_response",
+                    phase="assembling_prompt",
+                    started_at=started_at,
+                    private_session=private_session,
+                    cancel_handle=cancel_handle,
+                )
+            )
             if not private_session:
                 run_id = str(uuid4())
+                self._update_runtime_run_id(run_id)
                 request_count = int(assembly.section_stats.get("currentRequest", {}).get("includedCharacters") or 0)
                 deterministic_count = int(assembly.section_stats.get("deterministicResponse", {}).get("includedCharacters") or 0)
                 self._insert_run(
@@ -504,8 +679,12 @@ class LocalGenerationService:
                     web_source_count=int(assembly.section_stats.get("web", {}).get("includedItemCount") or 0),
                     prior_context_present=bool(assembly.section_stats.get("priorContext", {}).get("includedCharacters")),
                     section_stats=assembly.section_stats,
-                    created_at=utc_now(),
+                    created_at=started_at,
                 )
+
+            self._update_runtime_phase("connecting")
+            self._update_runtime_phase("generating")
+
             provider_result = self.provider.generate(
                 model=profile["modelName"],
                 system_message=assembly.system_message,
@@ -513,15 +692,23 @@ class LocalGenerationService:
                 output_schema=GENERATED_RESPONSE_SCHEMA,
                 keep_alive_seconds=profile["keepAliveSeconds"],
                 temperature=temperature,
+                cancel_handle=cancel_handle,
             )
+
+            self._update_runtime_phase("validating")
+
             generated = self.validate_structured_output(
                 provider_result["content"],
                 allowed_citation_labels=set(assembly.allowed_citation_labels),
                 max_response_characters=output_limit,
                 high_stakes=high_stakes,
             )
+
+            self._update_runtime_phase("finalizing")
+
             if not private_session and not self._settings_unchanged(settings_snapshot, profile):
                 raise LocalGenerationError("generation_state_changed")
+
             output_count = len(json.dumps(generated, ensure_ascii=False, separators=(",", ":")))
             if run_id:
                 self._complete_run(
@@ -549,6 +736,7 @@ class LocalGenerationService:
                 "primarySource": "local_model",
                 "providerCalled": True,
                 "runId": run_id,
+                "runtimeId": runtime_id,
                 "outputCharacterCount": output_count,
                 "thinkingDiscarded": bool(provider_result["thinkingDiscarded"]),
                 "status": "completed",
@@ -558,6 +746,35 @@ class LocalGenerationService:
             return {"generationContext": context, "generatedResponse": generated, "primaryResponseSource": "local_model"}
         except (LocalGenerationError, LocalGenerationProviderError, PromptAssemblyError) as exc:
             error = self._as_error(exc)
+            if error.code == "generation_cancelled":
+                self._update_runtime_phase("cancelled")
+                if run_id:
+                    self._complete_run(
+                        run_id,
+                        status="cancelled",
+                        actual_mode="cancelled",
+                        fallback_used=(requested_mode == "local_model_with_fallback"),
+                        error_code="generation_cancelled",
+                        completed_at=utc_now(),
+                    )
+                    self._emit(
+                        "generation.cancelled",
+                        {"runId": run_id, "responseId": response_id, "agentId": agent_id, "runtimeId": runtime_id},
+                    )
+                return self._cancelled_agent_result(
+                    {
+                        **base_context,
+                        **self._safe_profile_context(profile, output_limit, temperature, output_style),
+                        **assembly.metadata(),
+                        "providerCalled": True,
+                        "runId": run_id,
+                        "runtimeId": runtime_id,
+                        "persisted": bool(run_id),
+                    },
+                    requested_mode,
+                )
+
+            self._update_runtime_phase("failed")
             if run_id:
                 fallback_used = requested_mode == "local_model_with_fallback"
                 self._complete_run(
@@ -579,12 +796,14 @@ class LocalGenerationService:
                     **assembly.metadata(),
                     "providerCalled": True,
                     "runId": run_id,
+                    "runtimeId": runtime_id,
                     "persisted": bool(run_id),
                 },
                 error.code,
                 requested_mode,
             )
         finally:
+            self._clear_active_runtime()
             if acquired:
                 self._release_generation()
 
@@ -640,6 +859,31 @@ class LocalGenerationService:
             raise LocalGenerationError("output_too_large")
         return structured
 
+    def _cancelled_agent_result(self, context: dict[str, Any], requested_mode: str) -> dict[str, Any]:
+        fallback = requested_mode == "local_model_with_fallback"
+        primary = "deterministic_fallback" if fallback else "generation_cancelled"
+        return {
+            "generationContext": {
+                **context,
+                "actualMode": "deterministic" if fallback else "generation_cancelled",
+                "primarySource": primary,
+                "fallbackUsed": fallback,
+                "status": "cancelled",
+                "error": "generation_cancelled",
+                "errorMessage": (
+                    "Local generation was cancelled by the user. The deterministic response remains available."
+                    if fallback
+                    else "Local generation was cancelled by the user."
+                ),
+                "cancellationRequested": True,
+                "automaticGeneration": False,
+                "toolCalling": False,
+                "limitations": self._generation_limitations(bool(context.get("privateSession"))),
+            },
+            "generatedResponse": None,
+            "primaryResponseSource": primary,
+        }
+
     def _failed_agent_result(self, context: dict[str, Any], code: str, requested_mode: str) -> dict[str, Any]:
         fallback = requested_mode == "local_model_with_fallback"
         primary = "deterministic_fallback" if fallback else "generation_failed"
@@ -660,6 +904,26 @@ class LocalGenerationService:
             "primaryResponseSource": primary,
         }
 
+    def _set_active_runtime(self, runtime: ActiveGenerationRuntime) -> None:
+        with self._runtime_lock:
+            self._active_runtime = runtime
+
+    def _update_runtime_phase(self, phase: str) -> None:
+        with self._runtime_lock:
+            if self._active_runtime is not None:
+                self._active_runtime.phase = phase
+                if phase in ("completed", "failed", "cancelled"):
+                    self._active_runtime.cancellable = False
+
+    def _update_runtime_run_id(self, run_id: str) -> None:
+        with self._runtime_lock:
+            if self._active_runtime is not None:
+                self._active_runtime.run_id = run_id
+
+    def _clear_active_runtime(self) -> None:
+        with self._runtime_lock:
+            self._active_runtime = None
+
     @staticmethod
     def _base_generation_context(
         *, requested: bool, enabled: bool, private_session: bool, preview_only: bool, requested_mode: str
@@ -674,6 +938,7 @@ class LocalGenerationService:
             "primarySource": "deterministic",
             "providerCalled": False,
             "runId": None,
+            "runtimeId": None,
             "fallbackUsed": False,
             "thinkingDiscarded": False,
             "persisted": False,
@@ -703,6 +968,7 @@ class LocalGenerationService:
             "The model has no tools or action authority.",
             "Prompts, generated output, thinking, and provider bodies are not persisted.",
             "The deterministic response remains available for manual review.",
+            "Active local generation can be cancelled explicitly at any time.",
         ]
         if private_session:
             limitations.append("Private generation is ephemeral and creates no run row or generation event.")

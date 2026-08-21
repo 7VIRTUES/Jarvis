@@ -123,6 +123,13 @@ def unified_assistant_html() -> str:
       border-left-color: var(--safe);
       background: var(--safe-bg);
     }
+    .banner.high-stakes {
+      border-left-color: #ea580c;
+      background: #fff7ed;
+      color: #9a3412;
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
     .status-bar {
       display: flex;
       flex-wrap: wrap;
@@ -151,6 +158,7 @@ def unified_assistant_html() -> str:
     .pill.weak { background: #fee2e2; color: #991b1b; }
     .pill.override { background: #f3e8ff; color: #6b21a8; }
     .pill.high-stakes { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+    .pill.cancelled { background: #fee2e2; color: #991b1b; }
     .chat-container {
       display: grid;
       gap: 16px;
@@ -179,41 +187,38 @@ def unified_assistant_html() -> str:
       flex-wrap: wrap;
       gap: 8px;
       justify-content: center;
-      max-width: 860px;
-      margin: 0 auto;
+      margin-top: 12px;
     }
     .starter-chip {
-      background: var(--surface);
+      background: #fff;
       border: 1px solid var(--border);
+      padding: 7px 12px;
       border-radius: 20px;
-      padding: 6px 14px;
-      font-size: 0.88rem;
-      cursor: pointer;
+      font-size: 0.86rem;
       color: var(--accent-dark);
-      font-weight: 500;
+      cursor: pointer;
       transition: all 0.15s ease;
     }
     .starter-chip:hover {
       background: var(--accent-light);
       border-color: var(--accent);
-      transform: translateY(-1px);
     }
     .turn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 16px;
       display: grid;
       gap: 12px;
-      padding: 16px;
-      border-radius: 9px;
-      border: 1px solid var(--border);
-      background: var(--surface);
+      box-shadow: 0 2px 6px rgba(15, 35, 55, 0.04);
     }
     .turn.user-turn {
       background: #f8fafc;
-      border-color: #cbd5e1;
-      border-left: 5px solid #64748b;
+      border-left: 5px solid var(--accent);
     }
     .turn.jarvis-turn {
-      background: var(--surface);
-      border-left: 5px solid var(--accent);
+      background: #ffffff;
+      border-left: 5px solid #0d9488;
     }
     .turn-header {
       display: flex;
@@ -221,10 +226,7 @@ def unified_assistant_html() -> str:
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 0.85rem;
-      color: var(--muted);
-      border-bottom: 1px solid #edf2f7;
-      padding-bottom: 8px;
+      font-size: 0.86rem;
     }
     .turn-title {
       font-weight: 700;
@@ -234,127 +236,132 @@ def unified_assistant_html() -> str:
       gap: 8px;
     }
     .turn-body {
-      font-size: 1rem;
+      font-size: 0.96rem;
       line-height: 1.6;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
     .route-info-card {
-      background: #f0f7ff;
-      border: 1px solid #bfdbfe;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
       border-radius: 6px;
       padding: 10px 14px;
-      display: grid;
-      gap: 6px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
     .route-info-header {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      margin-bottom: 4px;
     }
     .route-rationale {
-      color: #334155;
-      font-size: 0.88rem;
+      color: var(--muted);
+      font-size: 0.85rem;
     }
     .response-section {
-      margin-top: 10px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e2e8f0;
     }
     .response-section h4 {
-      margin: 12px 0 6px;
-      font-size: 0.95rem;
+      margin: 0 0 6px;
+      font-size: 0.9rem;
       color: var(--accent-dark);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
     .key-points-list {
-      margin: 6px 0;
+      margin: 0;
       padding-left: 20px;
     }
     .key-points-list li {
       margin-bottom: 4px;
+      font-size: 0.92rem;
     }
     .citations-card {
-      background: #fafaf9;
-      border: 1px solid #e7e5e4;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
       border-radius: 6px;
       padding: 10px 14px;
-      margin-top: 10px;
-      font-size: 0.88rem;
+      font-size: 0.85rem;
+      color: #166534;
+      margin-top: 8px;
     }
     .turn-actions {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #edf2f7;
+      align-items: center;
+      margin-top: 4px;
     }
     button, .button {
       font: inherit;
       border: 1px solid var(--accent);
-      border-radius: 5px;
-      padding: 8px 14px;
       background: var(--accent);
       color: #fff;
+      padding: 8px 14px;
+      border-radius: 6px;
       font-weight: 600;
+      font-size: 0.9rem;
       cursor: pointer;
+      transition: all 0.15s ease;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.9rem;
-      transition: background 0.15s ease;
     }
-    button:hover {
+    button:hover:not(:disabled) {
       background: var(--accent-dark);
+      border-color: var(--accent-dark);
     }
     button.secondary {
       background: #fff;
       color: var(--accent);
       border-color: var(--border);
     }
-    button.secondary:hover {
-      background: #f8fafc;
+    button.secondary:hover:not(:disabled) {
+      background: #f1f5f9;
       border-color: var(--accent);
     }
     button.small {
-      padding: 4px 9px;
+      padding: 4px 10px;
       font-size: 0.82rem;
     }
-    button.warning {
-      background: var(--warn);
-      border-color: var(--warn);
+    button.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+    button.danger:hover:not(:disabled) {
+      background: #881b1b;
+      border-color: #881b1b;
     }
     button:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
       cursor: not-allowed;
     }
-    .composer-panel {
+    .composer-card {
       position: sticky;
       bottom: 12px;
       background: var(--surface);
-      border: 2px solid #b4c9de;
+      border: 1px solid var(--border);
       border-radius: 9px;
       padding: 14px;
-      box-shadow: 0 6px 20px rgba(15, 35, 55, 0.12);
+      box-shadow: 0 4px 16px rgba(15, 35, 55, 0.12);
       display: grid;
       gap: 10px;
       z-index: 5;
     }
     .composer-textarea {
       width: 100%;
-      min-height: 80px;
-      max-height: 220px;
-      resize: vertical;
+      min-height: 70px;
       padding: 10px 12px;
       border: 1px solid #94a3b8;
       border-radius: 6px;
       font: inherit;
-      line-height: 1.45;
+      font-size: 0.96rem;
+      resize: vertical;
     }
     .composer-textarea:focus {
-      outline: 3px solid var(--focus);
+      outline: 2px solid var(--accent);
       border-color: var(--accent);
     }
     .composer-options {
@@ -380,8 +387,9 @@ def unified_assistant_html() -> str:
     .toggle-label {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       cursor: pointer;
+      user-select: none;
       font-weight: 500;
     }
     select {
@@ -392,58 +400,53 @@ def unified_assistant_html() -> str:
       background: #fff;
       font-size: 0.88rem;
     }
-    .staged-context-bar {
+    .staged-prior-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
+      background: #f3e8ff;
+      border: 1px solid #d8b4fe;
       border-radius: 6px;
       padding: 6px 12px;
       font-size: 0.85rem;
-      color: #166534;
+      color: #6b21a8;
     }
-    .drawer {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 16px;
+    .staging-drawer {
+      background: var(--soft);
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      padding: 14px;
       display: grid;
       gap: 12px;
-      margin-top: 10px;
+    }
+    .staging-drawer h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      color: var(--accent-dark);
     }
     .alternatives-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 8px;
+      gap: 10px;
     }
     .alt-card {
+      background: #fff;
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 10px;
-      background: var(--soft);
+      padding: 8px 12px;
+      font-size: 0.86rem;
       display: grid;
       gap: 4px;
-      font-size: 0.86rem;
     }
-    .alt-card strong {
-      color: var(--accent-dark);
-    }
-    details summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--accent);
-      padding: 4px 0;
-    }
-    pre.json-viewer {
+    .json-panel {
       background: var(--code-bg);
-      color: #e2e8f0;
-      padding: 12px;
+      color: #f8fafc;
       border-radius: 6px;
-      font-size: 0.82rem;
-      overflow-x: auto;
-      max-height: 320px;
-      margin: 8px 0 0;
+      padding: 12px;
+      font-family: Consolas, Monaco, "Courier New", monospace;
+      font-size: 0.84rem;
+      max-height: 300px;
+      overflow: auto;
     }
     .toast {
       position: fixed;
@@ -451,19 +454,38 @@ def unified_assistant_html() -> str:
       right: 24px;
       background: #1e293b;
       color: #fff;
-      padding: 12px 18px;
-      border-radius: 7px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
-      z-index: 100;
+      padding: 10px 18px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       font-size: 0.9rem;
-      display: none;
-      align-items: center;
-      gap: 8px;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
     }
-    .toast.show { display: flex; }
-    @media (max-width: 768px) {
-      .composer-options { flex-direction: column; align-items: stretch; }
-      .options-left, .options-right { width: 100%; justify-content: space-between; }
+    .toast.show { opacity: 1; }
+
+    /* Active Generating Card */
+    .generating-card {
+      border: 2px solid #3b82f6;
+      background: #eff6ff;
+      border-radius: 9px;
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+      animation: pulse-border 2.5s infinite ease-in-out;
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: #3b82f6; }
+      50% { border-color: #93c5fd; }
+    }
+    .generating-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
     }
   </style>
 </head>
@@ -472,12 +494,12 @@ def unified_assistant_html() -> str:
   <div class="header-inner">
     <div>
       <h1>Jarvis Unified Assistant</h1>
-      <div class="tagline">Deterministic routing & execution over 37 local response agents · Session-only memory</div>
+      <p class="tagline">Supervised conversational interface over 37 local response agents</p>
     </div>
-    <nav class="header-nav" aria-label="Main Navigation">
-      <a class="active" href="/assistant">Assistant</a>
+    <nav class="header-nav">
+      <a href="/assistant" class="active">Assistant</a>
       <a href="/dashboard">Dashboard</a>
-      <a href="/dashboard#local-response-agents-workbench">Workbench</a>
+      <a href="/dashboard#response-agents">Workbench</a>
       <a href="/memory">Memory Center</a>
       <a href="/knowledge">Knowledge Library</a>
       <a href="/models">Models Center</a>
@@ -486,115 +508,98 @@ def unified_assistant_html() -> str:
 </header>
 
 <main>
-  <div class="status-bar" id="system-status-bar">
+  <!-- System Status Bar -->
+  <section class="status-bar" aria-label="System status">
     <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
-      <span class="pill active" id="session-pill">Session-Only: In-Memory</span>
-      <span class="pill inactive" id="generation-pill">Local Generation: Checking...</span>
-      <span class="pill inactive" id="agents-pill">37 Response Agents Ready</span>
+      <span class="pill active" id="session-mode-pill">Session-Only · In-Memory</span>
+      <span class="pill" id="generation-pill">Local Generation: Checking...</span>
+      <span class="pill" id="agents-pill">37 Response Agents Ready</span>
     </div>
-    <div>
-      <span class="muted" style="font-size:0.84rem;">No persistent DB transcript · No external APIs · Auditable</span>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button id="view-result-board-btn" class="secondary small" type="button">
+        Result Board (<span id="result-board-count">0</span>)
+      </button>
+      <button id="clear-session-btn" class="secondary small" type="button">Clear Transcript</button>
     </div>
+  </section>
+
+  <!-- Staged Prior Context Indicator -->
+  <div id="staged-prior-context-bar" class="staged-prior-bar" style="display:none;">
+    <span><strong>Staged Prior Context:</strong> <span id="staged-prior-summary"></span></span>
+    <button id="clear-prior-context-btn" class="secondary small" style="border-color:#d8b4fe;" type="button">Dismiss</button>
   </div>
 
-  <div class="banner warning" id="boundary-banner" style="display:block;">
-    <strong>Safe Local Supervisor Boundary:</strong>
-    Jarvis provides manual-input, response-only assistance using deterministic and local Ollama execution.
-    No automatic actions, account access, booking, purchases, email/calendar posting, or emergency filings are performed.
-  </div>
-
-  <section class="panel" style="padding:14px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h2 style="margin:0; font-size:1.15rem; color:var(--accent-dark);">Conversation</h2>
-      <div style="display:flex; gap:8px;">
-        <button id="clear-session-btn" class="secondary small" type="button">Clear Transcript</button>
-        <button id="view-result-board-btn" class="secondary small" type="button">Session Result Board (<span id="result-board-count">0</span>)</button>
-      </div>
-    </div>
-
-    <div class="chat-container" id="chat-container">
-      <div class="empty-state" id="empty-state">
-        <h3>How can Jarvis assist you today?</h3>
-        <p>Enter a natural language question or request. Jarvis will deterministically select the most suitable local agent from its 37 specialized capabilities, prepare the request payload, and execute it under your supervision.</p>
-        <div class="starter-chips">
-          <button class="starter-chip" data-prompt="Draft a weekly meal plan and grocery list for quick healthy dinners">Meal & Grocery Plan</button>
-          <button class="starter-chip" data-prompt="Organize my document checklist and questions for an upcoming visa/immigration appointment">Immigration Checklist</button>
-          <button class="starter-chip" data-prompt="Help me brainstorm and compare 3 monetization ideas for a local software tool">Business Tradeoffs</button>
-          <button class="starter-chip" data-prompt="Create a beginner home workout routine focusing on mobility and strength">Home Workout Routine</button>
-          <button class="starter-chip" data-prompt="Create an emergency preparedness car kit checklist for winter travel">Car Emergency Kit</button>
-          <button class="starter-chip" data-prompt="Review this project description for clarity and safety wording">Draft Review</button>
-          <button class="starter-chip" data-prompt="Troubleshoot why my local database connection timed out">Troubleshooting Triage</button>
-          <button class="starter-chip" data-prompt="Create a study roadmap to learn Python for robotics in 8 weeks">Study Roadmap</button>
-        </div>
+  <!-- Conversation Transcript Area -->
+  <section id="chat-container" class="chat-container">
+    <div id="empty-state" class="empty-state">
+      <h3>Welcome to the Unified Jarvis Assistant</h3>
+      <p>Enter any natural-language request below. Jarvis will deterministically inspect your request, recommend the best specialized response agent, explain the route transparently, and execute locally on your machine.</p>
+      <div class="starter-chips">
+        <button class="starter-chip" data-prompt="Help me plan a 3-month strength training and nutrition routine">Fitness & Nutrition Plan</button>
+        <button class="starter-chip" data-prompt="Draft an executive summary of our Q3 product roadmap update">Drafting Executive Brief</button>
+        <button class="starter-chip" data-prompt="We need to evaluate moving to a new apartment vs renewing current lease">Decision Analysis</button>
+        <button class="starter-chip" data-prompt="Troubleshoot intermittent Wi-Fi disconnection on Windows 11 PC">PC Troubleshooting</button>
+        <button class="starter-chip" data-prompt="Organize my project files and personal notes structure">Knowledge Organizer</button>
+        <button class="starter-chip" data-prompt="Coordinate my weekly commitments across career, fitness, and home">Life Dashboard Coordinator</button>
       </div>
     </div>
   </section>
 
-  <!-- Route Preview / Execution Staging Drawer -->
-  <div class="drawer" id="staging-drawer" style="display:none;">
+  <!-- Route Preview / Staging Drawer -->
+  <section id="staging-drawer" class="staging-drawer" style="display:none;">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Route Preview & Readiness Review</h3>
-      <button class="secondary small" id="close-drawer-btn" type="button">Close Preview</button>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <h3>Route & Payload Preview</h3>
+        <span id="drawer-confidence-pill" class="pill">Confidence</span>
+        <span id="drawer-readiness-pill" class="pill">Readiness</span>
+      </div>
+      <button id="close-drawer-btn" class="secondary small" type="button">Close Preview</button>
     </div>
 
-    <div id="drawer-high-stakes" style="display:none;" class="banner danger"></div>
-
-    <div class="route-info-card" id="drawer-route-card">
+    <div class="route-info-card">
       <div class="route-info-header">
-        <strong>Recommended Agent:</strong>
-        <span id="drawer-agent-name" style="font-weight:700;"></span>
-        <span class="pill" id="drawer-confidence-pill"></span>
+        <strong>Recommended Agent:</strong> <span id="drawer-agent-name"></span>
         <span class="muted" id="drawer-category"></span>
       </div>
       <div class="route-rationale" id="drawer-rationale"></div>
     </div>
 
-    <div id="drawer-ambiguity-notice" class="banner warning" style="display:none;">
-      <strong>Ambiguous Route:</strong> Several agents matched this request closely. Review alternative agents below or choose one explicitly.
-    </div>
+    <div id="drawer-high-stakes" class="banner high-stakes" style="display:none;"></div>
+    <div id="drawer-ambiguity-notice" class="banner warning" style="display:none;"></div>
 
-    <div id="drawer-alternatives-container" style="display:grid; gap:6px;">
-      <div style="font-weight:600; font-size:0.88rem; color:var(--muted);">Alternative Agent Candidates:</div>
+    <div>
+      <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">Alternative Candidate Agents:</div>
       <div class="alternatives-grid" id="drawer-alternatives-grid"></div>
     </div>
 
-    <div style="display:flex; align-items:center; gap:8px; font-size:0.9rem;">
-      <strong>Payload Readiness:</strong>
-      <span class="pill" id="drawer-readiness-pill">Ready</span>
-      <span class="muted" id="drawer-readiness-notes"></span>
+    <div>
+      <div style="font-weight:600; font-size:0.88rem; margin-bottom:4px;">Payload Readiness Notes:</div>
+      <div id="drawer-readiness-notes" class="muted" style="font-size:0.85rem;"></div>
     </div>
 
-    <details id="drawer-payload-details">
-      <summary>Inspect / Edit Prepared Agent Request Payload (JSON)</summary>
-      <textarea id="drawer-payload-editor" style="width:100%; min-height:140px; font-family:monospace; font-size:0.85rem; padding:8px; margin-top:8px; border:1px solid #cbd5e1; border-radius:5px;"></textarea>
-      <div style="font-size:0.82rem; color:var(--muted); margin-top:4px;">You can modify the JSON payload before executing.</div>
-    </details>
+    <div>
+      <div style="font-weight:600; font-size:0.88rem; margin-bottom:4px;">Edit Prepared Request Payload (JSON):</div>
+      <textarea id="drawer-payload-editor" class="composer-textarea" style="font-family:Consolas,monospace; font-size:0.85rem; min-height:110px;"></textarea>
+    </div>
 
-    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
       <button id="drawer-cancel-btn" class="secondary" type="button">Cancel</button>
-      <button id="drawer-execute-btn" type="button">Execute Selected Agent</button>
+      <button id="drawer-execute-btn" type="button">Run Selected Agent</button>
     </div>
-  </div>
+  </section>
 
-  <!-- Session Result Board Drawer -->
-  <div class="drawer" id="result-board-drawer" style="display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Session Result Board (In-Memory)</h3>
-      <button class="secondary small" id="close-result-board-btn" type="button">Close</button>
+  <!-- Result Board Drawer -->
+  <section id="result-board-drawer" class="panel" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Session Result Board</h3>
+      <button id="close-result-board-btn" class="secondary small" type="button">Close</button>
     </div>
-    <p class="muted" style="margin:0; font-size:0.88rem;">Results saved during this active browser session for comparison. Cleared upon page refresh.</p>
-    <div id="result-board-items" style="display:grid; gap:10px; max-height:400px; overflow-y:auto;">
-      <div class="empty-state" style="padding:20px;">No results added to Result Board yet.</div>
-    </div>
-  </div>
+    <p class="muted" style="margin:0 0 12px; font-size:0.88rem;">Key decisions, briefs, and plans collected during this session. In-memory only.</p>
+    <div id="result-board-items" style="display:grid; gap:10px;"></div>
+  </section>
 
   <!-- Composer Area -->
-  <div class="composer-panel" id="composer">
-    <div id="staged-prior-context-bar" class="staged-context-bar" style="display:none;">
-      <span><strong>Prior Context Attached:</strong> <span id="staged-prior-summary"></span></span>
-      <button id="clear-prior-context-btn" class="secondary small" type="button" style="padding:2px 6px;">Remove</button>
-    </div>
-
+  <div class="composer-card" id="composer">
     <textarea
       id="prompt-input"
       class="composer-textarea"
@@ -648,7 +653,12 @@ def unified_assistant_html() -> str:
     catalogAgents: [],
     generationStatus: null,
     stagedAnalysis: null,
+    isGenerating: false,
   };
+
+  let activeRuntimeId = null;
+  let activePoller = null;
+  let activeTimer = null;
 
   const byId = (id) => document.getElementById(id);
 
@@ -883,8 +893,11 @@ def unified_assistant_html() -> str:
 
   byId('drawer-execute-btn').addEventListener('click', executeStagedAgent);
 
-  // Core execution flow
+  // Core execution flow with active generation control and cancellation
   async function runAgent(promptText, agentId, routeInfo, payload) {
+    if (sessionState.isGenerating) return;
+    sessionState.isGenerating = true;
+
     // Append user turn
     const userTurn = {
       role: 'user',
@@ -900,10 +913,92 @@ def unified_assistant_html() -> str:
     sessionState.transcript.push(userTurn);
     renderTranscript();
 
-    // Disable composer during execution
+    // Lock composer controls
     byId('submit-btn').disabled = true;
     byId('preview-route-btn').disabled = true;
     byId('prompt-input').disabled = true;
+    byId('drawer-execute-btn').disabled = true;
+
+    // Active generating UI card
+    const isLocalModel = payload.generation && payload.generation.mode && payload.generation.mode !== 'deterministic';
+    const container = byId('chat-container');
+    const generatingDiv = document.createElement('article');
+    generatingDiv.className = 'turn generating-card';
+    generatingDiv.id = 'active-generating-turn';
+
+    const modelDisplay = (sessionState.generationStatus && sessionState.generationStatus.modelName) || 'Local Model';
+    const startTime = Date.now();
+
+    generatingDiv.innerHTML = `
+      <div class="generating-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="pill active" style="background:#2563eb; color:#fff;">Jarvis is generating locally</span>
+          <span class="pill strong">${escapeHtml(routeInfo ? routeInfo.selected_display_name : agentId)}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="muted" id="gen-elapsed-time">Elapsed: 0.0s</span>
+          <button class="danger small" id="stop-generation-btn" type="button">Stop generation</button>
+        </div>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.88rem; color:var(--muted);">
+        <span>Model: <strong>${escapeHtml(modelDisplay)}</strong></span>
+        <span>Phase: <strong id="gen-phase-indicator">connecting</strong></span>
+        <span id="gen-runtime-id-label" style="display:none;">Runtime: <strong id="gen-runtime-id"></strong></span>
+      </div>
+    `;
+
+    container.append(generatingDiv);
+    generatingDiv.scrollIntoView({ behavior: 'smooth' });
+
+    // Stop button event
+    const stopBtn = generatingDiv.querySelector('#stop-generation-btn');
+    stopBtn.addEventListener('click', async () => {
+      stopBtn.disabled = true;
+      stopBtn.textContent = 'Stopping...';
+      try {
+        await apiFetch('/api/generation/cancel', {
+          method: 'POST',
+          body: JSON.stringify({
+            confirmation: 'CANCEL LOCAL GENERATION',
+            expectedRuntimeId: activeRuntimeId || null,
+            actor: 'local_user'
+          })
+        });
+        showToast('Cancellation requested...');
+        byId('gen-phase-indicator').textContent = 'cancelling';
+      } catch (err) {
+        showToast('Cancellation notice: ' + err.message);
+      }
+    });
+
+    // Start elapsed timer
+    activeTimer = setInterval(() => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const span = byId('gen-elapsed-time');
+      if (span) span.textContent = `Elapsed: ${elapsed}s`;
+    }, 100);
+
+    // Start runtime status poller if local model used
+    if (isLocalModel) {
+      activePoller = setInterval(async () => {
+        try {
+          const runtime = await apiFetch('/api/generation/active');
+          if (runtime && runtime.active) {
+            activeRuntimeId = runtime.runtimeId;
+            const phaseSpan = byId('gen-phase-indicator');
+            if (phaseSpan) phaseSpan.textContent = runtime.phase || 'generating';
+            const rtLabel = byId('gen-runtime-id-label');
+            const rtSpan = byId('gen-runtime-id');
+            if (rtLabel && rtSpan && runtime.runtimeId) {
+              rtLabel.style.display = 'inline';
+              rtSpan.textContent = runtime.runtimeId.slice(0, 8) + '...';
+            }
+          }
+        } catch (e) {
+          // Keep polling quietly
+        }
+      }, 800);
+    }
 
     try {
       const responseData = await apiFetch('/api/assistant/execute', {
@@ -924,7 +1019,7 @@ def unified_assistant_html() -> str:
       };
       sessionState.transcript.push(jarvisTurn);
 
-      // Consume staged prior context after successful use
+      // Consume staged prior context after use
       setStagedPriorContext(null);
       byId('prompt-input').value = '';
     } catch (err) {
@@ -937,10 +1032,25 @@ def unified_assistant_html() -> str:
       };
       sessionState.transcript.push(errorTurn);
     } finally {
+      // Clear poller & timer
+      if (activeTimer) clearInterval(activeTimer);
+      if (activePoller) clearInterval(activePoller);
+      activeTimer = null;
+      activePoller = null;
+      activeRuntimeId = null;
+      sessionState.isGenerating = false;
+
+      // Remove generating card
+      const genCard = byId('active-generating-turn');
+      if (genCard) genCard.remove();
+
+      // Unlock composer
       byId('submit-btn').disabled = false;
       byId('preview-route-btn').disabled = false;
       byId('prompt-input').disabled = false;
+      byId('drawer-execute-btn').disabled = false;
       byId('prompt-input').focus();
+
       renderTranscript();
     }
   }
@@ -993,9 +1103,18 @@ def unified_assistant_html() -> str:
           `;
         } else {
           const resp = turn.response || {};
-          const gen = resp.generation || resp.generatedResponse || {};
-          const isGenerated = !!resp.generatedResponse || (resp.actualMode && resp.actualMode !== 'deterministic');
+          const isCancelled = resp.status === 'cancelled' || (resp.generationContext && resp.generationContext.status === 'cancelled');
           const primaryText = resp.generatedResponse ? resp.generatedResponse.response : (resp.summary || resp.brief || resp.plan || resp.draft || resp.response || JSON.stringify(resp, null, 2));
+
+          let cancelledBannerHtml = '';
+          if (isCancelled) {
+            cancelledBannerHtml = `
+              <div class="banner warning" style="margin-bottom:10px;">
+                <strong>Generation Cancelled:</strong> Local generation was stopped by user.
+                ${resp.fallbackUsed ? 'The deterministic response remains available below.' : ''}
+              </div>
+            `;
+          }
 
           let keyPointsHtml = '';
           if (resp.generatedResponse && resp.generatedResponse.keyPoints && resp.generatedResponse.keyPoints.length) {
@@ -1045,7 +1164,7 @@ def unified_assistant_html() -> str:
               <span class="turn-title">Jarvis</span>
               <div style="display:flex; align-items:center; gap:6px;">
                 <span class="pill strong">${escapeHtml(turn.route ? turn.route.selected_display_name : turn.agentId)}</span>
-                ${resp.actualMode ? `<span class="pill ${resp.actualMode === 'deterministic' ? 'inactive' : 'active'}">${escapeHtml(resp.actualMode)}</span>` : ''}
+                ${isCancelled ? '<span class="pill cancelled">Cancelled</span>' : (resp.actualMode ? `<span class="pill ${resp.actualMode === 'deterministic' ? 'inactive' : 'active'}">${escapeHtml(resp.actualMode)}</span>` : '')}
                 <span class="muted">${escapeHtml(turn.timestamp)}</span>
               </div>
             </div>
@@ -1060,6 +1179,7 @@ def unified_assistant_html() -> str:
             </div>
 
             ${hsNoticeHtml}
+            ${cancelledBannerHtml}
 
             <div class="turn-body">${escapeHtml(primaryText)}</div>
 
@@ -1188,6 +1308,7 @@ def unified_assistant_html() -> str:
 
   // Handle composer submission
   async function handleSubmit(previewOnly = false) {
+    if (sessionState.isGenerating) return;
     const input = byId('prompt-input');
     const promptText = input.value.trim();
     if (!promptText) {
@@ -1211,8 +1332,10 @@ def unified_assistant_html() -> str:
     } catch (err) {
       alert(`Routing analysis failed: ${err.message}`);
     } finally {
-      byId('submit-btn').disabled = false;
-      byId('preview-route-btn').disabled = false;
+      if (!sessionState.isGenerating) {
+        byId('submit-btn').disabled = false;
+        byId('preview-route-btn').disabled = false;
+      }
     }
   }
 

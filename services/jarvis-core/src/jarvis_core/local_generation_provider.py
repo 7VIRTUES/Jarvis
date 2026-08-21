@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import socket
+import threading
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
-GENERATION_ENDPOINT = "http://127.0.0.1:11434/api/chat"
+GENERATION_HOST = "127.0.0.1"
+GENERATION_PORT = 11434
+GENERATION_PATH = "/api/chat"
+GENERATION_ENDPOINT = f"http://{GENERATION_HOST}:{GENERATION_PORT}{GENERATION_PATH}"
+
 PROBE_TIMEOUT_SECONDS = 120
 GENERATION_TIMEOUT_SECONDS = 300
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
@@ -29,17 +33,41 @@ class LocalGenerationProviderError(RuntimeError):
         self.code = code
 
 
-class _RejectRedirects(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        req: Request,
-        fp: Any,
-        code: int,
-        msg: str,
-        headers: Any,
-        newurl: str,
-    ) -> None:
-        raise LocalGenerationProviderError("provider_redirect_blocked")
+class GenerationCancelHandle:
+    """Thread-safe cancellation handle for a single in-flight local generation request."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._conn: http.client.HTTPConnection | None = None
+
+    @property
+    def is_cancelled(self) -> bool:
+        with self._lock:
+            return self._cancelled
+
+    def register_connection(self, conn: http.client.HTTPConnection) -> None:
+        with self._lock:
+            self._conn = conn
+            if self._cancelled:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def unregister_connection(self) -> None:
+        with self._lock:
+            self._conn = None
+
+    def cancel(self) -> bool:
+        with self._lock:
+            self._cancelled = True
+            if self._conn is not None:
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
+            return True
 
 
 def validate_model_name(value: object) -> str:
@@ -57,9 +85,6 @@ def validate_model_name(value: object) -> str:
 class LocalGenerationProvider:
     endpoint = GENERATION_ENDPOINT
 
-    def __init__(self) -> None:
-        self._opener = build_opener(ProxyHandler({}), _RejectRedirects())
-
     def generate(
         self,
         *,
@@ -70,6 +95,7 @@ class LocalGenerationProvider:
         timeout_seconds: int = GENERATION_TIMEOUT_SECONDS,
         keep_alive_seconds: int = 300,
         temperature: float = 0.2,
+        cancel_handle: GenerationCancelHandle | None = None,
     ) -> dict[str, Any]:
         model = validate_model_name(model)
         if len(system_message) + len(user_message) > MAX_PROMPT_CHARACTERS:
@@ -86,10 +112,20 @@ class LocalGenerationProvider:
             "keep_alive": int(keep_alive_seconds),
             "options": {"temperature": float(temperature)},
         }
-        response = self._post(payload, min(max(int(timeout_seconds), 1), GENERATION_TIMEOUT_SECONDS))
+        response = self._post(
+            payload,
+            min(max(int(timeout_seconds), 1), GENERATION_TIMEOUT_SECONDS),
+            cancel_handle=cancel_handle,
+        )
         return self._validated_generation_response(response)
 
-    def probe(self, *, model: str, timeout_seconds: int = PROBE_TIMEOUT_SECONDS) -> dict[str, Any]:
+    def probe(
+        self,
+        *,
+        model: str,
+        timeout_seconds: int = PROBE_TIMEOUT_SECONDS,
+        cancel_handle: GenerationCancelHandle | None = None,
+    ) -> dict[str, Any]:
         result = self.generate(
             model=model,
             system_message=(
@@ -106,57 +142,112 @@ class LocalGenerationProvider:
             timeout_seconds=min(max(int(timeout_seconds), 1), PROBE_TIMEOUT_SECONDS),
             keep_alive_seconds=0,
             temperature=0.0,
+            cancel_handle=cancel_handle,
         )
         if set(result["content"]) != {"status"} or str(result["content"]["status"]).strip().lower() != "ok":
             raise LocalGenerationProviderError("invalid_provider_response")
         return {"status": "ok", "thinkingDiscarded": result["thinkingDiscarded"]}
 
-    def unload(self, *, model: str, timeout_seconds: int = PROBE_TIMEOUT_SECONDS) -> dict[str, Any]:
+    def unload(
+        self,
+        *,
+        model: str,
+        timeout_seconds: int = PROBE_TIMEOUT_SECONDS,
+        cancel_handle: GenerationCancelHandle | None = None,
+    ) -> dict[str, Any]:
         model = validate_model_name(model)
         response = self._post(
             {"model": model, "messages": [], "stream": False, "keep_alive": 0},
             min(max(int(timeout_seconds), 1), PROBE_TIMEOUT_SECONDS),
+            cancel_handle=cancel_handle,
         )
         if not isinstance(response, dict):
             raise LocalGenerationProviderError("invalid_provider_response")
         return {"unloaded": True, "provider": "ollama_local", "model": model}
 
-    def _post(self, payload: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
+    def _post(
+        self,
+        payload: dict[str, Any],
+        timeout_seconds: int,
+        cancel_handle: GenerationCancelHandle | None = None,
+    ) -> dict[str, Any]:
+        if cancel_handle and cancel_handle.is_cancelled:
+            raise LocalGenerationProviderError("generation_cancelled")
+
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(encoded) > MAX_REQUEST_BYTES:
             raise LocalGenerationProviderError("generation_request_too_large")
-        request = Request(
-            GENERATION_ENDPOINT,
-            data=encoded,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+
+        conn = http.client.HTTPConnection(GENERATION_HOST, GENERATION_PORT, timeout=timeout_seconds)
+        if cancel_handle:
+            cancel_handle.register_connection(conn)
+
         try:
-            with self._opener.open(request, timeout=timeout_seconds) as response:
-                if response.geturl() != GENERATION_ENDPOINT:
-                    raise LocalGenerationProviderError("provider_redirect_blocked")
-                body = response.read(MAX_RESPONSE_BYTES + 1)
+            if cancel_handle and cancel_handle.is_cancelled:
+                raise LocalGenerationProviderError("generation_cancelled")
+
+            conn.request(
+                "POST",
+                GENERATION_PATH,
+                body=encoded,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Host": f"{GENERATION_HOST}:{GENERATION_PORT}",
+                },
+            )
+
+            if cancel_handle and cancel_handle.is_cancelled:
+                raise LocalGenerationProviderError("generation_cancelled")
+
+            response = conn.getresponse()
+
+            if 300 <= response.status < 400:
+                raise LocalGenerationProviderError("provider_redirect_blocked")
+            if response.status == 404:
+                raise LocalGenerationProviderError("model_unavailable")
+            if response.status != 200:
+                raise LocalGenerationProviderError("provider_unavailable")
+
+            chunks: list[bytes] = []
+            total_bytes = 0
+            while True:
+                if cancel_handle and cancel_handle.is_cancelled:
+                    raise LocalGenerationProviderError("generation_cancelled")
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > MAX_RESPONSE_BYTES:
+                    raise LocalGenerationProviderError("generation_response_too_large")
+                chunks.append(chunk)
+
+            body = b"".join(chunks)
+
         except LocalGenerationProviderError:
             raise
-        except HTTPError as exc:
-            if 300 <= exc.code < 400:
-                raise LocalGenerationProviderError("provider_redirect_blocked") from None
-            if exc.code == 404:
-                raise LocalGenerationProviderError("model_unavailable") from None
-            raise LocalGenerationProviderError("provider_unavailable") from None
         except (TimeoutError, socket.timeout):
+            if cancel_handle and cancel_handle.is_cancelled:
+                raise LocalGenerationProviderError("generation_cancelled") from None
             raise LocalGenerationProviderError("provider_timeout") from None
-        except URLError as exc:
-            if isinstance(exc.reason, (TimeoutError, socket.timeout)):
-                raise LocalGenerationProviderError("provider_timeout") from None
+        except (http.client.HTTPException, ConnectionError, OSError, socket.error):
+            if cancel_handle and cancel_handle.is_cancelled:
+                raise LocalGenerationProviderError("generation_cancelled") from None
             raise LocalGenerationProviderError("provider_unavailable") from None
-        if len(body) > MAX_RESPONSE_BYTES:
-            raise LocalGenerationProviderError("generation_response_too_large")
+        finally:
+            if cancel_handle:
+                cancel_handle.unregister_connection()
+            try:
+                conn.close()
+            except Exception:
+                pass
+
         try:
             decoded = body.decode("utf-8")
             parsed = json.loads(decoded)
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise LocalGenerationProviderError("invalid_provider_response") from None
+
         if not isinstance(parsed, dict):
             raise LocalGenerationProviderError("invalid_provider_response")
         return parsed

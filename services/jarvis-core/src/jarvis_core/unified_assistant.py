@@ -395,53 +395,85 @@ class UnifiedRoutingEngine:
         top_score = top_candidate["score"]
         top_signals = top_candidate["signals"]
 
-        # Determine confidence tier
-        if top_score >= 6:
-            confidence_tier = "strong"
-        elif top_score >= 3:
-            confidence_tier = "moderate"
-        else:
+        # If no signals matched at all (score == 0), deliberately select a defined general fallback
+        if top_score == 0:
+            fallback_id = "local_planning_agent"
+            if any(term in lower_text for term in ("coordinate", "cross-agent", "dashboard", "overall", "life areas")):
+                fallback_id = "local_life_dashboard_cross_agent_coordinator"
+            top_agent = self.agents_by_id.get(fallback_id, top_agent)
+            top_signals = ["General fallback — no specific domain keywords matched"]
             confidence_tier = "weak"
-            # If weak and empty signals, fallback to planning agent or coordinator
-            if not top_signals:
-                top_signals = ["General natural-language intent fallback"]
+            routing_rationale = (
+                f"No specific domain keywords matched. Recommended {top_agent['displayName']} "
+                f"({top_agent['category']}) as a safe general fallback."
+            )
+            # General fallback alternatives
+            fallback_alt_ids = [
+                "local_life_dashboard_cross_agent_coordinator",
+                "local_decision_agent",
+                "local_summarization_agent",
+                "local_research_agent",
+            ]
+            alternatives = []
+            for alt_id in fallback_alt_ids:
+                if alt_id != top_agent["agentId"] and alt_id in self.agents_by_id:
+                    alt_agent = self.agents_by_id[alt_id]
+                    alternatives.append({
+                        "agent_id": alt_agent["agentId"],
+                        "display_name": alt_agent["displayName"],
+                        "category": alt_agent["category"],
+                        "endpoint": alt_agent["endpoint"],
+                        "score": 0,
+                        "reason": alt_agent.get("useWhen", "General fallback response agent."),
+                        "use_when": alt_agent.get("useWhen", ""),
+                    })
+                    if len(alternatives) >= 4:
+                        break
+            is_ambiguous = False
+            ambiguity_reason = None
+        else:
+            # Determine confidence tier
+            if top_score >= 6:
+                confidence_tier = "strong"
+            elif top_score >= 3:
+                confidence_tier = "moderate"
+            else:
+                confidence_tier = "weak"
 
-        # Determine ambiguity
-        is_ambiguous = False
-        ambiguity_reason = None
-        if len(scored_candidates) > 1:
-            second = scored_candidates[1]
-            if top_score > 0 and (top_score - second["score"]) <= 1 and confidence_tier != "strong":
-                is_ambiguous = True
-                ambiguity_reason = (
-                    f"Both '{top_agent['displayName']}' (score {top_score}) and "
-                    f"'{second['agent']['displayName']}' (score {second['score']}) match closely."
-                )
+            # Determine ambiguity
+            is_ambiguous = False
+            ambiguity_reason = None
+            if len(scored_candidates) > 1:
+                second = scored_candidates[1]
+                if top_score > 0 and (top_score - second["score"]) <= 1 and confidence_tier != "strong":
+                    is_ambiguous = True
+                    ambiguity_reason = (
+                        f"Both '{top_agent['displayName']}' (score {top_score}) and "
+                        f"'{second['agent']['displayName']}' (score {second['score']}) match closely."
+                    )
 
-        # Build alternatives
-        alternatives = []
-        for cand in scored_candidates[1:5]:
-            alt_agent = cand["agent"]
-            alt_signals = cand["signals"] or ["Secondary category match"]
-            alternatives.append({
-                "agent_id": alt_agent["agentId"],
-                "display_name": alt_agent["displayName"],
-                "category": alt_agent["category"],
-                "endpoint": alt_agent["endpoint"],
-                "score": cand["score"],
-                "reason": ", ".join(alt_signals[:3]),
-                "use_when": alt_agent.get("useWhen", ""),
-            })
+            # Build alternatives from scored candidates
+            alternatives = []
+            for cand in scored_candidates:
+                alt_agent = cand["agent"]
+                if alt_agent["agentId"] == top_agent["agentId"]:
+                    continue
+                alt_signals = cand["signals"] or ["General secondary candidate"]
+                alternatives.append({
+                    "agent_id": alt_agent["agentId"],
+                    "display_name": alt_agent["displayName"],
+                    "category": alt_agent["category"],
+                    "endpoint": alt_agent["endpoint"],
+                    "score": cand["score"],
+                    "reason": ", ".join(alt_signals[:3]),
+                    "use_when": alt_agent.get("useWhen", ""),
+                })
+                if len(alternatives) >= 4:
+                    break
 
-        # Routing rationale
-        if top_signals and top_signals != ["General natural-language intent fallback"]:
             routing_rationale = (
                 f"Selected {top_agent['displayName']} ({top_agent['category']}) based on matched signals: "
                 + ", ".join(top_signals[:4]) + "."
-            )
-        else:
-            routing_rationale = (
-                f"Recommended {top_agent['displayName']} ({top_agent['category']}) as a general starting agent for this request."
             )
 
         high_stakes_info = classify_high_stakes(top_agent["agentId"], top_agent["category"])
@@ -462,17 +494,44 @@ class UnifiedRoutingEngine:
             "safety_reminders": self._get_safety_reminders(top_agent["category"], high_stakes_info["is_high_stakes"]),
         }
 
-    def _find_alternatives(self, lower_text: str, exclude_id: str, count: int = 3) -> list[dict[str, Any]]:
-        alts = []
+    def _find_alternatives(self, lower_text: str, exclude_id: str, count: int = 4) -> list[dict[str, Any]]:
+        scored: list[dict[str, Any]] = []
         for agent in self.enriched_agents:
-            if agent["agentId"] == exclude_id:
+            agent_id = agent["agentId"]
+            if agent_id == exclude_id:
                 continue
+            score = 0
+            signals: list[str] = []
+            keywords = LOCAL_RESPONSE_AGENT_ROUTE_KEYWORDS.get(agent_id, ())
+            for kw in keywords:
+                if kw in lower_text:
+                    score += 3
+                    signals.append(f"keyword: '{kw}'")
+            intent_signals = DOMAIN_INTENT_SIGNALS.get(agent_id, ())
+            for sig in intent_signals:
+                if sig in lower_text:
+                    score += 4
+                    signals.append(f"signal: '{sig}'")
+            if agent["displayName"].lower() in lower_text:
+                score += 5
+                signals.append("agent name mentioned")
+            if agent["category"].lower() in lower_text:
+                score += 2
+                signals.append(f"category match: {agent['category']}")
+            scored.append({"agent": agent, "score": score, "signals": signals})
+
+        scored.sort(key=lambda item: (-item["score"], item["agent"]["displayName"]))
+        alts: list[dict[str, Any]] = []
+        for cand in scored:
+            agent = cand["agent"]
+            signals = cand["signals"] or [agent.get("useWhen", "Alternative response agent.")]
             alts.append({
                 "agent_id": agent["agentId"],
                 "display_name": agent["displayName"],
                 "category": agent["category"],
                 "endpoint": agent["endpoint"],
-                "reason": agent.get("useWhen", "Alternative response agent."),
+                "score": cand["score"],
+                "reason": ", ".join(signals[:3]) if isinstance(signals, list) else str(signals),
                 "use_when": agent.get("useWhen", ""),
             })
             if len(alts) >= count:
