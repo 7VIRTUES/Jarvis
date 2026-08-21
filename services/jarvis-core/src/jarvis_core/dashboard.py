@@ -111,6 +111,8 @@ class DashboardService:
                 "knowledgeLibrary": "implemented_with_optional_local_embeddings",
                 "localGeneration": "implemented_disabled_by_default",
                 "modelsCenter": "/models",
+                "unifiedAssistant": "implemented_session_only",
+                "assistant": "/assistant",
                 "connectors": "placeholder_summary_only",
                 "unsupportedControlsExposed": False,
             },
@@ -935,6 +937,7 @@ def dashboard_html() -> str:
       <div id="dashboard-section-filter-status" class="muted">Showing all dashboard sections.</div>
       <div id="dashboard-shortcut-help" class="muted shortcut-help">Keyboard shortcuts: / focuses section search, Escape clears the filter, e expands all sections, c collapses all sections.</div>
       <div class="home-grid" aria-label="Dashboard section navigation">
+        <div class="home-card"><a href="/assistant">Open Unified Assistant</a><span class="muted">Primary conversational interface across 37 response agents.</span></div>
         <div class="home-card"><a href="/memory">Open Memory Center</a><span class="muted">Approval-gated local memory management.</span></div>
         <div class="home-card"><a href="/knowledge">Open Knowledge Library</a><span class="muted">Explicit local document ingestion and provenance.</span></div>
         <div class="home-card"><a href="/models">Open Models Center</a><span class="muted">Controlled local generation configuration and metadata.</span></div>

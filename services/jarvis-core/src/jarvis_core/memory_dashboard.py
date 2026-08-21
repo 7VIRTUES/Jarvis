@@ -248,6 +248,7 @@ def memory_dashboard_html() -> str:
         <p>Local · User-controlled · Approval-gated · Auditable</p>
       </div>
       <div class="actions">
+        <a class="button-link" href="/assistant">Open Assistant</a>
         <a class="button-link" href="/knowledge">Open Knowledge Library</a>
         <a class="button-link" href="/models">Open Models Center</a>
         <a class="button-link" href="/dashboard">Back to Dashboard</a>

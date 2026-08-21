@@ -99,6 +99,8 @@ from .memory_retrieval import (
 from .memory_dashboard import memory_dashboard_html
 from .local_generation import LocalGenerationError, LocalGenerationService
 from .models_dashboard import models_dashboard_html
+from .unified_assistant import UnifiedAssistantService
+from .unified_assistant_dashboard import unified_assistant_html
 from .prompt_assembly import classify_high_stakes
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -241,6 +243,7 @@ local_vehicle_devices_gear_agent = LocalVehicleDevicesGearAgentService()
 local_life_direction_agent = LocalLifeDirectionAgentService()
 local_relationships_agent = LocalRelationshipsAgentService()
 local_emotional_reflection_agent = LocalEmotionalReflectionAgentService()
+unified_assistant = UnifiedAssistantService()
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -728,6 +731,27 @@ class LocalResponseAgentInputBase(BaseModel):
     knowledge: KnowledgeRetrievalOptionsInput | None = None
     memoryProposalSuggestions: MemoryProposalSuggestionOptionsInput | None = None
     generation: GenerationOptionsInput | None = None
+
+
+class UnifiedAssistantAnalyzeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requestText: str
+    explicitAgentId: str | None = None
+    categoryPreference: str | None = None
+    memoryEnabled: bool | None = False
+    knowledgeEnabled: bool | None = False
+    generationMode: str | None = "local_model_with_fallback"
+    priorAgentContext: PriorAgentContextInput | None = None
+    webContext: list[WebContextSourceInput] = Field(default_factory=list)
+    customOverrides: dict[str, Any] | None = None
+
+
+class UnifiedAssistantExecuteInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agentId: str
+    payload: dict[str, Any]
 
 
 class GenerationProbeInput(BaseModel):
@@ -1828,6 +1852,11 @@ def health() -> dict[str, str]:
     return {"status": "ok", "app": APP_NAME, "version": VERSION, "mode": "local"}
 
 
+@app.get("/assistant", response_class=HTMLResponse)
+def unified_assistant_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
+    return HTMLResponse(unified_assistant_html())
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def local_dashboard(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
     return HTMLResponse(dashboard_html())
@@ -2894,6 +2923,93 @@ def create_local_emotional_reflection_plan(
             desired_output_type=payload.desiredOutputType,
         )
     ), payload)
+
+
+_UNIFIED_ASSISTANT_AGENT_DISPATCH: dict[str, tuple[type[LocalResponseAgentInputBase], Any]] = {
+    "local_research_agent": (LocalResearchBriefInput, create_local_research_brief),
+    "file_data_agent": (FileDataSummaryInput, create_file_data_summary),
+    "local_planning_agent": (LocalPlanningInput, create_local_plan),
+    "local_drafting_agent": (LocalDraftingInput, create_local_draft),
+    "local_review_agent": (LocalReviewInput, create_local_review),
+    "local_decision_agent": (LocalDecisionInput, create_local_decision),
+    "local_troubleshooting_agent": (LocalTroubleshootingInput, create_local_troubleshooting_triage),
+    "local_summarization_agent": (LocalSummarizationInput, create_local_summarization),
+    "local_extraction_agent": (LocalExtractionInput, create_local_extraction),
+    "local_classification_agent": (LocalClassificationInput, create_local_classification),
+    "local_transformation_agent": (LocalTransformationInput, create_local_transformation),
+    "local_business_agent": (LocalBusinessInput, create_local_business_brief),
+    "local_health_fitness_agent": (LocalHealthFitnessInput, create_local_health_fitness_plan),
+    "local_food_cooking_grocery": (LocalFoodCookingGroceryInput, create_local_food_cooking_grocery_plan),
+    "local_home_room_living_space": (LocalHomeRoomLivingSpaceInput, create_local_home_room_living_space_plan),
+    "local_legal_immigration_official_matters": (LocalLegalImmigrationOfficialInput, create_local_legal_immigration_official_plan),
+    "local_emergency_preparedness": (LocalEmergencyPreparednessInput, create_local_emergency_preparedness_plan),
+    "local_culture_taste_high_class_lifestyle": (LocalCultureTasteHighClassLifestyleInput, create_local_culture_taste_high_class_lifestyle_plan),
+    "local_hobbies_adventure": (LocalHobbiesAdventureInput, create_local_hobbies_adventure_plan),
+    "local_personal_knowledge_memory_organizer": (LocalPersonalKnowledgeMemoryOrganizerInput, create_local_personal_knowledge_memory_organizer_plan),
+    "local_life_dashboard_cross_agent_coordinator": (LocalLifeDashboardCoordinatorInput, create_local_life_dashboard_coordinator_plan),
+    "local_everyday_life_agent": (LocalEverydayLifeInput, create_local_everyday_life_plan),
+    "local_online_presence_agent": (LocalOnlinePresenceInput, create_local_online_presence_plan),
+    "local_security_safety_agent": (LocalSecuritySafetyInput, create_local_security_safety_review),
+    "local_creator_agent": (LocalCreatorInput, create_local_creator_plan),
+    "local_school_robotics_agent": (LocalSchoolRoboticsInput, create_local_school_robotics_plan),
+    "local_career_agent": (LocalCareerInput, create_local_career_plan),
+    "local_finance_budget_agent": (LocalFinanceBudgetInput, create_local_finance_budget_plan),
+    "local_housing_move_travel_agent": (LocalHousingMoveTravelInput, create_local_housing_move_travel_plan),
+    "local_projects_portfolio_agent": (LocalProjectsPortfolioInput, create_local_projects_portfolio_plan),
+    "local_learning_study_agent": (LocalLearningStudyInput, create_local_learning_study_plan),
+    "local_social_networking_agent": (LocalSocialNetworkingInput, create_local_social_networking_plan),
+    "local_personal_admin_agent": (LocalPersonalAdminInput, create_local_personal_admin_plan),
+    "local_vehicle_devices_gear_agent": (LocalVehicleDevicesGearInput, create_local_vehicle_devices_gear_plan),
+    "local_life_direction_agent": (LocalLifeDirectionInput, create_local_life_direction_plan),
+    "local_relationships_agent": (LocalRelationshipsInput, create_local_relationships_plan),
+    "local_emotional_reflection_agent": (LocalEmotionalReflectionInput, create_local_emotional_reflection_plan),
+}
+
+
+@app.post("/api/assistant/analyze-route")
+def assistant_analyze_route(
+    payload: UnifiedAssistantAnalyzeInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    memory_opt = None
+    if payload.memoryEnabled:
+        memory_opt = {"retrieve_limit": 4, "private_session": False}
+    knowledge_opt = None
+    if payload.knowledgeEnabled:
+        knowledge_opt = {"mode": "hybrid", "retrieve_limit": 4, "private_session": False}
+
+    prior_ctx = payload.priorAgentContext.model_dump() if payload.priorAgentContext else None
+    web_ctx = [w.model_dump() for w in payload.webContext] if payload.webContext else []
+
+    return unified_assistant.analyze(
+        request_text=payload.requestText,
+        explicit_agent_id=payload.explicitAgentId,
+        category_preference=payload.categoryPreference,
+        memory_option=memory_opt,
+        knowledge_option=knowledge_opt,
+        generation_mode=payload.generationMode,
+        prior_agent_context=prior_ctx,
+        web_context=web_ctx,
+        custom_overrides=payload.customOverrides,
+    )
+
+
+@app.post("/api/assistant/execute")
+def assistant_execute_agent(
+    payload: UnifiedAssistantExecuteInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    agent_id = payload.agentId.strip()
+    if agent_id not in _UNIFIED_ASSISTANT_AGENT_DISPATCH:
+        raise HTTPException(status_code=400, detail=f"Unknown local response agent ID: {agent_id}")
+
+    input_cls, handler = _UNIFIED_ASSISTANT_AGENT_DISPATCH[agent_id]
+    try:
+        parsed_payload = input_cls(**payload.payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid payload for {agent_id}: {exc}") from exc
+
+    return handler(parsed_payload, None)
 
 
 @app.get("/vm-validation/prep")

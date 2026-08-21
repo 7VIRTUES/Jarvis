@@ -45,7 +45,7 @@ def knowledge_dashboard_html() -> str:
 </head>
 <body>
 <header>
-  <div class="nav"><div><h1>Jarvis Knowledge Library</h1><p>Local · Explicitly imported · Provenance-aware · User-controlled</p></div><div class="actions"><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/memory">Memory Center</a><a class="button-link" href="/models">Models Center</a></div></div>
+  <div class="nav"><div><h1>Jarvis Knowledge Library</h1><p>Local · Explicitly imported · Provenance-aware · User-controlled</p></div><div class="actions"><a class="button-link" href="/assistant">Assistant</a><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/memory">Memory Center</a><a class="button-link" href="/models">Models Center</a></div></div>
 </header>
 <main>
   <section class="banner"><h2>Knowledge safety boundaries</h2><ul>
