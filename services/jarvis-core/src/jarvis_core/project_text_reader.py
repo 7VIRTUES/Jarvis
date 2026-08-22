@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from pathlib import Path
 from typing import Any
 
+from .permissions import is_protected_path
+from .post_execution_review import is_dependency_file
 from .project_registry import ProjectRegistry
 from .workspace_boundary import (
     DEFAULT_RUNTIME_SKIP_DIRS,
@@ -137,22 +140,27 @@ class ProjectTextReader:
         candidates.sort(key=lambda c: c["relativePath"])
         return candidates
 
-    def read_text_files(
+    def validate_safe_paths(
         self,
         project_name: str,
         relative_paths: list[str],
-    ) -> dict[str, Any]:
+        *,
+        max_files: int = 10,
+        reject_dependency_files: bool = False,
+        enforce_total_bytes_limit: bool = False,
+        max_total_bytes: int = MAX_TOTAL_BYTES,
+    ) -> list[dict[str, Any]]:
+        """Validates relative paths strictly against registered project and security boundaries without returning full file content to untrusted callers."""
         clean_project = str(project_name or "").strip()
         if not clean_project:
             raise ValueError("projectName is required.")
 
         if not isinstance(relative_paths, list) or len(relative_paths) < 1:
-            raise ValueError("At least 1 relative file path must be selected for reading.")
+            raise ValueError("At least 1 relative file path must be specified.")
 
-        if len(relative_paths) > MAX_FILES_PER_READ:
-            raise ValueError(f"Cannot read more than {MAX_FILES_PER_READ} files per execution.")
+        if len(relative_paths) > max_files:
+            raise ValueError(f"Cannot select more than {max_files} files per execution.")
 
-        # Re-resolve project from registry
         proj = self.projects.get_project(clean_project)
         if not proj:
             raise KeyError(f"Registered project '{clean_project}' no longer found in registry.")
@@ -163,21 +171,39 @@ class ProjectTextReader:
         if not root_decision.allowed:
             raise PermissionError(root_decision.reason)
 
-        validated_paths: list[tuple[str, Path]] = []
+        validated: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
         total_bytes = 0
 
-        # Validate each relative path strictly
         for raw_path in relative_paths:
             if not isinstance(raw_path, str) or not raw_path.strip():
                 raise ValueError("Empty or invalid relative path specified.")
 
-            norm_rel = raw_path.strip().replace("\\", "/").lstrip("/")
+            trimmed = raw_path.strip()
+
+            # Reject absolute / UNC / drive-qualified forms before normalization
+            if trimmed.startswith("/") or trimmed.startswith("\\"):
+                raise PermissionError(f"Absolute or root-relative paths are not permitted: {raw_path}")
+            if trimmed.startswith("//") or trimmed.startswith("\\\\"):
+                raise PermissionError(f"UNC network paths are not permitted: {raw_path}")
+            if bool(re.match(r"^[a-zA-Z]:", trimmed)):
+                raise PermissionError(f"Drive-qualified paths are not permitted: {raw_path}")
+            if Path(trimmed).is_absolute():
+                raise PermissionError(f"Absolute paths are not permitted: {raw_path}")
+
+            norm_rel = trimmed.replace("\\", "/")
             if ".." in norm_rel.split("/"):
                 raise PermissionError(f"Directory traversal '..' not permitted: {raw_path}")
 
+            if any(char in norm_rel for char in ("*", "?", "[", "]", ":")):
+                raise ValueError(f"Glob patterns or invalid characters not permitted in paths: {raw_path}")
+
+            if norm_rel in seen_paths:
+                raise ValueError(f"Duplicate file path selected: '{norm_rel}'")
+            seen_paths.add(norm_rel)
+
             target_path = (project_root / norm_rel).resolve()
 
-            # Ensure path stays inside project root
             if not target_path.is_relative_to(project_root):
                 raise PermissionError(f"File path escapes project root: {raw_path}")
 
@@ -188,20 +214,25 @@ class ProjectTextReader:
                 raise ValueError(f"Selected path is not a regular file: {norm_rel}")
 
             if target_path.is_symlink():
-                raise PermissionError(f"Symlinked files cannot be read: {norm_rel}")
+                raise PermissionError(f"Symlinked files cannot be accessed: {norm_rel}")
 
             if is_reparse_point(target_path):
-                raise PermissionError(f"Reparse/junction paths cannot be read: {norm_rel}")
+                raise PermissionError(f"Reparse/junction paths cannot be accessed: {norm_rel}")
 
             decision = validator.check_path(target_path)
             if not decision.allowed:
                 raise PermissionError(f"Path not allowed by boundary policy: {norm_rel} ({decision.reason})")
             if decision.protected:
                 raise PermissionError(f"Access to protected file is blocked: {norm_rel}")
+            if decision.skipped:
+                raise PermissionError(f"Access to runtime/cache directory is blocked: {norm_rel}")
+
+            if reject_dependency_files and is_dependency_file(norm_rel):
+                raise PermissionError(f"Dependency and package files cannot be modified in conservative mode: {norm_rel}")
 
             suffix = target_path.suffix.lower()
             if suffix not in SAFE_TEXT_SUFFIXES:
-                raise PermissionError(f"File extension '{suffix}' is not permitted for safe text reading: {norm_rel}")
+                raise PermissionError(f"File extension '{suffix}' is not permitted for safe text access: {norm_rel}")
 
             stat = target_path.stat()
             file_size = stat.st_size
@@ -211,24 +242,55 @@ class ProjectTextReader:
                     f"File '{norm_rel}' exceeds size limit of {MAX_BYTES_PER_FILE} bytes ({file_size} bytes)."
                 )
 
+            raw = target_path.read_bytes()
+            if b"\x00" in raw:
+                raise ValueError(f"Binary file containing NUL bytes rejected: {norm_rel}")
+
             total_bytes += file_size
-            if total_bytes > MAX_TOTAL_BYTES:
+            if enforce_total_bytes_limit and total_bytes > max_total_bytes:
                 raise ValueError(
-                    f"Combined size of selected files ({total_bytes} bytes) exceeds limit of {MAX_TOTAL_BYTES} bytes."
+                    f"Combined size of selected files ({total_bytes} bytes) exceeds limit of {max_total_bytes} bytes."
                 )
 
-            validated_paths.append((norm_rel, target_path))
+            sha256 = hashlib.sha256(raw).hexdigest()
+            category = CATEGORY_MAP.get(suffix, "Source / Text")
+
+            validated.append({
+                "relativePath": norm_rel,
+                "filename": target_path.name,
+                "extension": suffix,
+                "sizeBytes": file_size,
+                "sha256": sha256,
+                "category": category,
+                "_target_path": target_path,
+                "_raw_bytes": raw,
+            })
+
+        return validated
+
+    def read_text_files(
+        self,
+        project_name: str,
+        relative_paths: list[str],
+    ) -> dict[str, Any]:
+        clean_project = str(project_name or "").strip()
+        validated_files = self.validate_safe_paths(
+            project_name=clean_project,
+            relative_paths=relative_paths,
+            max_files=MAX_FILES_PER_READ,
+            reject_dependency_files=False,
+            enforce_total_bytes_limit=True,
+            max_total_bytes=MAX_TOTAL_BYTES,
+        )
 
         read_files: list[dict[str, Any]] = []
         warnings: list[str] = []
         total_chars = 0
 
         # Read contents safely
-        for norm_rel, file_path in validated_paths:
-            raw = file_path.read_bytes()
-            if b"\x00" in raw:
-                raise ValueError(f"Binary file containing NUL bytes rejected: {norm_rel}")
-
+        for item in validated_files:
+            norm_rel = item["relativePath"]
+            raw = item["_raw_bytes"]
             try:
                 content = raw.decode("utf-8")
             except UnicodeDecodeError:
@@ -241,14 +303,13 @@ class ProjectTextReader:
                     f"Combined character count exceeds maximum limit of {MAX_RETURNED_CHARS} characters."
                 )
 
-            sha256 = hashlib.sha256(raw).hexdigest()
             line_count = len(content.splitlines())
 
             read_files.append({
                 "relativePath": norm_rel,
-                "sizeBytes": len(raw),
+                "sizeBytes": item["sizeBytes"],
                 "lineCount": line_count,
-                "sha256": sha256,
+                "sha256": item["sha256"],
                 "content": content,
             })
 

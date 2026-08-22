@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -12,7 +13,9 @@ from typing import Any
 
 from .permissions import is_protected_path
 from .post_execution_review import is_dependency_file
+from .project_text_reader import is_reparse_point
 from .time_utils import utc_now
+from .workspace_boundary import SAFE_TEXT_SUFFIXES
 
 
 SCOPE_MANIFEST_BEGIN = "<!-- JARVIS_CODEX_SCOPE_V1_BEGIN -->"
@@ -159,7 +162,7 @@ def generate_scope_manifest(
     allowed_files: list[str],
 ) -> tuple[dict[str, Any], str]:
     """Generates a strictly validated scope manifest for a conservative Codex plan."""
-    if not allowed_files:
+    if not allowed_files or len(allowed_files) < 1:
         raise ValueError("At least 1 allowed file must be specified for conservative Codex execution.")
 
     if len(allowed_files) > MAX_APPROVED_FILES:
@@ -168,17 +171,34 @@ def generate_scope_manifest(
     root = project_path.resolve()
     validated_files: list[str] = []
     file_hashes: dict[str, str] = {}
+    seen_paths: set[str] = set()
 
     for raw_path in allowed_files:
         if not isinstance(raw_path, str) or not raw_path.strip():
             raise ValueError("Empty file path in allowed_files.")
 
-        norm_rel = raw_path.strip().replace("\\", "/").lstrip("/")
+        trimmed = raw_path.strip()
+
+        # Reject absolute / UNC / drive-qualified forms before normalization
+        if trimmed.startswith("/") or trimmed.startswith("\\"):
+            raise PermissionError(f"Absolute or root-relative paths are not permitted: {raw_path}")
+        if trimmed.startswith("//") or trimmed.startswith("\\\\"):
+            raise PermissionError(f"UNC network paths are not permitted: {raw_path}")
+        if bool(re.match(r"^[a-zA-Z]:", trimmed)):
+            raise PermissionError(f"Drive-qualified paths are not permitted: {raw_path}")
+        if Path(trimmed).is_absolute():
+            raise PermissionError(f"Absolute paths are not permitted: {raw_path}")
+
+        norm_rel = trimmed.replace("\\", "/")
         if ".." in norm_rel.split("/"):
             raise ValueError(f"Directory traversal '..' is not allowed: {raw_path}")
 
         if any(char in norm_rel for char in ("*", "?", "[", "]", ":")):
             raise ValueError(f"Glob patterns or invalid characters not permitted in allowed files: {raw_path}")
+
+        if norm_rel in seen_paths:
+            raise ValueError(f"Duplicate file path in allowed_files: '{norm_rel}'")
+        seen_paths.add(norm_rel)
 
         file_path = (root / norm_rel).resolve()
         if not file_path.is_relative_to(root):
@@ -190,13 +210,27 @@ def generate_scope_manifest(
         if file_path.is_symlink():
             raise ValueError(f"Symlinked files cannot be approved for Codex execution: {norm_rel}")
 
+        if is_reparse_point(file_path):
+            raise PermissionError(f"Reparse/junction paths cannot be approved for Codex execution: {norm_rel}")
+
         if is_protected_path(norm_rel) or is_protected_path(file_path):
             raise PermissionError(f"Access to protected file is blocked: {norm_rel}")
 
         if is_dependency_file(norm_rel):
             raise PermissionError(f"Dependency and package files cannot be modified in conservative mode: {norm_rel}")
 
+        suffix = file_path.suffix.lower()
+        if suffix not in SAFE_TEXT_SUFFIXES:
+            raise PermissionError(f"File extension '{suffix}' is not permitted for conservative execution: {norm_rel}")
+
+        stat = file_path.stat()
+        if stat.st_size > 128_000:
+            raise ValueError(f"File '{norm_rel}' exceeds conservative size limit of 128,000 bytes ({stat.st_size} bytes).")
+
         raw_bytes = file_path.read_bytes()
+        if b"\x00" in raw_bytes:
+            raise ValueError(f"Binary file containing NUL bytes rejected: {norm_rel}")
+
         sha256 = hashlib.sha256(raw_bytes).hexdigest()
 
         validated_files.append(norm_rel)

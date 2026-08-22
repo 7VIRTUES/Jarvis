@@ -87,38 +87,52 @@ class AssistantCodingBridge:
         }
 
     def prepare_coding_plan(self, payload: AssistantCodingPrepareInput) -> dict[str, Any]:
-        project = self.projects.get_project(payload.project_name)
-        if not project:
-            raise ValueError(f"Target project '{payload.project_name}' is not registered.")
-
-        if not payload.allowed_files or len(payload.allowed_files) < 1:
-            raise ValueError("At least 1 existing safe project file must be selected.")
-
-        if len(payload.allowed_files) > 10:
-            raise ValueError("A maximum of 10 existing files can be selected per conservative plan.")
-
         if not payload.task_goal or not payload.task_goal.strip():
             raise ValueError("Task goal is required.")
 
         if not payload.exact_scope or not payload.exact_scope.strip():
             raise ValueError("Exact scope is required.")
 
-        # Create supervised planning task record
+        # Validate 1-10 safe project files strictly with ProjectTextReader
+        validated_files = self.project_text_reader.validate_safe_paths(
+            project_name=payload.project_name,
+            relative_paths=payload.allowed_files,
+            max_files=10,
+            reject_dependency_files=True,
+        )
+        allowed_rel_paths = [f["relativePath"] for f in validated_files]
+
+        # Create supervised planning task record through existing TaskQueue dry-run validation
         task = self.tasks.create_task(
+            project_name=payload.project_name,
             agent_id="coding_agent",
             task_type="plan",
-            title=f"Plan Codex change for {payload.project_name}",
-            project_name=payload.project_name,
+            autonomy_level="supervised",
             dry_run=True,
             write_capable=False,
-            source_agent_id="unified_assistant",
-            source_response_id=payload.source_response_id,
-            source_turn_index=payload.source_turn_index,
+            proposed_actions=[{
+                "tool_id": "codex_tool",
+                "action_type": "codex.plan_execution",
+                "target": payload.project_name,
+                "risk_level": "high",
+                "dry_run": True,
+            }],
+            risk_plan={"sandbox_mode": 1, "network": 0, "fs_write": 1, "command": 0},
         )
+
+        if not task or not isinstance(task, dict):
+            raise RuntimeError("Failed to create planning task in TaskQueue.")
+
+        task_status = task.get("status")
+        if task_status != "succeeded":
+            err_msg = task.get("error") or task.get("summary") or f"Planning task status is '{task_status}'"
+            raise RuntimeError(f"Controlled coding planning dry-run did not succeed: {err_msg}")
+
+        task_id = str(task["task_id"])
 
         plan = self.plans.create_conservative_plan(
             CodexPlanInput(
-                task_id=task.task_id,
+                task_id=task_id,
                 project_name=payload.project_name,
                 agent_id="coding_agent",
                 tool_id="codex_tool",
@@ -126,13 +140,20 @@ class AssistantCodingBridge:
                 task_goal=payload.task_goal.strip()[:4000],
                 exact_scope=payload.exact_scope.strip()[:6000],
                 non_goals=payload.non_goals.strip()[:4000],
-                allowed_files=payload.allowed_files,
+                allowed_files=allowed_rel_paths,
                 test_commands=[],
                 sandbox_mode=ALLOWED_SANDBOX_MODE,
                 conservative=True,
                 execution_mode="extreme_budget",
             )
         )
+
+        if not plan or plan.get("status") == "blocked":
+            summary = plan.get("summary") if plan else "Plan creation blocked"
+            raise ValueError(f"Conservative Codex plan was blocked: {summary}")
+
+        if plan.get("status") != "waiting_for_approval":
+            raise ValueError(f"Conservative Codex plan was created with unexpected status: '{plan.get('status')}'.")
 
         prompt_content = get_plan_prompt_content(plan)
         parse_err, manifest = parse_scope_manifest(prompt_content, expected_project_name=payload.project_name)
@@ -141,14 +162,14 @@ class AssistantCodingBridge:
 
         return {
             "planId": plan["plan_id"],
-            "taskId": task.task_id,
+            "taskId": task_id,
             "projectName": payload.project_name,
             "status": plan["status"],
             "approvalId": plan["approval_id"],
             "taskGoal": payload.task_goal.strip(),
             "exactScope": payload.exact_scope.strip(),
             "nonGoals": payload.non_goals.strip(),
-            "allowedFiles": manifest.get("allowedFiles", payload.allowed_files),
+            "allowedFiles": manifest.get("allowedFiles", allowed_rel_paths),
             "allowedFileHashes": manifest.get("allowedFileHashes", {}),
             "existingFilesOnly": True,
             "maxCodexRuns": 1,

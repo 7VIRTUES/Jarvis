@@ -4902,8 +4902,10 @@ def prepare_assistant_coding_plan(
         )
     except (ValueError, FileNotFoundError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Plan preparation error: {exc}") from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unable to prepare conservative coding plan.")
 
 
 @app.post("/api/assistant/coding/approve")
@@ -4919,8 +4921,10 @@ def approve_assistant_coding_plan(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
+    except (ValueError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unable to approve conservative coding plan.")
 
 
 @app.post("/api/assistant/coding/reject")
@@ -4935,6 +4939,10 @@ def reject_assistant_coding_plan(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unable to reject conservative coding plan.")
 
 
 @app.post("/api/assistant/coding/execute")
@@ -4951,8 +4959,10 @@ def execute_assistant_coding_plan(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
+    except (ValueError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unable to execute conservative coding plan.")
 
 
 @app.get("/api/assistant/coding/plan/{plan_id}")
