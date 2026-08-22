@@ -1333,6 +1333,7 @@ def unified_assistant_html() -> str:
                         <option value="inspect_project" ${turn.selectedActionType === 'inspect_project' ? 'selected' : ''}>inspect_project (Read-Only Inspection)</option>
                         <option value="read_project_text_files" ${turn.selectedActionType === 'read_project_text_files' ? 'selected' : ''}>read_project_text_files (Read Project Source Files)</option>
                         <option value="write_report" ${turn.selectedActionType === 'write_report' ? 'selected' : ''}>write_report (Structured Report Creation)</option>
+                        <option value="modify_project_files_with_codex" ${turn.selectedActionType === 'modify_project_files_with_codex' ? 'selected' : ''}>modify_project_files_with_codex (Controlled Coding with Codex)</option>
                       </select>
                     </div>
                     <div class="action-field">
@@ -1381,107 +1382,281 @@ def unified_assistant_html() -> str:
                     </div>
                   ` : ''}
 
-                  <div class="action-preview-box" id="action-policy-preview-${index}">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <strong>Policy Preview:</strong>
-                      <span class="pill ${turn.policyStatus === 'allowed' ? 'succeeded' : (turn.policyStatus === 'blocked' ? 'blocked' : (turn.policyStatus === 'approval_required' ? 'waiting_for_approval' : 'inactive'))}" id="policy-status-pill-${index}">
-                        ${escapeHtml((turn.policyStatus || (turn.selectedProject ? 'ready' : 'needs_project')).toUpperCase())}
-                      </span>
-                    </div>
-                    <div class="muted" id="policy-reason-${index}">
-                      ${escapeHtml(turn.policyReason || (turn.selectedProject ? 'Project selected. Ready for policy check.' : 'Select a registered project target to preview policy status.'))}
-                    </div>
-                  </div>
-
-                  <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;">
-                    <span class="muted" style="font-size:0.82rem;">Supervised dry-run task is validated via TaskQueue &amp; SafeActionRuntime. Nothing is executed.</span>
-                    <button class="small" type="button" data-action="submit-dry-run" data-turn-idx="${index}">Validate Dry Run</button>
-                  </div>
-
-                  ${turn.dryRunResult ? `
-                    <div class="action-result-box ${turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' ? 'succeeded' : (turn.dryRunResult.task && turn.dryRunResult.task.status === 'blocked' ? 'blocked' : 'waiting')}">
+                  ${turn.selectedActionType === 'modify_project_files_with_codex' ? `
+                    <div style="display:grid; gap:10px; background:#fbfcfe; border:1px solid #c7d2fe; border-radius:6px; padding:12px;">
                       <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong>${escapeHtml(turn.dryRunResult.summary)}</strong>
-                        <span class="pill ${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'validated')}">${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'done')}</span>
+                        <strong style="color:#3730a3; font-size:0.92rem;">Controlled Coding with Codex (Extreme-Budget Mode)</strong>
+                        <span class="pill allowed">1 Run Max · 0 Auto Checks · 0 Auto Repairs</span>
                       </div>
-                      <div class="muted" style="font-size:0.84rem;">
-                        Dry-Run Task ID: <code>${escapeHtml(turn.dryRunResult.taskId)}</code>
-                        ${turn.dryRunResult.receipts && turn.dryRunResult.receipts.length ? ` · Receipt ID: <code>${escapeHtml(turn.dryRunResult.receipts[0].receipt_id)}</code>` : ''}
+
+                      <div style="display:grid; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <label style="font-weight:600; font-size:0.85rem;">Select Existing Target Files (1 to 10 files):</label>
+                          <span class="pill ${(turn.selectedRelativePaths || []).length > 0 ? 'allowed' : 'inactive'}">
+                            Selected: ${(turn.selectedRelativePaths || []).length} / 10
+                          </span>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                          <input type="text" id="file-catalog-search-${index}" placeholder="Filter project files..." style="font-size:0.82rem; padding:4px 8px; flex:1;" value="${escapeHtml(turn.fileCatalogFilter || '')}" />
+                          <button class="secondary small" type="button" data-action="refresh-file-catalog" data-turn-idx="${index}">Refresh</button>
+                        </div>
+                        <div id="file-catalog-list-${index}" style="max-height:160px; overflow-y:auto; border:1px solid #cbd5e1; border-radius:4px; background:#fff; padding:4px;">
+                          ${renderFileCatalogItems(index, turn)}
+                        </div>
+                        <div class="muted" style="font-size:0.78rem;">
+                          <strong>Safety Invariant:</strong> Existing files only (no new files, renames, or deletions). Approval-time SHA-256 hashes are locked into the machine manifest.
+                        </div>
                       </div>
-                      <div style="margin-top:4px;">
-                        <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+
+                      <div style="display:grid; gap:8px;">
+                        <div class="action-field">
+                          <label for="coding-goal-${index}">Coding Task Goal</label>
+                          <input type="text" id="coding-goal-${index}" value="${escapeHtml(turn.codingGoal !== undefined ? turn.codingGoal : (turn.prompt || ''))}" placeholder="High-level goal for this change..." />
+                        </div>
+                        <div class="action-field">
+                          <label for="coding-scope-${index}">Exact Scope (What to modify)</label>
+                          <textarea id="coding-scope-${index}" rows="3" style="width:100%; font-family:inherit; font-size:0.85rem; padding:6px; border:1px solid #94a3b8; border-radius:4px; resize:vertical;" placeholder="Describe exact requested modifications...">${escapeHtml(turn.codingScope !== undefined ? turn.codingScope : primaryText)}</textarea>
+                        </div>
+                        <div class="action-field">
+                          <label for="coding-non-goals-${index}">Non-Goals (What NOT to touch)</label>
+                          <input type="text" id="coding-non-goals-${index}" value="${escapeHtml(turn.codingNonGoals !== undefined ? turn.codingNonGoals : 'Do not modify unselected files, install dependencies, or edit tests.')}" placeholder="Explicit non-goals and restrictions..." />
+                        </div>
                       </div>
+
+                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                        <span class="muted" style="font-size:0.8rem;">Generates a verified scope manifest and requests plan approval. Nothing executes yet.</span>
+                        <button class="small" style="background:#4338ca; border-color:#4338ca;" type="button" data-action="prepare-coding-plan" data-turn-idx="${index}">Prepare Conservative Plan</button>
+                      </div>
+
+                      ${turn.codingPlan ? `
+                        <div style="background:#fff; border:1px solid #a5b4fc; border-radius:6px; padding:12px; display:grid; gap:8px; margin-top:6px;">
+                          <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                              <strong style="color:#312e81;">Conservative Plan: <code>${escapeHtml(turn.codingPlan.planId)}</code></strong>
+                              <div class="muted" style="font-size:0.8rem;">Task: <code>${escapeHtml(turn.codingPlan.taskId)}</code> · Project: <strong>${escapeHtml(turn.codingPlan.projectName)}</strong></div>
+                            </div>
+                            <span class="pill ${turn.codingPlan.status === 'approved_for_future_execution' ? 'succeeded' : (turn.codingPlan.status === 'execution_consumed' ? 'inactive' : (turn.codingPlan.status === 'waiting_for_approval' ? 'waiting_for_approval' : 'blocked'))}">
+                              ${escapeHtml(turn.codingPlan.status.toUpperCase())}
+                            </span>
+                          </div>
+
+                          <div style="font-size:0.82rem;">
+                            <strong>Approved Scope Manifest:</strong>
+                            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; padding:6px 8px; margin-top:4px; max-height:120px; overflow-y:auto; font-family:Consolas, Monaco, monospace; font-size:0.78rem;">
+                              ${(turn.codingPlan.allowedFiles || []).map(f => {
+                                const h = (turn.codingPlan.allowedFileHashes || {})[f] || '';
+                                return `<div><strong>${escapeHtml(f)}</strong> <span class="muted">(SHA: ${escapeHtml(h.slice(0, 12))}...)</span></div>`;
+                              }).join('')}
+                            </div>
+                          </div>
+
+                          <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.75rem;">
+                            <span class="pill allowed">Max Runs: 1</span>
+                            <span class="pill allowed">Max Lines: 700</span>
+                            <span class="pill allowed">Checks: Disabled</span>
+                            <span class="pill allowed">Repairs: Disabled</span>
+                            <span class="pill allowed">Clean Baseline Required</span>
+                            <span class="pill allowed">No Auto Commit/Push</span>
+                          </div>
+
+                          ${turn.codingPlan.status === 'waiting_for_approval' ? `
+                            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; border-top:1px solid #f1f5f9; padding-top:8px;">
+                              <span class="muted" style="font-size:0.8rem;">Requires confirmation: <code>APPROVE CONSERVATIVE CODEX PLAN</code></span>
+                              <div style="display:flex; gap:6px;">
+                                <button class="secondary small" type="button" data-action="reject-coding-plan" data-turn-idx="${index}">Reject Plan</button>
+                                <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="approve-coding-plan" data-turn-idx="${index}">Approve Conservative Plan</button>
+                              </div>
+                            </div>
+                          ` : ''}
+
+                          ${turn.codingPlan.status === 'approved_for_future_execution' && !turn.codingActive && !turn.codingExecutionResult ? `
+                            <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px; display:grid; gap:8px; margin-top:4px;">
+                              <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong style="color:#166534;">Plan Approved for Future Execution</strong>
+                                <span class="pill succeeded">Ready</span>
+                              </div>
+                              <p class="muted" style="font-size:0.82rem; margin:0;">
+                                Preflight will check clean Git worktree and unchanged file hashes. Exactly one Codex child will run in workspace-write sandbox. No automated checks or repairs will run.
+                              </p>
+                              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                <span class="muted" style="font-size:0.8rem;">Requires confirmation: <code>EXECUTE APPROVED CODEX CHANGE</code></span>
+                                <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-coding-plan" data-turn-idx="${index}">Execute Approved Change</button>
+                              </div>
+                            </div>
+                          ` : ''}
+                        </div>
+                      ` : ''}
+
+                      ${turn.codingActive ? `
+                        <div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:6px; padding:12px; display:grid; gap:8px; margin-top:6px;">
+                          <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong style="color:#b45309;">Codex Process Active (Single Run Mode)...</strong>
+                            <span class="pill waiting">Running</span>
+                          </div>
+                          <div class="muted" style="font-size:0.82rem;">
+                            Jarvis is supervising Codex execution on <strong>${escapeHtml(turn.selectedProject)}</strong>. Zero automated tests or repairs will run.
+                          </div>
+                          <div style="display:flex; justify-content:flex-end;">
+                            <button class="small" style="background:#b91c1c; border-color:#b91c1c;" type="button" data-action="cancel-coding-execution" data-turn-idx="${index}">Stop Codex Execution</button>
+                          </div>
+                        </div>
+                      ` : ''}
+
+                      ${turn.codingExecutionResult ? `
+                        <div class="action-result-box ${turn.codingExecutionResult.status === 'succeeded' ? 'succeeded' : (turn.codingExecutionResult.status === 'blocked' ? 'blocked' : 'waiting')}" style="margin-top:8px; border-width:2px;">
+                          <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong>${escapeHtml(turn.codingExecutionResult.message)}</strong>
+                            <span class="pill ${escapeHtml(turn.codingExecutionResult.status)}">${escapeHtml(turn.codingExecutionResult.status.toUpperCase())}</span>
+                          </div>
+                          <div class="muted" style="font-size:0.84rem; margin-top:2px;">
+                            Execution ID: <code>${escapeHtml(turn.codingExecutionResult.executionId)}</code> · Exit Code: <strong>${escapeHtml(turn.codingExecutionResult.exitCode)}</strong> · Baseline SHA: <code>${escapeHtml(turn.codingExecutionResult.baselineHeadSha || 'unknown')}</code>
+                          </div>
+
+                          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:6px; margin:6px 0;">
+                            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                              <span class="muted">Changed Files:</span> <strong>${escapeHtml(turn.codingExecutionResult.changedFileCount)}</strong>
+                            </div>
+                            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                              <span class="muted">Added Lines:</span> <strong style="color:#166534;">+${escapeHtml(turn.codingExecutionResult.addedLines)}</strong>
+                            </div>
+                            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                              <span class="muted">Deleted Lines:</span> <strong style="color:#991b1b;">-${escapeHtml(turn.codingExecutionResult.deletedLines)}</strong>
+                            </div>
+                          </div>
+
+                          ${turn.codingExecutionResult.changedFiles && turn.codingExecutionResult.changedFiles.length ? `
+                            <div style="font-size:0.82rem; margin-top:4px;">
+                              <strong>Changed Files in Workspace:</strong>
+                              <div style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:6px; font-family:Consolas, Monaco, monospace; font-size:0.78rem;">
+                                ${turn.codingExecutionResult.changedFiles.map(f => `<div>${escapeHtml(f)}</div>`).join('')}
+                              </div>
+                            </div>
+                          ` : ''}
+
+                          <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.75rem; margin-top:4px;">
+                            <span class="pill allowed">Checks: SKIPPED (Extreme-Budget)</span>
+                            <span class="pill allowed">Repairs: SKIPPED (Extreme-Budget)</span>
+                            <span class="pill allowed">No Auto Commit/Push</span>
+                          </div>
+
+                          ${turn.codingExecutionResult.requiresUserReview ? `
+                            <div style="background:#fef2f2; border:1px solid #f87171; border-radius:4px; padding:8px; font-size:0.82rem; color:#991b1b; margin-top:6px;">
+                              <strong>Policy Review Warning:</strong> ${escapeHtml((turn.codingExecutionResult.reviewReasons || []).join('; '))}
+                            </div>
+                          ` : ''}
+
+                          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+                            <button class="small" style="background:#2563eb; border-color:#2563eb;" type="button" data-action="review-changed-files" data-turn-idx="${index}">Review Changed Files in Source Reader</button>
+                            <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                          </div>
+                        </div>
+                      ` : ''}
                     </div>
                   ` : ''}
 
-                  ${turn.dryRunResult && turn.selectedActionType === 'inspect_project' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.realExecutionResult ? `
-                    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                  ${turn.selectedActionType !== 'modify_project_files_with_codex' ? `
+                    <div class="action-preview-box" id="action-policy-preview-${index}">
                       <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#166534;">Ready for Supervised Read-Only Execution:</strong>
-                        <span class="pill succeeded">Dry-Run Proof Verified</span>
+                        <strong>Policy Preview:</strong>
+                        <span class="pill ${turn.policyStatus === 'allowed' ? 'succeeded' : (turn.policyStatus === 'blocked' ? 'blocked' : (turn.policyStatus === 'approval_required' ? 'waiting_for_approval' : 'inactive'))}" id="policy-status-pill-${index}">
+                          ${escapeHtml((turn.policyStatus || (turn.selectedProject ? 'ready' : 'needs_project')).toUpperCase())}
+                        </span>
                       </div>
-                      <div class="muted" style="font-size:0.84rem;">
-                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only)
-                      </div>
-                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
-                        <span class="pill allowed">Read-Only</span>
-                        <span class="pill allowed">Registered-Project Only</span>
-                        <span class="pill allowed">No Shell / No Writes</span>
-                        <span class="pill allowed">Protected Files Skipped</span>
-                      </div>
-                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
-                        <span class="muted" style="font-size:0.82rem;">Inspects workspace metadata synchronously without file modification.</span>
-                        <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-read-only" data-turn-idx="${index}">Execute Read-Only Inspection</button>
+                      <div class="muted" id="policy-reason-${index}">
+                        ${escapeHtml(turn.policyReason || (turn.selectedProject ? 'Project selected. Ready for policy check.' : 'Select a registered project target to preview policy status.'))}
                       </div>
                     </div>
-                  ` : ''}
 
-                  ${turn.dryRunResult && turn.selectedActionType === 'read_project_text_files' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.readExecutionResult ? `
-                    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#166534;">Ready to Read Selected Project Files:</strong>
-                        <span class="pill succeeded">Dry-Run Proof Verified</span>
-                      </div>
-                      <div class="muted" style="font-size:0.84rem;">
-                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only) · Files: <strong>${(turn.selectedRelativePaths || []).length} selected</strong>
-                      </div>
-                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
-                        <span class="pill allowed">Read Only</span>
-                        <span class="pill allowed">Max 5 Files</span>
-                        <span class="pill allowed">Protected Files Blocked</span>
-                        <span class="pill allowed">No Shell</span>
-                        <span class="pill allowed">No Writes</span>
-                        <span class="pill allowed">Session Only</span>
-                      </div>
-                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
-                        <span class="muted" style="font-size:0.82rem;">Reads bounded source text synchronously into session memory without persisting content.</span>
-                        <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-project-text-read" data-turn-idx="${index}">Read Selected Project Files</button>
-                      </div>
+                    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;">
+                      <span class="muted" style="font-size:0.82rem;">Supervised dry-run task is validated via TaskQueue &amp; SafeActionRuntime. Nothing is executed.</span>
+                      <button class="small" type="button" data-action="submit-dry-run" data-turn-idx="${index}">Validate Dry Run</button>
                     </div>
-                  ` : ''}
 
-                  ${turn.dryRunResult && turn.selectedActionType === 'write_report' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.reportExecutionResult ? `
-                    <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#1e40af;">Ready to Create Local Markdown Report:</strong>
-                        <span class="pill succeeded">Dry-Run Proof Verified</span>
+                    ${turn.dryRunResult ? `
+                      <div class="action-result-box ${turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' ? 'succeeded' : (turn.dryRunResult.task && turn.dryRunResult.task.status === 'blocked' ? 'blocked' : 'waiting')}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <strong>${escapeHtml(turn.dryRunResult.summary)}</strong>
+                          <span class="pill ${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'validated')}">${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'done')}</span>
+                        </div>
+                        <div class="muted" style="font-size:0.84rem;">
+                          Dry-Run Task ID: <code>${escapeHtml(turn.dryRunResult.taskId)}</code>
+                          ${turn.dryRunResult.receipts && turn.dryRunResult.receipts.length ? ` · Receipt ID: <code>${escapeHtml(turn.dryRunResult.receipts[0].receipt_id)}</code>` : ''}
+                        </div>
+                        <div style="margin-top:4px;">
+                          <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                        </div>
                       </div>
-                      <div class="muted" style="font-size:0.84rem;">
-                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>report_tool</code> (Non-Destructive Write)
+                    ` : ''}
+
+                    ${turn.dryRunResult && turn.selectedActionType === 'inspect_project' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.realExecutionResult ? `
+                      <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <strong style="color:#166534;">Ready for Supervised Read-Only Execution:</strong>
+                          <span class="pill succeeded">Dry-Run Proof Verified</span>
+                        </div>
+                        <div class="muted" style="font-size:0.84rem;">
+                          Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only)
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                          <span class="pill allowed">Read-Only</span>
+                          <span class="pill allowed">Registered-Project Only</span>
+                          <span class="pill allowed">No Shell / No Writes</span>
+                          <span class="pill allowed">Protected Files Skipped</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                          <span class="muted" style="font-size:0.82rem;">Inspects workspace metadata synchronously without file modification.</span>
+                          <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-read-only" data-turn-idx="${index}">Execute Read-Only Inspection</button>
+                        </div>
                       </div>
-                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
-                        <span class="pill allowed">New File Only</span>
-                        <span class="pill allowed">Markdown Only</span>
-                        <span class="pill allowed">Jarvis Reports Directory</span>
-                        <span class="pill allowed">No Overwrite</span>
-                        <span class="pill allowed">Project Files Unchanged</span>
-                        <span class="pill allowed">Explicit Confirmation</span>
+                    ` : ''}
+
+                    ${turn.dryRunResult && turn.selectedActionType === 'read_project_text_files' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.readExecutionResult ? `
+                      <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <strong style="color:#166534;">Ready to Read Selected Project Files:</strong>
+                          <span class="pill succeeded">Dry-Run Proof Verified</span>
+                        </div>
+                        <div class="muted" style="font-size:0.84rem;">
+                          Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only) · Files: <strong>${(turn.selectedRelativePaths || []).length} selected</strong>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                          <span class="pill allowed">Read Only</span>
+                          <span class="pill allowed">Max 5 Files</span>
+                          <span class="pill allowed">Protected Files Blocked</span>
+                          <span class="pill allowed">No Shell</span>
+                          <span class="pill allowed">No Writes</span>
+                          <span class="pill allowed">Session Only</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                          <span class="muted" style="font-size:0.82rem;">Reads bounded source text synchronously into session memory without persisting content.</span>
+                          <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-project-text-read" data-turn-idx="${index}">Read Selected Project Files</button>
+                        </div>
                       </div>
-                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
-                        <span class="muted" style="font-size:0.82rem;">Writes a new .md report under data/jarvis/reports/assistant without modifying project source.</span>
-                        <button class="small" style="background:#2563eb; border-color:#2563eb;" type="button" data-action="execute-report" data-turn-idx="${index}">Create Local Report</button>
+                    ` : ''}
+
+                    ${turn.dryRunResult && turn.selectedActionType === 'write_report' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.reportExecutionResult ? `
+                      <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <strong style="color:#1e40af;">Ready to Create Local Markdown Report:</strong>
+                          <span class="pill succeeded">Dry-Run Proof Verified</span>
+                        </div>
+                        <div class="muted" style="font-size:0.84rem;">
+                          Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>report_tool</code> (Non-Destructive Write)
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                          <span class="pill allowed">New File Only</span>
+                          <span class="pill allowed">Markdown Only</span>
+                          <span class="pill allowed">Jarvis Reports Directory</span>
+                          <span class="pill allowed">No Overwrite</span>
+                          <span class="pill allowed">Project Files Unchanged</span>
+                          <span class="pill allowed">Explicit Confirmation</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                          <span class="muted" style="font-size:0.82rem;">Writes a new .md report under data/jarvis/reports/assistant without modifying project source.</span>
+                          <button class="small" style="background:#2563eb; border-color:#2563eb;" type="button" data-action="execute-report" data-turn-idx="${index}">Create Local Report</button>
+                        </div>
                       </div>
-                    </div>
+                    ` : ''}
                   ` : ''}
 
                   ${turn.realExecutionResult ? `
@@ -1626,7 +1801,7 @@ def unified_assistant_html() -> str:
           if (typeSelect) {
             typeSelect.addEventListener('change', () => {
               turn.selectedActionType = typeSelect.value;
-              if (turn.selectedActionType === 'read_project_text_files' && turn.selectedProject && !turn.availableProjectFiles) {
+              if ((turn.selectedActionType === 'read_project_text_files' || turn.selectedActionType === 'modify_project_files_with_codex') && turn.selectedProject && !turn.availableProjectFiles) {
                 loadProjectFiles(index, turn.selectedProject);
               }
               updatePolicyPreview(index);
@@ -1639,7 +1814,7 @@ def unified_assistant_html() -> str:
               turn.selectedProject = projSelect.value;
               turn.availableProjectFiles = null;
               turn.selectedRelativePaths = [];
-              if (turn.selectedActionType === 'read_project_text_files' && turn.selectedProject) {
+              if ((turn.selectedActionType === 'read_project_text_files' || turn.selectedActionType === 'modify_project_files_with_codex') && turn.selectedProject) {
                 loadProjectFiles(index, turn.selectedProject);
               }
               updatePolicyPreview(index);
@@ -1679,6 +1854,64 @@ def unified_assistant_html() -> str:
           if (contentInput) {
             contentInput.addEventListener('input', () => {
               turn.reportContent = contentInput.value;
+            });
+          }
+
+          // Coding inputs
+          const goalInput = turnDiv.querySelector(`#coding-goal-${index}`);
+          if (goalInput) {
+            goalInput.addEventListener('input', () => {
+              turn.codingGoal = goalInput.value;
+            });
+          }
+          const scopeInput = turnDiv.querySelector(`#coding-scope-${index}`);
+          if (scopeInput) {
+            scopeInput.addEventListener('input', () => {
+              turn.codingScope = scopeInput.value;
+            });
+          }
+          const nonGoalsInput = turnDiv.querySelector(`#coding-non-goals-${index}`);
+          if (nonGoalsInput) {
+            nonGoalsInput.addEventListener('input', () => {
+              turn.codingNonGoals = nonGoalsInput.value;
+            });
+          }
+
+          // Coding action buttons
+          const prepPlanBtn = turnDiv.querySelector(`[data-action="prepare-coding-plan"]`);
+          if (prepPlanBtn) {
+            prepPlanBtn.addEventListener('click', () => prepareCodingPlan(index));
+          }
+          const appPlanBtn = turnDiv.querySelector(`[data-action="approve-coding-plan"]`);
+          if (appPlanBtn) {
+            appPlanBtn.addEventListener('click', () => approveCodingPlan(index));
+          }
+          const rejPlanBtn = turnDiv.querySelector(`[data-action="reject-coding-plan"]`);
+          if (rejPlanBtn) {
+            rejPlanBtn.addEventListener('click', () => rejectCodingPlan(index));
+          }
+          const execPlanBtn = turnDiv.querySelector(`[data-action="execute-coding-plan"]`);
+          if (execPlanBtn) {
+            execPlanBtn.addEventListener('click', () => executeCodingPlan(index));
+          }
+          const cancelExecBtn = turnDiv.querySelector(`[data-action="cancel-coding-execution"]`);
+          if (cancelExecBtn) {
+            cancelExecBtn.addEventListener('click', () => cancelCodingExecution(index));
+          }
+          const reviewChangedBtn = turnDiv.querySelector(`[data-action="review-changed-files"]`);
+          if (reviewChangedBtn) {
+            reviewChangedBtn.addEventListener('click', () => {
+              const res = turn.codingExecutionResult;
+              if (res && res.changedFiles) {
+                turn.selectedActionType = 'read_project_text_files';
+                turn.selectedRelativePaths = res.changedFiles.slice(0, 5);
+                turn.readExecutionResult = null;
+                turn.dryRunResult = null;
+                loadProjectFiles(index, turn.selectedProject);
+                updatePolicyPreview(index);
+                renderTranscript();
+                showToast('Staged changed files into Project Source Reader for review.');
+              }
             });
           }
 
@@ -1776,14 +2009,15 @@ def unified_assistant_html() -> str:
 
   function bindCatalogCheckboxes(turnDiv, turnIdx, turn) {
     const checkboxes = turnDiv.querySelectorAll(`input[data-file-rel]`);
+    const maxAllowed = turn.selectedActionType === 'modify_project_files_with_codex' ? 10 : 5;
     checkboxes.forEach(cb => {
       cb.addEventListener('change', () => {
         const rel = cb.getAttribute('data-file-rel');
         if (!turn.selectedRelativePaths) turn.selectedRelativePaths = [];
         if (cb.checked) {
-          if (turn.selectedRelativePaths.length >= 5) {
+          if (turn.selectedRelativePaths.length >= maxAllowed) {
             cb.checked = false;
-            alert('You can select a maximum of 5 files per execution.');
+            alert(`You can select a maximum of ${maxAllowed} files for this action.`);
             return;
           }
           if (!turn.selectedRelativePaths.includes(rel)) {
@@ -1864,7 +2098,7 @@ def unified_assistant_html() -> str:
       return;
     }
 
-    if (actionType === 'read_project_text_files' && !turn.availableProjectFiles && !turn.loadingProjectFiles) {
+    if ((actionType === 'read_project_text_files' || actionType === 'modify_project_files_with_codex') && !turn.availableProjectFiles && !turn.loadingProjectFiles) {
       loadProjectFiles(turnIdx, projectName);
     }
 
@@ -2057,6 +2291,156 @@ def unified_assistant_html() -> str:
       renderTranscript();
     } catch (err) {
       alert(`Report creation failed: ${err.message}`);
+    }
+  }
+
+  // Prepare conservative coding plan
+  async function prepareCodingPlan(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn) return;
+    if (!turn.selectedProject) {
+      alert('Please select a registered target project.');
+      return;
+    }
+    if (!turn.selectedRelativePaths || turn.selectedRelativePaths.length === 0) {
+      alert('Please select 1 to 10 existing files for this conservative plan.');
+      return;
+    }
+    const goalInput = byId(`coding-goal-${turnIdx}`);
+    const scopeInput = byId(`coding-scope-${turnIdx}`);
+    const nonGoalsInput = byId(`coding-non-goals-${turnIdx}`);
+    const goal = (goalInput ? goalInput.value : turn.codingGoal) || turn.prompt || 'Code modification';
+    const scope = (scopeInput ? scopeInput.value : turn.codingScope) || 'Modify specified files as requested';
+    const nonGoals = (nonGoalsInput ? nonGoalsInput.value : turn.codingNonGoals) || 'Do not touch unapproved files or dependencies.';
+
+    const resp = turn.response || {};
+    const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
+
+    try {
+      showToast('Preparing conservative Codex plan with scope manifest...');
+      const planSummary = await apiFetch('/api/assistant/coding/prepare', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectName: turn.selectedProject,
+          allowedFiles: turn.selectedRelativePaths,
+          taskGoal: goal,
+          exactScope: scope,
+          nonGoals: nonGoals,
+          sourceResponseId: responseId,
+          sourceTurnIndex: turnIdx,
+          actor: 'local_user'
+        })
+      });
+      turn.codingPlan = planSummary;
+      turn.codingExecutionResult = null;
+      showToast('Conservative plan prepared. Scope manifest locked.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Plan preparation failed: ${err.message}`);
+    }
+  }
+
+  // Approve conservative coding plan
+  async function approveCodingPlan(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.codingPlan) return;
+    const confirmText = prompt('Type "APPROVE CONSERVATIVE CODEX PLAN" to approve this plan for future execution:');
+    if (confirmText !== 'APPROVE CONSERVATIVE CODEX PLAN') {
+      if (confirmText !== null) alert('Approval cancelled: confirmation string did not match exactly.');
+      return;
+    }
+    try {
+      const updated = await apiFetch('/api/assistant/coding/approve', {
+        method: 'POST',
+        body: JSON.stringify({
+          planId: turn.codingPlan.planId,
+          confirmation: confirmText,
+          actor: 'local_user'
+        })
+      });
+      turn.codingPlan = updated;
+      showToast('Plan approved for future execution.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Approval failed: ${err.message}`);
+    }
+  }
+
+  // Reject conservative coding plan
+  async function rejectCodingPlan(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.codingPlan) return;
+    if (!confirm('Reject this Codex plan?')) return;
+    try {
+      const updated = await apiFetch('/api/assistant/coding/reject', {
+        method: 'POST',
+        body: JSON.stringify({
+          planId: turn.codingPlan.planId,
+          actor: 'local_user'
+        })
+      });
+      turn.codingPlan = updated;
+      showToast('Plan rejected.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Rejection failed: ${err.message}`);
+    }
+  }
+
+  // Execute approved conservative coding plan
+  async function executeCodingPlan(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.codingPlan) return;
+    const confirmText = prompt('Type "EXECUTE APPROVED CODEX CHANGE" to execute this approved single-run change:');
+    if (confirmText !== 'EXECUTE APPROVED CODEX CHANGE') {
+      if (confirmText !== null) alert('Execution cancelled: confirmation string did not match exactly.');
+      return;
+    }
+    turn.codingActive = true;
+    renderTranscript();
+    try {
+      showToast('Starting supervised Codex execution (single run mode)...');
+      const result = await apiFetch('/api/assistant/coding/execute', {
+        method: 'POST',
+        body: JSON.stringify({
+          planId: turn.codingPlan.planId,
+          projectName: turn.selectedProject,
+          confirmation: confirmText,
+          actor: 'local_user'
+        })
+      });
+      turn.codingActive = false;
+      turn.codingExecutionResult = result;
+      if (turn.codingPlan) turn.codingPlan.status = 'execution_consumed';
+      showToast(result.message || 'Execution finished.');
+      renderTranscript();
+    } catch (err) {
+      turn.codingActive = false;
+      alert(`Execution failed: ${err.message}`);
+      renderTranscript();
+    }
+  }
+
+  // Cancel active coding execution
+  async function cancelCodingExecution(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn) return;
+    const confirmText = prompt('Type "STOP CODEX EXECUTION" to stop the active child process:');
+    if (confirmText !== 'STOP CODEX EXECUTION') {
+      if (confirmText !== null) alert('Cancellation aborted: confirmation string did not match exactly.');
+      return;
+    }
+    try {
+      const res = await apiFetch('/api/codex/execution/cancel', {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmation: confirmText,
+          actor: 'local_user'
+        })
+      });
+      showToast(res.message || 'Cancellation requested.');
+    } catch (err) {
+      alert(`Stop failed: ${err.message}`);
     }
   }
 

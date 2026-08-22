@@ -23,6 +23,7 @@ from .feedback import (
 )
 from .codex_plans import CodexPlanInput, CodexPlanService
 from .codex_execution import CodexExecutionService
+from .assistant_coding import AssistantCodingBridge, AssistantCodingPrepareInput
 from .db import init_db
 from .dashboard import DashboardService, dashboard_html, first_run_setup_html
 from .dashboard_surface_health import DashboardSurfaceHealthService
@@ -259,6 +260,16 @@ assistant_actions = AssistantActionBridge(
     report_tool=report_tool,
     project_text_reader=project_text_reader,
     workspace_root=WORKSPACE_ROOT,
+)
+assistant_coding = AssistantCodingBridge(
+    projects,
+    project_text_reader,
+    codex_plans,
+    codex_execution,
+    tasks,
+    runtime,
+    approvals,
+    events,
 )
 
 app = FastAPI(title=APP_NAME, version=VERSION)
@@ -650,6 +661,39 @@ class CodexExecutionCancelInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmation: str
     expectedExecutionId: str | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantCodingPrepareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    projectName: str = Field(min_length=1, max_length=200)
+    allowedFiles: list[str] = Field(min_length=1, max_length=10)
+    taskGoal: str = Field(min_length=1, max_length=4000)
+    exactScope: str = Field(min_length=1, max_length=6000)
+    nonGoals: str = Field(default="", max_length=4000)
+    sourceResponseId: str | None = None
+    sourceTurnIndex: int | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantCodingApproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planId: str = Field(min_length=1, max_length=100)
+    confirmation: str = Field(min_length=1, max_length=200)
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantCodingRejectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planId: str = Field(min_length=1, max_length=100)
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantCodingExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planId: str = Field(min_length=1, max_length=100)
+    projectName: str = Field(min_length=1, max_length=200)
+    confirmation: str = Field(min_length=1, max_length=200)
     actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 
@@ -4708,7 +4752,10 @@ def _safe_report_project_name(project_name: str) -> str:
 
 
 @app.post("/codex/plans")
-def create_codex_plan(payload: CodexPlanRequest) -> dict[str, object]:
+def create_codex_plan(
+    payload: CodexPlanRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     return codex_plans.create_plan(
         CodexPlanInput(
             task_id=payload.taskId,
@@ -4732,12 +4779,17 @@ def create_codex_plan(payload: CodexPlanRequest) -> dict[str, object]:
 
 
 @app.get("/codex/plans")
-def list_codex_plans() -> list[dict[str, object]]:
+def list_codex_plans(
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
     return codex_plans.list_plans()
 
 
 @app.get("/codex/plans/{plan_id}")
-def get_codex_plan(plan_id: str) -> dict[str, object]:
+def get_codex_plan(
+    plan_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     plan = codex_plans.get_plan(plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="codex plan not found")
@@ -4745,7 +4797,10 @@ def get_codex_plan(plan_id: str) -> dict[str, object]:
 
 
 @app.post("/codex/plans/{plan_id}/cancel")
-def cancel_codex_plan(plan_id: str) -> dict[str, object]:
+def cancel_codex_plan(
+    plan_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     try:
         return codex_plans.cancel_plan(plan_id)
     except KeyError as exc:
@@ -4753,7 +4808,11 @@ def cancel_codex_plan(plan_id: str) -> dict[str, object]:
 
 
 @app.post("/codex/plans/{plan_id}/approve-for-future-execution")
-def approve_codex_plan_for_future_execution(plan_id: str, payload: ApprovalResolutionInput) -> dict[str, object]:
+def approve_codex_plan_for_future_execution(
+    plan_id: str,
+    payload: ApprovalResolutionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     try:
         return codex_plans.approve_for_future_execution(plan_id, payload.resolvedBy, payload.resolutionNote)
     except KeyError as exc:
@@ -4761,7 +4820,11 @@ def approve_codex_plan_for_future_execution(plan_id: str, payload: ApprovalResol
 
 
 @app.post("/codex/plans/{plan_id}/reject")
-def reject_codex_plan(plan_id: str, payload: ApprovalResolutionInput) -> dict[str, object]:
+def reject_codex_plan(
+    plan_id: str,
+    payload: ApprovalResolutionInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     try:
         return codex_plans.reject_plan(plan_id, payload.resolvedBy, payload.resolutionNote)
     except KeyError as exc:
@@ -4769,13 +4832,18 @@ def reject_codex_plan(plan_id: str, payload: ApprovalResolutionInput) -> dict[st
 
 
 @app.post("/codex/plans/{plan_id}/execute")
-def execute_codex_plan(plan_id: str) -> dict[str, object]:
+def execute_codex_plan(
+    plan_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     return codex_execution.execute_plan(plan_id)
 
 
 @app.get("/api/codex/execution/active")
 @app.get("/codex/execution/active")
-def get_active_codex_execution() -> dict[str, object]:
+def get_active_codex_execution(
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     active = codex_execution.execution_tracker.get_active()
     return {
         "active": active is not None,
@@ -4785,7 +4853,10 @@ def get_active_codex_execution() -> dict[str, object]:
 
 @app.post("/api/codex/execution/cancel")
 @app.post("/codex/execution/cancel")
-def cancel_active_codex_execution(payload: CodexExecutionCancelInput) -> dict[str, object]:
+def cancel_active_codex_execution(
+    payload: CodexExecutionCancelInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
     success, message, info = codex_execution.execution_tracker.cancel_active(
         confirmation=payload.confirmation,
         expected_execution_id=payload.expectedExecutionId,
@@ -4797,3 +4868,110 @@ def cancel_active_codex_execution(payload: CodexExecutionCancelInput) -> dict[st
         "message": message,
         "execution": info,
     }
+
+
+# ==========================================
+# Assistant Controlled Coding Endpoints
+# ==========================================
+
+
+@app.get("/api/assistant/coding/capabilities")
+def get_assistant_coding_capabilities(
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return assistant_coding.get_coding_capabilities()
+
+
+@app.post("/api/assistant/coding/prepare")
+def prepare_assistant_coding_plan(
+    payload: AssistantCodingPrepareRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.prepare_coding_plan(
+            AssistantCodingPrepareInput(
+                project_name=payload.projectName,
+                allowed_files=payload.allowedFiles,
+                task_goal=payload.taskGoal,
+                exact_scope=payload.exactScope,
+                non_goals=payload.nonGoals,
+                source_response_id=payload.sourceResponseId,
+                source_turn_index=payload.sourceTurnIndex,
+                actor=payload.actor,
+            )
+        )
+    except (ValueError, FileNotFoundError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Plan preparation error: {exc}") from exc
+
+
+@app.post("/api/assistant/coding/approve")
+def approve_assistant_coding_plan(
+    payload: AssistantCodingApproveRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.approve_coding_plan(
+            plan_id=payload.planId,
+            confirmation=payload.confirmation,
+            actor=payload.actor,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/assistant/coding/reject")
+def reject_assistant_coding_plan(
+    payload: AssistantCodingRejectRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.reject_coding_plan(
+            plan_id=payload.planId,
+            actor=payload.actor,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/assistant/coding/execute")
+def execute_assistant_coding_plan(
+    payload: AssistantCodingExecuteRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.execute_coding_plan(
+            plan_id=payload.planId,
+            project_name=payload.projectName,
+            confirmation=payload.confirmation,
+            actor=payload.actor,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/assistant/coding/plan/{plan_id}")
+def get_assistant_coding_plan(
+    plan_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.get_plan_summary(plan_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/assistant/coding/execution/{execution_id}")
+def get_assistant_coding_execution(
+    execution_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_coding.get_execution_summary(execution_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

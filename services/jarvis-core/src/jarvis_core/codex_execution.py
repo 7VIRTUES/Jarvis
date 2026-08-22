@@ -14,7 +14,9 @@ from .codex_constants import ALLOWED_SANDBOX_MODE
 from .codex_execution_control import (
     SCOPE_MANIFEST_BEGIN,
     CodexActiveExecutionTracker,
+    get_plan_prompt_content,
     inspect_git_clean_baseline,
+    is_conservative_plan,
     parse_scope_manifest,
     review_conservative_git_diff,
     verify_stale_files,
@@ -63,12 +65,21 @@ class CodexExecutionService:
 
     def execute_plan(self, plan_id: str, execution_mode: str = "auto") -> dict[str, Any]:
         plan = self.plans.get_plan(plan_id)
-        is_conservative = (
-            execution_mode in {"assistant_conservative", "extreme_budget", "conservative"}
-            or (execution_mode == "auto" and plan is not None and SCOPE_MANIFEST_BEGIN in str(plan.get("prompt", "")))
-        )
-        if is_conservative:
+        plan_is_conservative = is_conservative_plan(plan)
+
+        # Security boundary: If a plan contains a conservative manifest, it MUST use conservative execution
+        if plan_is_conservative:
             return self.execute_conservative_plan(plan_id)
+
+        # If caller explicitly requested conservative execution but plan has no valid manifest, fail closed
+        if execution_mode in {"assistant_conservative", "extreme_budget", "conservative"}:
+            execution_id = str(uuid4())
+            started_at = utc_now()
+            task_id = str(plan["task_id"]) if plan else ""
+            project_name = str(plan["project_name"]) if plan else ""
+            reason = "requested conservative execution for plan without valid conservative scope manifest"
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]) if plan else "coding_agent", "codex.execute", reason, task_id, str(plan["tool_id"]) if plan else "codex_tool", "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, reason, None)
 
         execution_id = str(uuid4())
         started_at = utc_now()
@@ -191,7 +202,7 @@ class CodexExecutionService:
             return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, validation, None)
 
         assert plan is not None
-        prompt_content = str(plan.get("prompt", ""))
+        prompt_content = get_plan_prompt_content(plan)
         parse_err, manifest = parse_scope_manifest(prompt_content, expected_project_name=project_name)
         if parse_err or manifest is None:
             reason = f"conservative execution requires valid approved scope manifest: {parse_err}"
@@ -240,6 +251,16 @@ class CodexExecutionService:
             if lock_inserted:
                 self._release_lock(project_name, task_id)
             return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, str(exc), None)
+
+        # Atomic one-shot plan consumption
+        consumed = self.plans.consume_plan_for_execution(plan_id)
+        if not consumed:
+            reason = "codex plan was already consumed or no longer approved for future execution"
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", reason, task_id, str(plan["tool_id"]), str(plan["risk_level"])))
+            self.execution_tracker.clear(execution_id)
+            if lock_inserted:
+                self._release_lock(project_name, task_id)
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, reason, None)
 
         receipt_id = None
         proc: subprocess.Popen[str] | None = None

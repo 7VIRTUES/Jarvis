@@ -284,7 +284,7 @@ def assistant_actions_dashboard_html() -> str:
   <!-- Strategic Boundary Banner -->
   <section class="banner" role="region" aria-label="Action boundary notice">
     <h2>Supervised Action Center</h2>
-    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> (read-only metadata inspection), <code>read_project_text_files</code> (bounded source/text reading, max 5 files), and <code>write_report</code> (non-destructive Markdown report creation) all support explicit supervised execution on registered projects.</strong> No shell commands, arbitrary file mutations, or external network actions are executed.</p>
+    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> (read-only metadata inspection), <code>read_project_text_files</code> (bounded source/text reading, max 5 files), <code>write_report</code> (non-destructive Markdown report creation), and <code>modify_project_files_with_codex</code> (controlled coding via conservative Codex execution, max 10 existing files, 1 run, 0 checks, 0 repairs, no auto commit/push) all support explicit supervised execution on registered projects.</strong> No arbitrary shell commands or external network actions are executed.</p>
   </section>
 
   <!-- Summary Metrics Grid -->
@@ -386,6 +386,19 @@ def assistant_actions_dashboard_html() -> str:
       <div class="muted" style="text-align:center; padding:20px;">Loading approvals...</div>
     </div>
   </section>
+
+  <!-- Codex Controlled Coding Plans Section -->
+  <section>
+    <div class="controls-row">
+      <div>
+        <h2 style="margin:0; font-size:1.15rem;">Conservative Codex Plans</h2>
+        <p class="muted" style="margin:2px 0 0;">Machine scope manifests and approval states for controlled Codex modifications.</p>
+      </div>
+    </div>
+    <div class="card-list" id="codex-plans-list">
+      <div class="muted" style="text-align:center; padding:20px;">Loading Codex plans...</div>
+    </div>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="alert"></div>
@@ -399,6 +412,7 @@ def assistant_actions_dashboard_html() -> str:
     receipts: [],
     approvals: [],
     projects: [],
+    codexPlans: [],
   };
 
   function showToast(message, duration = 3000) {
@@ -436,23 +450,30 @@ def assistant_actions_dashboard_html() -> str:
 
   async function loadData() {
     try {
-      const [tasksRes, receiptsRes, approvalsRes, projectsRes] = await Promise.all([
+      const [tasksRes, receiptsRes, approvalsRes, projectsRes, codexPlansRes] = await Promise.all([
         apiFetch('/tasks'),
         apiFetch('/api/action-receipts'),
         apiFetch('/approvals'),
         apiFetch('/projects'),
+        apiFetch('/codex/plans').catch(() => []),
       ]);
 
       state.tasks = Array.isArray(tasksRes) ? tasksRes : [];
       state.receipts = Array.isArray(receiptsRes) ? receiptsRes : [];
       state.approvals = Array.isArray(approvalsRes) ? approvalsRes : [];
       state.projects = Array.isArray(projectsRes) ? projectsRes : [];
+      state.codexPlans = Array.isArray(codexPlansRes) ? codexPlansRes : [];
 
       updateProjectFilter();
       updateMetrics();
       renderTasks();
       renderReceipts();
       renderApprovals();
+      renderCodexPlans();
+    } catch (err) {
+      showToast('Error loading action center data: ' + err.message);
+    }
+  }
     } catch (err) {
       showToast('Error loading action center data: ' + err.message);
     }
@@ -680,6 +701,50 @@ def assistant_actions_dashboard_html() -> str:
         });
       }
 
+      list.append(card);
+    });
+  }
+
+  function renderCodexPlans() {
+    const list = byId('codex-plans-list');
+    if (!list) return;
+    if (!state.codexPlans || !state.codexPlans.length) {
+      list.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">No conservative Codex plans created yet.</div>';
+      return;
+    }
+
+    const sorted = [...state.codexPlans].reverse();
+    list.replaceChildren();
+    sorted.forEach(plan => {
+      const card = document.createElement('div');
+      card.className = 'item-card';
+      const statusCls = plan.status === 'approved_for_future_execution'
+        ? 'succeeded'
+        : (plan.status === 'execution_consumed' ? 'inactive' : (plan.status === 'waiting_for_approval' ? 'waiting_for_approval' : 'blocked'));
+
+      card.innerHTML = `
+        <div class="item-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong>Codex Plan: <code>${escapeHtml((plan.plan_id || '').slice(0, 8))}...</code></strong>
+            <span class="muted">· Project: <strong>${escapeHtml(plan.project_name || '—')}</strong></span>
+            <span class="pill ${escapeHtml(statusCls)}">${escapeHtml((plan.status || '').toUpperCase())}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="pill inactive">Sandbox: ${escapeHtml(plan.sandbox_mode || 'workspace-write')}</span>
+            <span class="muted" style="font-size:0.8rem;">${escapeHtml(plan.created_at || '—')}</span>
+          </div>
+        </div>
+        <div style="font-size:0.86rem; color:var(--muted); margin-top:4px;">
+          Task ID: <code>${escapeHtml(plan.task_id || '—')}</code>
+          ${plan.approval_id ? `<span style="margin-left:12px;">Approval ID: <code>${escapeHtml(plan.approval_id)}</code></span>` : ''}
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.75rem; margin-top:6px;">
+          <span class="pill allowed">1 Run Max</span>
+          <span class="pill allowed">0 Auto Checks</span>
+          <span class="pill allowed">0 Auto Repairs</span>
+          <span class="pill allowed">No Auto Commit/Push</span>
+        </div>
+      `;
       list.append(card);
     });
   }

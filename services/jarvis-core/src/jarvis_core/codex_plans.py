@@ -22,7 +22,15 @@ from .time_utils import utc_now
 
 
 PLAN_MODES = {"plan_only", "approval_required"}
-PLAN_STATUSES = {"planned", "waiting_for_approval", "approved_for_future_execution", "rejected", "blocked", "canceled"}
+PLAN_STATUSES = {
+    "planned",
+    "waiting_for_approval",
+    "approved_for_future_execution",
+    "rejected",
+    "blocked",
+    "canceled",
+    "execution_consumed",
+}
 
 
 @dataclass(frozen=True)
@@ -370,6 +378,15 @@ class CodexPlanService:
             raise ValueError("invalid codex plan status")
         self.conn.execute("update codex_plans set status = ?, updated_at = ? where plan_id = ?", (status, utc_now(), plan_id))
         self.conn.commit()
+
+    def consume_plan_for_execution(self, plan_id: str) -> bool:
+        """Atomically transitions plan status from approved_for_future_execution to execution_consumed."""
+        cursor = self.conn.execute(
+            "update codex_plans set status = 'execution_consumed', updated_at = ? where plan_id = ? and status = 'approved_for_future_execution'",
+            (utc_now(), plan_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
 
     def _select_sql(self) -> str:
         return (

@@ -21,25 +21,45 @@ SUPPORTED_ASSISTANT_ACTION_TYPES: list[str] = [
     "inspect_project",
     "read_project_text_files",
     "write_report",
+    "modify_project_files_with_codex",
 ]
 
 ACTION_DISPLAY_NAMES: dict[str, str] = {
     "inspect_project": "Inspect Registered Project (Read-Only)",
     "read_project_text_files": "Read Project Text Files (Read-Only)",
     "write_report": "Create Markdown Report (Non-Destructive)",
+    "modify_project_files_with_codex": "Controlled Coding with Codex",
 }
 
 ACTION_TOOL_IDS: dict[str, str] = {
     "inspect_project": "filesystem_tool",
     "read_project_text_files": "filesystem_tool",
     "write_report": "report_tool",
+    "modify_project_files_with_codex": "codex_tool",
 }
 
 ACTION_TASK_TYPES: dict[str, str] = {
     "inspect_project": "inspect",
     "read_project_text_files": "read_project_text_files",
     "write_report": "report",
+    "modify_project_files_with_codex": "plan",
 }
+
+CODEX_CODING_SIGNALS: tuple[str, ...] = (
+    "modify files with codex",
+    "write code with codex",
+    "edit code with codex",
+    "coding change",
+    "execute codex plan",
+    "apply code changes",
+    "implement code change",
+    "change code",
+    "refactor code",
+    "fix bug in code",
+    "modify project files",
+    "conservative codex",
+    "prepare codex plan",
+)
 
 INSPECT_PROJECT_SIGNALS: tuple[str, ...] = (
     "inspect project",
@@ -170,6 +190,20 @@ class AssistantActionBridge:
                     "createsNewFileOnly": True,
                     "executionPermitted": True,
                 },
+                {
+                    "actionType": "modify_project_files_with_codex",
+                    "displayLabel": ACTION_DISPLAY_NAMES["modify_project_files_with_codex"],
+                    "description": "Prepare and explicitly execute one approved extreme-budget Codex change against selected existing files.",
+                    "targetType": "registered_project_name",
+                    "toolId": "codex_tool",
+                    "riskLevel": "high",
+                    "dryRunSupported": True,
+                    "realExecutionSupported": True,
+                    "readOnly": False,
+                    "nonDestructive": False,
+                    "createsNewFileOnly": False,
+                    "executionPermitted": True,
+                },
             ],
             "unsupportedActionTypes": [
                 "command",
@@ -190,10 +224,11 @@ class AssistantActionBridge:
                 "inspect_project performs read-only workspace metadata inspections.",
                 "read_project_text_files reads up to 5 user-selected text/source files (256 KB max) without modifying workspace files.",
                 "write_report writes new Markdown files exclusively to the fixed Jarvis reports directory without modifying project source.",
+                "modify_project_files_with_codex runs one supervised Codex process against 1-10 approved existing files with post-execution diff verification.",
                 "Only registered project workspaces within the allowed root can be selected as targets.",
-                "Real execution requires matching successful dry-run verification proof.",
+                "Real execution requires matching successful dry-run verification proof or explicit approval.",
                 "SafeActionRuntime creates execution-gate receipts before any action runs.",
-                "No shell commands, process spawning, or external network requests occur.",
+                "No arbitrary shell commands or external network requests occur.",
             ],
         }
 
@@ -230,11 +265,19 @@ class AssistantActionBridge:
         matched_signals: list[str] = []
         candidate_action: str | None = None
 
-        # Check read_project_text_files signals
-        for sig in READ_PROJECT_FILES_SIGNALS:
+        # Check codex coding signals
+        for sig in CODEX_CODING_SIGNALS:
             if sig in cleaned:
-                matched_signals.append(f"read_signal: '{sig}'")
-                candidate_action = "read_project_text_files"
+                matched_signals.append(f"coding_signal: '{sig}'")
+                candidate_action = "modify_project_files_with_codex"
+                break
+
+        # Check read_project_text_files signals
+        if not candidate_action:
+            for sig in READ_PROJECT_FILES_SIGNALS:
+                if sig in cleaned:
+                    matched_signals.append(f"read_signal: '{sig}'")
+                    candidate_action = "read_project_text_files"
 
         # Check inspect_project signals if not explicitly reading files
         if not candidate_action:
@@ -272,6 +315,9 @@ class AssistantActionBridge:
                 if "report" in cleaned or "summary" in cleaned or "brief" in cleaned:
                     candidate_action = "write_report"
                     matched_signals.append(f"agent_affinity: {agent_id}")
+            elif agent_id in ("coding_agent", "local_coding_agent", "local_refactoring_agent", "local_debugging_agent"):
+                candidate_action = "modify_project_files_with_codex"
+                matched_signals.append(f"agent_affinity: {agent_id}")
 
         if not candidate_action and not matched_signals:
             return {

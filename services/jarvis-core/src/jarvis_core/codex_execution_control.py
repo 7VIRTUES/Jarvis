@@ -23,6 +23,19 @@ MAX_DIFF_LINES = 700
 MAX_CHANGED_FILES = 10
 
 
+def get_plan_prompt_content(plan: dict[str, Any] | None) -> str:
+    """Extracts persisted prompt_content safely from plan record."""
+    if not plan:
+        return ""
+    return str(plan.get("prompt_content") or plan.get("prompt") or "")
+
+
+def is_conservative_plan(plan: dict[str, Any] | None) -> bool:
+    """Determines whether a plan contains a valid conservative scope manifest sentinel in its persisted prompt_content."""
+    prompt_content = get_plan_prompt_content(plan)
+    return SCOPE_MANIFEST_BEGIN in prompt_content and SCOPE_MANIFEST_END in prompt_content
+
+
 @dataclass
 class ActiveExecutionState:
     execution_id: str
