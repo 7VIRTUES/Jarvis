@@ -422,13 +422,22 @@ def productivity_html_panels() -> str:
   <section class="prod-toolbar" aria-label="Productivity workspace helpers">
     <div class="prod-tabs">
       <button type="button" class="prod-tab-btn" id="tab-command-center" data-panel="panel-command-center">
-        ⚡ Agent Command Center (37)
+        ⚡ Command Center (37)
       </button>
       <button type="button" class="prod-tab-btn" id="tab-playbooks" data-panel="panel-playbooks">
-        📋 Playbooks & Workflows
+        📋 Playbooks
       </button>
       <button type="button" class="prod-tab-btn" id="tab-context-kit" data-panel="panel-context-kit">
-        🧰 Context Kit Builder (<span id="kit-item-count">0</span>)
+        🧰 Context Kit (<span id="kit-item-count">0</span>)
+      </button>
+      <button type="button" class="prod-tab-btn" id="tab-result-board" data-panel="panel-result-board">
+        📊 Result Board (<span id="rb-tab-count">0</span>)
+      </button>
+      <button type="button" class="prod-tab-btn" id="tab-comparison" data-panel="panel-comparison">
+        ⚖️ Comparison (<span id="cmp-tab-count">0</span>)
+      </button>
+      <button type="button" class="prod-tab-btn" id="tab-decision-composer" data-panel="panel-decision-composer-wrap">
+        🎯 Decision Composer
       </button>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
