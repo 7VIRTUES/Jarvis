@@ -605,20 +605,20 @@ def results_dashboard_scripts() -> str:
     const rawPayload = (source.actionMetadata && source.actionMetadata.rawPayload) || source.rawPayload || {};
     const genResp = resp.generatedResponse || {};
 
-    // Reviewed sources derived ONLY from explicitly supplied rawPayload.web_context
+    // Reviewed sources derived ONLY from explicitly supplied rawPayload.web_context or resp.source_evidence
     const reviewedSources = [];
-    const webContext = rawPayload.web_context || (resp.responseContext && resp.responseContext.webContext) || [];
+    const webContext = rawPayload.web_context || (resp.responseContext && resp.responseContext.webContext) || resp.source_evidence || [];
     if (Array.isArray(webContext)) {
       webContext.forEach((src, idx) => {
         if (src && typeof src === 'object') {
           reviewedSources.push({
-            citationLabel: src.citationLabel || src.label || `Source ${idx + 1}`,
-            title: src.title || src.citationLabel || 'Reviewed Web Source',
+            citationLabel: src.citationLabel || src.citation_label || src.label || `Source ${idx + 1}`,
+            title: src.title || src.citation_label || 'Reviewed Web Source',
             domain: src.domain || '',
-            sourceType: src.sourceType || 'web_context',
-            fetchedAt: src.fetchedAt || null,
-            recencyNote: src.recencyNote || '',
-            qualityWarnings: Array.isArray(src.qualityWarnings) ? src.qualityWarnings : [],
+            sourceType: src.sourceType || src.source_type || 'web_context',
+            fetchedAt: src.fetchedAt || src.fetched_at || null,
+            recencyNote: src.recencyNote || src.recency_note || '',
+            qualityWarnings: Array.isArray(src.qualityWarnings || src.quality_warnings) ? (src.qualityWarnings || src.quality_warnings) : [],
             limitations: Array.isArray(src.limitations) ? src.limitations : [],
             excerpt: typeof src.excerpt === 'string' ? src.excerpt.slice(0, 400) : '',
           });

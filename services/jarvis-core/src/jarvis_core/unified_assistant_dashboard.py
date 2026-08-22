@@ -10,6 +10,11 @@ from .assistant_results_dashboard import (
     results_dashboard_scripts,
     results_dashboard_styles,
 )
+from .assistant_sources_dashboard import (
+    sources_dashboard_html,
+    sources_dashboard_scripts,
+    sources_dashboard_styles,
+)
 
 
 def unified_assistant_html() -> str:
@@ -748,6 +753,7 @@ def unified_assistant_html() -> str:
             <option value="">Auto-Route (Deterministic)</option>
           </select>
         </label>
+        <span id="composer-sources-badge" class="pill inactive" style="cursor:pointer; font-size:0.78rem;" title="Click to open Reviewed Sources panel">No reviewed sources attached</span>
       </div>
 
       <div class="options-right">
@@ -910,7 +916,7 @@ def unified_assistant_html() -> str:
         source_response_id: sessionState.stagedPriorContext.responseId,
         summary: sessionState.stagedPriorContext.summary || sessionState.stagedPriorContext.response || '',
       } : null,
-      webContext: [],
+      webContext: typeof buildIncludedWebContext === 'function' ? buildIncludedWebContext() : [],
     };
 
     return await apiFetch('/api/assistant/analyze-route', {
@@ -935,9 +941,14 @@ def unified_assistant_html() -> str:
 
     // High stakes banner
     const hsBanner = byId('drawer-high-stakes');
+    const includedSrcs = typeof getIncludedReviewedSources === 'function' ? getIncludedReviewedSources() : [];
     if (route.high_stakes) {
       hsBanner.style.display = 'block';
-      hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(route.high_stakes_category || route.category)}):</strong> ${escapeHtml(route.safety_reminders.join(' '))}`;
+      if (includedSrcs.length === 0) {
+        hsBanner.innerHTML = `<strong>High-Stakes Source Gap:</strong> No reviewed public source excerpts are attached to this request. Jarvis can still provide local informational support, but important facts should be checked against appropriate authoritative or qualified sources before acting. <span class="muted">(Category: ${escapeHtml(route.high_stakes_category || route.category)})</span>`;
+      } else {
+        hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(route.high_stakes_category || route.category)}):</strong> ${escapeHtml(route.safety_reminders.join(' '))} · <em>Reviewed excerpts (${includedSrcs.length}) are supporting context only (not independently verified).</em>`;
+      }
     } else {
       hsBanner.style.display = 'none';
     }
@@ -1354,6 +1365,7 @@ def unified_assistant_html() -> str:
             ${keyPointsHtml}
             ${citationsHtml}
             ${safetyNotesHtml}
+            ${typeof renderTurnSourceEvidenceHtml === 'function' ? renderTurnSourceEvidenceHtml(turn, resp, index) : ''}
 
             <div class="turn-actions">
               <button class="secondary small" type="button" data-action="use-prior" data-turn-idx="${index}">Use as prior context for next message</button>
@@ -1847,6 +1859,31 @@ def unified_assistant_html() -> str:
           turnDiv.querySelector(`[data-action="toggle-json"]`).addEventListener('click', () => {
             const p = byId(`json-panel-${index}`);
             p.style.display = p.style.display === 'none' ? 'block' : 'none';
+          });
+
+          // Bind source evidence inspect buttons
+          turnDiv.querySelectorAll(`[data-turn-inspect-src="${index}"]`).forEach(btn => {
+            btn.addEventListener('click', () => {
+              const sIdx = parseInt(btn.getAttribute('data-src-idx'), 10);
+              const sourceEvidence = resp.source_evidence || (resp.responseContext && resp.responseContext.sourceEvidence) || [];
+              const src = sourceEvidence[sIdx];
+              if (src && typeof openSourceDetailDrawer === 'function') {
+                openSourceDetailDrawer({
+                  sourceUrl: src.source_url || src.url || '',
+                  finalUrl: src.final_url || '',
+                  title: src.title || src.citation_label || 'Reviewed Source',
+                  domain: src.domain || '',
+                  excerpt: src.excerpt || '',
+                  contentType: src.content_type || 'text/plain',
+                  sourceType: src.source_type || 'public_web_excerpt',
+                  recencyNote: src.recency_note || 'Recency Unknown',
+                  qualityWarnings: src.quality_warnings || [],
+                  limitations: src.limitations || [],
+                  userNotes: src.user_notes || '',
+                  included: true,
+                });
+              }
+            });
           });
 
           // Bind structured decision result actions
@@ -2810,7 +2847,8 @@ def unified_assistant_html() -> str:
       'panel-playbooks',
       'panel-context-kit',
       'panel-result-board',
-      'panel-comparison'
+      'panel-comparison',
+      'panel-sources'
     ];
     if (tabId === 'panel-decision-composer-wrap') {
       openDecisionComposer();
@@ -2829,6 +2867,7 @@ def unified_assistant_html() -> str:
           panel.classList.add('open');
           btn.classList.add('active');
           if (id === 'panel-result-board') renderResultBoard();
+          if (id === 'panel-sources' && typeof renderSourcesGrid === 'function') renderSourcesGrid();
         }
       } else {
         panel.classList.remove('open');
@@ -3441,6 +3480,8 @@ def unified_assistant_html() -> str:
     const charIndicator = byId('char-budget-indicator');
     if (charIndicator) charIndicator.textContent = `${text.length} chars`;
 
+    const includedSrcs = typeof getIncludedReviewedSources === 'function' ? getIncludedReviewedSources() : [];
+
     try {
       const res = await apiFetch('/api/assistant/productivity/readiness', {
         method: 'POST',
@@ -3448,8 +3489,8 @@ def unified_assistant_html() -> str:
           text: text,
           selectedAgentId: explicitAgentId,
           contextKitChars: kitChars,
-          hasReviewedSources: false,
-          sourceCount: 0,
+          hasReviewedSources: includedSrcs.length > 0,
+          sourceCount: includedSrcs.length,
           selectedProject: null,
         })
       });
@@ -3468,6 +3509,7 @@ def unified_assistant_html() -> str:
     const hsBanner = byId('coach-high-stakes-banner');
     const sugBox = byId('readiness-suggestion-box');
     const sugText = byId('readiness-suggestion-text');
+    const srcPill = byId('source-summary-pill');
 
     if (!card || !pill || !reason) return;
 
@@ -3476,9 +3518,24 @@ def unified_assistant_html() -> str:
     pill.textContent = readiness.statusDisplay || 'Ready';
     reason.textContent = readiness.reason || '';
 
+    const includedSrcs = typeof getIncludedReviewedSources === 'function' ? getIncludedReviewedSources() : [];
+    if (srcPill) {
+      if (includedSrcs.length > 0) {
+        srcPill.style.display = 'inline-block';
+        srcPill.className = 'pill allowed';
+        srcPill.textContent = `Reviewed Sources: ${includedSrcs.length}`;
+      } else {
+        srcPill.style.display = 'none';
+      }
+    }
+
     if (readiness.isHighStakes) {
       hsBanner.style.display = 'block';
-      hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(readiness.highStakesCategory || 'Sensitive')}):</strong> ${escapeHtml(readiness.highStakesWarning || 'Review safety boundaries before acting.')}`;
+      if (includedSrcs.length === 0) {
+        hsBanner.innerHTML = `<strong>High-Stakes Source Gap:</strong> No reviewed public source excerpts are attached to this request. Jarvis can still provide local informational support, but important facts should be checked against appropriate authoritative or qualified sources before acting. <span class="muted">(Category: ${escapeHtml(readiness.highStakesCategory || 'Sensitive')})</span>`;
+      } else {
+        hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(readiness.highStakesCategory || 'Sensitive')}):</strong> ${escapeHtml(readiness.highStakesWarning || 'Review safety boundaries before acting.')} · <em>Reviewed excerpts (${includedSrcs.length}) are supporting context only (not independently verified).</em>`;
+      }
     } else {
       hsBanner.style.display = 'none';
     }
@@ -3563,6 +3620,9 @@ def unified_assistant_html() -> str:
 
     await loadPlaybooks();
     initResultsDashboardEventHandlers();
+    if (typeof initSourcesDashboardEventHandlers === 'function') initSourcesDashboardEventHandlers();
+    if (typeof updateSourcesCounters === 'function') updateSourcesCounters();
+    if (typeof renderSourcesGrid === 'function') renderSourcesGrid();
     triggerReadinessEvaluation();
   }
 
@@ -3625,8 +3685,8 @@ def unified_assistant_html() -> str:
 </script>
 </body>
 </html>"""
-    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles() + "\n" + results_dashboard_styles())
-    html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels() + "\n" + results_dashboard_html_panels())
+    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles() + "\n" + results_dashboard_styles() + "\n" + sources_dashboard_styles())
+    html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels() + "\n" + results_dashboard_html_panels() + "\n" + sources_dashboard_html())
     html = html.replace("<!-- PRODUCTIVITY_READINESS_COACH_PLACEHOLDER -->", productivity_readiness_coach_html())
-    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", results_dashboard_scripts())
+    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", results_dashboard_scripts() + "\n" + sources_dashboard_scripts())
     return html

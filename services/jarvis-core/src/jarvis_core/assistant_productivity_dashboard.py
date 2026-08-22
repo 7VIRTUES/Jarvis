@@ -436,6 +436,9 @@ def productivity_html_panels() -> str:
       <button type="button" class="prod-tab-btn" id="tab-comparison" data-panel="panel-comparison">
         ⚖️ Comparison (<span id="cmp-tab-count">0</span>)
       </button>
+      <button type="button" class="prod-tab-btn" id="tab-sources" data-panel="panel-sources">
+        🌐 Sources (<span id="sources-tab-count">0</span>)
+      </button>
       <button type="button" class="prod-tab-btn" id="tab-decision-composer" data-panel="panel-decision-composer-wrap">
         🎯 Decision Composer
       </button>
