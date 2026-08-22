@@ -101,6 +101,8 @@ from .local_generation import LocalGenerationError, LocalGenerationService
 from .models_dashboard import models_dashboard_html
 from .unified_assistant import UnifiedAssistantService
 from .unified_assistant_dashboard import unified_assistant_html
+from .assistant_actions import AssistantActionBridge
+from .assistant_actions_dashboard import assistant_actions_dashboard_html
 from .prompt_assembly import classify_high_stakes
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -244,6 +246,7 @@ local_life_direction_agent = LocalLifeDirectionAgentService()
 local_relationships_agent = LocalRelationshipsAgentService()
 local_emotional_reflection_agent = LocalEmotionalReflectionAgentService()
 unified_assistant = UnifiedAssistantService()
+assistant_actions = AssistantActionBridge(projects, tasks, runtime, approvals)
 
 app = FastAPI(title=APP_NAME, version=VERSION)
 
@@ -752,6 +755,45 @@ class UnifiedAssistantExecuteInput(BaseModel):
 
     agentId: str
     payload: dict[str, Any]
+
+
+class AssistantActionIntentDetectInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requestText: str
+    agentId: str | None = None
+
+
+class AssistantActionPrepareInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requestText: str
+    actionType: str
+    projectName: str | None = None
+    sourceAgentId: str = "unified_assistant"
+    sourceResponseId: str | None = None
+    sourceTurnIndex: int | None = None
+    reportTitle: str | None = None
+    customNotes: str | None = None
+
+
+class AssistantActionPolicyPreviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actionType: str
+    projectName: str | None = None
+
+
+class AssistantActionValidateDryRunInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actionType: str
+    projectName: str
+    proposalId: str | None = None
+    sourceAgentId: str = "unified_assistant"
+    sourceResponseId: str | None = None
+    reportTitle: str | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 
 class GenerationProbeInput(BaseModel):
@@ -1863,6 +1905,11 @@ def health() -> dict[str, str]:
 @app.get("/assistant", response_class=HTMLResponse)
 def unified_assistant_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
     return HTMLResponse(unified_assistant_html())
+
+
+@app.get("/actions", response_class=HTMLResponse)
+def actions_center_page(_: None = Depends(require_dashboard_lan_access)) -> HTMLResponse:
+    return HTMLResponse(assistant_actions_dashboard_html())
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -3038,6 +3085,91 @@ def assistant_execute_agent(
         raise HTTPException(status_code=400, detail=f"Invalid payload for {agent_id}: {exc}") from exc
 
     return handler(parsed_payload, None)
+
+
+@app.get("/api/assistant/actions/capabilities")
+def get_assistant_action_capabilities(_: None = Depends(require_dashboard_lan_access)) -> dict[str, object]:
+    return assistant_actions.get_capabilities()
+
+
+@app.post("/api/assistant/actions/detect-intent")
+def detect_assistant_action_intent(
+    payload: AssistantActionIntentDetectInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return assistant_actions.detect_intent(
+        request_text=payload.requestText,
+        agent_id=payload.agentId,
+    )
+
+
+@app.post("/api/assistant/actions/prepare")
+def prepare_assistant_action(
+    payload: AssistantActionPrepareInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_actions.prepare_proposal(
+            request_text=payload.requestText,
+            action_type=payload.actionType,
+            project_name=payload.projectName,
+            source_agent_id=payload.sourceAgentId,
+            source_response_id=payload.sourceResponseId,
+            source_turn_index=payload.sourceTurnIndex,
+            report_title=payload.reportTitle,
+            custom_notes=payload.customNotes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/assistant/actions/policy-preview")
+def preview_assistant_action_policy(
+    payload: AssistantActionPolicyPreviewInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return assistant_actions.policy_preview(
+        action_type=payload.actionType,
+        project_name=payload.projectName,
+    )
+
+
+@app.post("/api/assistant/actions/validate-dry-run")
+def validate_assistant_action_dry_run(
+    payload: AssistantActionValidateDryRunInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_actions.validate_dry_run(
+            action_type=payload.actionType,
+            project_name=payload.projectName,
+            proposal_id=payload.proposalId,
+            source_agent_id=payload.sourceAgentId,
+            source_response_id=payload.sourceResponseId,
+            report_title=payload.reportTitle,
+            actor=payload.actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/assistant/actions/task/{task_id}")
+def get_assistant_action_task(
+    task_id: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    view = assistant_actions.get_task_action_view(task_id)
+    if not view:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return view
+
+
+@app.get("/api/action-receipts")
+def list_action_receipts(
+    taskId: str | None = None,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    return runtime.list_receipts(task_id=taskId)
 
 
 @app.get("/vm-validation/prep")

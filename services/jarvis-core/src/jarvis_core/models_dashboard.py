@@ -32,7 +32,7 @@ def models_dashboard_html() -> str:
   </style>
 </head>
 <body>
-<header><div class="nav"><div><h1>Jarvis Models Center</h1><p>Controlled local generation · Explicit runtime control · Safe interruption</p></div><div class="actions"><a class="button-link" href="/assistant">Assistant</a><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/knowledge">Knowledge Library</a><a class="button-link" href="/memory">Memory Center</a></div></div></header>
+<header><div class="nav"><div><h1>Jarvis Models Center</h1><p>Controlled local generation · Explicit runtime control · Safe interruption</p></div><div class="actions"><a class="button-link" href="/assistant">Assistant</a><a class="button-link" href="/dashboard">Dashboard</a><a class="button-link" href="/actions">Action Center</a><a class="button-link" href="/knowledge">Knowledge Library</a><a class="button-link" href="/memory">Memory Center</a></div></div></header>
 <main>
   <section class="banner"><h2>Generation safety boundaries</h2><ul>
     <li>Local generation is disabled by default and uses only the fixed IPv4 loopback provider.</li>

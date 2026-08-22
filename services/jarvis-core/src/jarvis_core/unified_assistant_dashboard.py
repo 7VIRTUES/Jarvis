@@ -338,6 +338,79 @@ def unified_assistant_html() -> str:
       opacity: 0.5;
       cursor: not-allowed;
     }
+    .action-bridge-card {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      padding: 12px 14px;
+      margin-top: 8px;
+      display: grid;
+      gap: 10px;
+    }
+    .action-bridge-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .action-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .action-field {
+      display: grid;
+      gap: 4px;
+      font-size: 0.86rem;
+    }
+    .action-field label {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .action-field select, .action-field input {
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 0.88rem;
+      background: #fff;
+    }
+    .action-preview-box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.86rem;
+      display: grid;
+      gap: 6px;
+    }
+    .action-result-box {
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.88rem;
+      display: grid;
+      gap: 6px;
+    }
+    .action-result-box.succeeded {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #14532d;
+    }
+    .action-result-box.blocked {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+    .action-result-box.waiting {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
     .composer-card {
       position: sticky;
       bottom: 12px;
@@ -499,6 +572,7 @@ def unified_assistant_html() -> str:
     <nav class="header-nav">
       <a href="/assistant" class="active">Assistant</a>
       <a href="/dashboard">Dashboard</a>
+      <a href="/actions">Action Center</a>
       <a href="/dashboard#response-agents">Workbench</a>
       <a href="/memory">Memory Center</a>
       <a href="/knowledge">Knowledge Library</a>
@@ -537,6 +611,7 @@ def unified_assistant_html() -> str:
       <div class="starter-chips">
         <button class="starter-chip" data-prompt="Help me plan a 3-month strength training and nutrition routine">Fitness & Nutrition Plan</button>
         <button class="starter-chip" data-prompt="Draft an executive summary of our Q3 product roadmap update">Drafting Executive Brief</button>
+        <button class="starter-chip" data-prompt="Inspect the Jarvis registered project and check workspace structure">Inspect Jarvis Project</button>
         <button class="starter-chip" data-prompt="We need to evaluate moving to a new apartment vs renewing current lease">Decision Analysis</button>
         <button class="starter-chip" data-prompt="Troubleshoot intermittent Wi-Fi disconnection on Windows 11 PC">PC Troubleshooting</button>
         <button class="starter-chip" data-prompt="Organize my project files and personal notes structure">Knowledge Organizer</button>
@@ -651,6 +726,7 @@ def unified_assistant_html() -> str:
     resultBoard: [],
     stagedPriorContext: null,
     catalogAgents: [],
+    projects: [],
     generationStatus: null,
     stagedAnalysis: null,
     isGenerating: false,
@@ -695,7 +771,7 @@ def unified_assistant_html() -> str:
     return data;
   }
 
-  // Load system and generation status
+  // Load system, generation status, and registered projects
   async function loadSystemStatus() {
     try {
       const genStatus = await apiFetch('/api/generation/status');
@@ -721,6 +797,15 @@ def unified_assistant_html() -> str:
       }
     } catch (err) {
       byId('agents-pill').textContent = 'Agents Discovery Error';
+    }
+
+    try {
+      const projects = await apiFetch('/projects');
+      if (Array.isArray(projects)) {
+        sessionState.projects = projects;
+      }
+    } catch (err) {
+      sessionState.projects = [];
     }
   }
 
@@ -1016,7 +1101,32 @@ def unified_assistant_html() -> str:
         route: routeInfo,
         response: responseData,
         rawPayload: payload,
+        detectedIntent: null,
+        selectedActionType: 'inspect_project',
+        selectedProject: (sessionState.projects && sessionState.projects.length === 1) ? sessionState.projects[0].name : '',
+        actionBridgeOpen: false,
+        policyStatus: null,
+        policyReason: null,
+        dryRunResult: null,
       };
+
+      try {
+        const intent = await apiFetch('/api/assistant/actions/detect-intent', {
+          method: 'POST',
+          body: JSON.stringify({ requestText: promptText, agentId: agentId })
+        });
+        jarvisTurn.detectedIntent = intent;
+        if (intent && intent.actionable && intent.detectedActionType) {
+          jarvisTurn.selectedActionType = intent.detectedActionType;
+          if (intent.detectedProjectName) {
+            jarvisTurn.selectedProject = intent.detectedProjectName;
+          }
+          jarvisTurn.actionBridgeOpen = true;
+        }
+      } catch (e) {
+        // quiet fallback
+      }
+
       sessionState.transcript.push(jarvisTurn);
 
       // Consume staged prior context after use
@@ -1196,6 +1306,78 @@ def unified_assistant_html() -> str:
             <div class="json-panel" id="json-panel-${index}" style="display:none; margin-top:8px;">
               <pre class="json-viewer">${escapeHtml(JSON.stringify(resp, null, 2))}</pre>
             </div>
+
+            <div class="action-bridge-card" id="action-bridge-${index}">
+              <div class="action-bridge-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="pill dry-run">Action Bridge</span>
+                  <span class="muted" style="font-size:0.84rem;">
+                    ${turn.detectedIntent && turn.detectedIntent.actionable ?
+                      `Candidate action detected: <strong>${escapeHtml(turn.detectedIntent.detectedActionType)}</strong>` :
+                      (turn.detectedIntent && !turn.detectedIntent.supported ?
+                        `<span style="color:var(--danger);">${escapeHtml(turn.detectedIntent.explanation)}</span>` :
+                        'Informational response only · No action taken.')}
+                  </span>
+                </div>
+                <button class="secondary small" type="button" data-action="toggle-action-bridge" data-turn-idx="${index}">
+                  ${turn.actionBridgeOpen ? 'Close Action Bridge' : (turn.detectedIntent && turn.detectedIntent.actionable ? 'Prepare Action Proposal' : 'Prepare Action')}
+                </button>
+              </div>
+
+              ${turn.actionBridgeOpen ? `
+                <div style="display:grid; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid #e2e8f0;">
+                  <div class="action-form-grid">
+                    <div class="action-field">
+                      <label for="action-type-select-${index}">Proposed Action Type</label>
+                      <select id="action-type-select-${index}" data-turn-idx="${index}">
+                        <option value="inspect_project" ${turn.selectedActionType === 'inspect_project' ? 'selected' : ''}>inspect_project (Read-Only Inspection)</option>
+                        <option value="write_report" ${turn.selectedActionType === 'write_report' ? 'selected' : ''}>write_report (Structured Report Proposal)</option>
+                      </select>
+                    </div>
+                    <div class="action-field">
+                      <label for="action-project-select-${index}">Target Registered Project</label>
+                      <select id="action-project-select-${index}" data-turn-idx="${index}">
+                        <option value="">-- Select Registered Project --</option>
+                        ${(sessionState.projects || []).map(p => `<option value="${escapeHtml(p.name)}" ${turn.selectedProject === p.name ? 'selected' : ''}>${escapeHtml(p.name)} (${escapeHtml(p.path)})</option>`).join('')}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="action-preview-box" id="action-policy-preview-${index}">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <strong>Policy Preview:</strong>
+                      <span class="pill ${turn.policyStatus === 'allowed' ? 'succeeded' : (turn.policyStatus === 'blocked' ? 'blocked' : (turn.policyStatus === 'approval_required' ? 'waiting_for_approval' : 'inactive'))}" id="policy-status-pill-${index}">
+                        ${escapeHtml((turn.policyStatus || (turn.selectedProject ? 'ready' : 'needs_project')).toUpperCase())}
+                      </span>
+                    </div>
+                    <div class="muted" id="policy-reason-${index}">
+                      ${escapeHtml(turn.policyReason || (turn.selectedProject ? 'Project selected. Ready for policy check.' : 'Select a registered project target to preview policy status.'))}
+                    </div>
+                  </div>
+
+                  <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;">
+                    <span class="muted" style="font-size:0.82rem;">Supervised dry-run task is validated via TaskQueue &amp; SafeActionRuntime. Nothing is executed.</span>
+                    <button class="small" type="button" data-action="submit-dry-run" data-turn-idx="${index}">Validate Dry Run</button>
+                  </div>
+
+                  ${turn.dryRunResult ? `
+                    <div class="action-result-box ${turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' ? 'succeeded' : (turn.dryRunResult.task && turn.dryRunResult.task.status === 'blocked' ? 'blocked' : 'waiting')}">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong>${escapeHtml(turn.dryRunResult.summary)}</strong>
+                        <span class="pill ${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'validated')}">${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'done')}</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Task ID: <code>${escapeHtml(turn.dryRunResult.taskId)}</code>
+                        ${turn.dryRunResult.receipts && turn.dryRunResult.receipts.length ? ` · Receipt ID: <code>${escapeHtml(turn.dryRunResult.receipts[0].receipt_id)}</code>` : ''}
+                      </div>
+                      <div style="margin-top:4px;">
+                        <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              ` : ''}
+            </div>
           `;
 
           // Bind turn actions
@@ -1218,6 +1400,37 @@ def unified_assistant_html() -> str:
             const p = byId(`json-panel-${index}`);
             p.style.display = p.style.display === 'none' ? 'block' : 'none';
           });
+
+          // Toggle Action Bridge
+          const toggleBridgeBtn = turnDiv.querySelector(`[data-action="toggle-action-bridge"]`);
+          if (toggleBridgeBtn) {
+            toggleBridgeBtn.addEventListener('click', () => {
+              turn.actionBridgeOpen = !turn.actionBridgeOpen;
+              if (turn.actionBridgeOpen && !turn.selectedProject && sessionState.projects && sessionState.projects.length === 1) {
+                turn.selectedProject = sessionState.projects[0].name;
+              }
+              if (turn.actionBridgeOpen) {
+                updatePolicyPreview(index);
+              }
+              renderTranscript();
+            });
+          }
+
+          // Form change events
+          const typeSelect = turnDiv.querySelector(`#action-type-select-${index}`);
+          if (typeSelect) {
+            typeSelect.addEventListener('change', () => updatePolicyPreview(index));
+          }
+          const projSelect = turnDiv.querySelector(`#action-project-select-${index}`);
+          if (projSelect) {
+            projSelect.addEventListener('change', () => updatePolicyPreview(index));
+          }
+
+          // Submit dry run
+          const submitDryRunBtn = turnDiv.querySelector(`[data-action="submit-dry-run"]`);
+          if (submitDryRunBtn) {
+            submitDryRunBtn.addEventListener('click', () => submitDryRun(index));
+          }
         }
       }
 
@@ -1226,6 +1439,83 @@ def unified_assistant_html() -> str:
 
     // Auto scroll to bottom
     container.lastElementChild?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Update policy preview for a specific turn
+  async function updatePolicyPreview(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn) return;
+    const typeSelect = byId(`action-type-select-${turnIdx}`);
+    const projSelect = byId(`action-project-select-${turnIdx}`);
+    if (typeSelect) turn.selectedActionType = typeSelect.value;
+    if (projSelect) turn.selectedProject = projSelect.value;
+
+    const actionType = turn.selectedActionType || 'inspect_project';
+    const projectName = turn.selectedProject || '';
+
+    if (!projectName) {
+      turn.policyStatus = 'needs_project';
+      turn.policyReason = 'Select a registered project target to preview policy status.';
+      const pill = byId(`policy-status-pill-${turnIdx}`);
+      const reason = byId(`policy-reason-${turnIdx}`);
+      if (pill) { pill.className = 'pill inactive'; pill.textContent = 'NEEDS PROJECT'; }
+      if (reason) reason.textContent = turn.policyReason;
+      return;
+    }
+
+    try {
+      const preview = await apiFetch('/api/assistant/actions/policy-preview', {
+        method: 'POST',
+        body: JSON.stringify({ actionType: actionType, projectName: projectName })
+      });
+      turn.policyStatus = preview.status;
+      turn.policyReason = preview.reason;
+      const pill = byId(`policy-status-pill-${turnIdx}`);
+      const reason = byId(`policy-reason-${turnIdx}`);
+      if (pill) {
+        const cls = preview.status === 'allowed' ? 'succeeded' : (preview.status === 'blocked' ? 'blocked' : 'waiting_for_approval');
+        pill.className = `pill ${cls}`;
+        pill.textContent = preview.status.toUpperCase();
+      }
+      if (reason) reason.textContent = preview.reason;
+    } catch (err) {
+      turn.policyStatus = 'error';
+      turn.policyReason = err.message;
+    }
+  }
+
+  // Submit dry run for a specific turn
+  async function submitDryRun(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn) return;
+    const actionType = turn.selectedActionType || 'inspect_project';
+    const projectName = turn.selectedProject;
+
+    if (!projectName) {
+      alert('Please select a registered project target before validating.');
+      return;
+    }
+
+    const resp = turn.response || {};
+    const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
+
+    try {
+      const result = await apiFetch('/api/assistant/actions/validate-dry-run', {
+        method: 'POST',
+        body: JSON.stringify({
+          actionType: actionType,
+          projectName: projectName,
+          sourceAgentId: turn.agentId || 'unified_assistant',
+          sourceResponseId: responseId,
+          actor: 'local_user'
+        })
+      });
+      turn.dryRunResult = result;
+      showToast('Dry run validated. No local action was executed.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Dry run validation failed: ${err.message}`);
+    }
   }
 
   // Result Board in session memory
