@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from .assistant_productivity_dashboard import (
+    productivity_html_panels,
+    productivity_readiness_coach_html,
+    productivity_styles,
+)
+
 
 def unified_assistant_html() -> str:
-    return """<!doctype html>
+    html = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -560,6 +566,8 @@ def unified_assistant_html() -> str:
       flex-wrap: wrap;
       gap: 8px;
     }
+
+    /* PRODUCTIVITY_STYLES_PLACEHOLDER */
   </style>
 </head>
 <body>
@@ -597,6 +605,8 @@ def unified_assistant_html() -> str:
     </div>
   </section>
 
+  <!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->
+
   <!-- Staged Prior Context Indicator -->
   <div id="staged-prior-context-bar" class="staged-prior-bar" style="display:none;">
     <span><strong>Staged Prior Context:</strong> <span id="staged-prior-summary"></span></span>
@@ -607,7 +617,32 @@ def unified_assistant_html() -> str:
   <section id="chat-container" class="chat-container">
     <div id="empty-state" class="empty-state">
       <h3>Welcome to the Unified Jarvis Assistant</h3>
-      <p>Enter any natural-language request below. Jarvis will deterministically inspect your request, recommend the best specialized response agent, explain the route transparently, and execute locally on your machine.</p>
+      <p>Supervised conversational interface over 37 local response agents. Local-only, private, and fully under your control.</p>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; max-width:850px; margin:0 auto 18px; text-align:left;">
+        <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+          <strong style="color:var(--accent); font-size:0.9rem;">1. Describe Needs</strong><br>
+          Type your natural-language task in the composer below.
+        </div>
+        <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+          <strong style="color:var(--accent); font-size:0.9rem;">2. Choose Agent</strong><br>
+          Use auto-routing or pick from the 37 Command Center agents.
+        </div>
+        <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+          <strong style="color:var(--accent); font-size:0.9rem;">3. Context Kit</strong><br>
+          Assemble optional notes, prior answers, or project context.
+        </div>
+        <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+          <strong style="color:var(--accent); font-size:0.9rem;">4. Check Readiness</strong><br>
+          Verify deterministic readiness before dispatching.
+        </div>
+        <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+          <strong style="color:var(--accent); font-size:0.9rem;">5. Dispatch Safely</strong><br>
+          Execute locally with complete auditability.
+        </div>
+      </div>
+
+      <div style="font-weight:600; font-size:0.88rem; margin-bottom:8px; color:var(--text);">Quick Starters:</div>
       <div class="starter-chips">
         <button class="starter-chip" data-prompt="Help me plan a 3-month strength training and nutrition routine">Fitness & Nutrition Plan</button>
         <button class="starter-chip" data-prompt="Draft an executive summary of our Q3 product roadmap update">Drafting Executive Brief</button>
@@ -672,6 +707,8 @@ def unified_assistant_html() -> str:
     <p class="muted" style="margin:0 0 12px; font-size:0.88rem;">Key decisions, briefs, and plans collected during this session. In-memory only.</p>
     <div id="result-board-items" style="display:grid; gap:10px;"></div>
   </section>
+
+  <!-- PRODUCTIVITY_READINESS_COACH_PLACEHOLDER -->
 
   <!-- Composer Area -->
   <div class="composer-card" id="composer">
@@ -1300,6 +1337,7 @@ def unified_assistant_html() -> str:
             <div class="turn-actions">
               <button class="secondary small" type="button" data-action="use-prior" data-turn-idx="${index}">Use as prior context for next message</button>
               <button class="secondary small" type="button" data-action="add-board" data-turn-idx="${index}">Add to Result Board</button>
+              <button class="secondary small" type="button" data-action="add-kit" data-turn-idx="${index}">Add to Context Kit</button>
               <button class="secondary small" type="button" data-action="toggle-json" data-turn-idx="${index}">Inspect Metadata & JSON</button>
             </div>
 
@@ -1774,6 +1812,11 @@ def unified_assistant_html() -> str:
 
           turnDiv.querySelector(`[data-action="add-board"]`).addEventListener('click', () => {
             addToResultBoard(turn);
+          });
+
+          turnDiv.querySelector(`[data-action="add-kit"]`).addEventListener('click', () => {
+            const agentName = turn.route ? turn.route.selected_display_name : turn.agentId;
+            addContextKitItem('prior_turn', `${agentName} (Turn #${index + 1})`, primaryText);
           });
 
           turnDiv.querySelector(`[data-action="toggle-json"]`).addEventListener('click', () => {
@@ -2482,6 +2525,7 @@ def unified_assistant_html() -> str:
         <div style="font-size:0.88rem; max-height:100px; overflow-y:auto; white-space:pre-wrap;">${escapeHtml(item.text)}</div>
         <div style="margin-top:8px; display:flex; gap:6px;">
           <button class="secondary small" data-rb-prior="${idx}">Use as Prior Context</button>
+          <button class="secondary small" data-rb-kit="${idx}">Add to Context Kit</button>
           <button class="secondary small" data-rb-remove="${idx}">Remove</button>
         </div>
       `;
@@ -2494,6 +2538,9 @@ def unified_assistant_html() -> str:
         });
         byId('result-board-drawer').style.display = 'none';
         byId('composer').scrollIntoView({ behavior: 'smooth' });
+      });
+      card.querySelector(`[data-rb-kit="${idx}"]`).addEventListener('click', () => {
+        addContextKitItem('result_board', `${item.agentName} Board Item`, item.text);
       });
       card.querySelector(`[data-rb-remove="${idx}"]`).addEventListener('click', () => {
         sessionState.resultBoard.splice(idx, 1);
@@ -2521,6 +2568,770 @@ def unified_assistant_html() -> str:
       showToast('Conversation transcript cleared.');
     }
   });
+
+  // ==========================================
+  // Productivity Layer: Tabs & Command Center
+  // ==========================================
+
+  sessionState.pinnedAgentIds = new Set();
+  sessionState.recentAgentIds = [];
+  sessionState.contextKit = [];
+  sessionState.activePlaybookId = 'plan_review_decision';
+  sessionState.playbookSteps = [];
+  sessionState.builtInPlaybooks = [];
+  sessionState.readinessDebounceTimer = null;
+  sessionState.activeBoundariesAgent = null;
+  sessionState.activeSuggestion = null;
+
+  function switchProductivityTab(tabId) {
+    const tabs = ['panel-command-center', 'panel-playbooks', 'panel-context-kit'];
+    tabs.forEach(id => {
+      const panel = byId(id);
+      const btn = document.querySelector(`[data-panel="${id}"]`);
+      if (!panel || !btn) return;
+      if (id === tabId) {
+        const isOpen = panel.classList.contains('open');
+        if (isOpen) {
+          panel.classList.remove('open');
+          btn.classList.remove('active');
+        } else {
+          panel.classList.add('open');
+          btn.classList.add('active');
+        }
+      } else {
+        panel.classList.remove('open');
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  document.querySelectorAll('.prod-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetPanel = btn.getAttribute('data-panel');
+      switchProductivityTab(targetPanel);
+    });
+  });
+
+  function renderCommandCenter() {
+    const grid = byId('cc-agent-grid');
+    if (!grid) return;
+    const query = (byId('cc-search-input').value || '').toLowerCase().trim();
+    const catFilter = byId('cc-category-filter').value;
+    const hsOnly = byId('cc-high-stakes-filter').checked;
+    const pinnedOnly = byId('cc-pinned-filter').checked;
+
+    const filtered = sessionState.catalogAgents.filter(agent => {
+      const agentId = agent.agentId || agent.agent_id;
+      const name = (agent.displayName || agent.name || '').toLowerCase();
+      const cat = (agent.category || '').toLowerCase();
+      const useWhen = (agent.useWhen || agent.use_when || '').toLowerCase();
+      const keywords = (agent.keywords || []).join(' ').toLowerCase();
+      const isHs = !!(agent.isHighStakes || agent.high_stakes);
+      const isPinned = sessionState.pinnedAgentIds.has(agentId);
+
+      if (pinnedOnly && !isPinned) return false;
+      if (hsOnly && !isHs) return false;
+      if (catFilter && agent.category !== catFilter) return false;
+      if (query) {
+        const matches = name.includes(query) || cat.includes(query) || useWhen.includes(query) || keywords.includes(query) || agentId.includes(query);
+        if (!matches) return false;
+      }
+      return true;
+    });
+
+    if (!filtered.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1; padding:24px;">No response agents match the active filter criteria.</div>';
+      return;
+    }
+
+    grid.replaceChildren();
+    filtered.forEach(agent => {
+      const agentId = agent.agentId || agent.agent_id;
+      const isPinned = sessionState.pinnedAgentIds.has(agentId);
+      const isHs = !!(agent.isHighStakes || agent.high_stakes);
+      const card = document.createElement('div');
+      card.className = `cc-agent-card ${isHs ? 'high-stakes-card' : ''}`;
+      card.innerHTML = `
+        <div class="cc-card-top">
+          <div class="cc-card-name">${escapeHtml(agent.displayName || agent.name)}</div>
+          <button class="secondary small pin-btn" data-pin-id="${escapeHtml(agentId)}" style="padding:1px 6px; font-size:0.75rem;" title="${isPinned ? 'Unpin' : 'Pin to quick access'}">
+            ${isPinned ? '★ Pinned' : '☆ Pin'}
+          </button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="cc-card-cat">${escapeHtml(agent.category || 'General')}</span>
+          <span class="muted" style="font-size:0.75rem;">${escapeHtml(agent.responseMode || 'response_only')}</span>
+        </div>
+        <div class="cc-card-desc">${escapeHtml(agent.useWhen || 'Specialized response agent.')}</div>
+        <div class="cc-card-badges">
+          <span class="cc-badge">Local-Only</span>
+          <span class="cc-badge">Manual-Input</span>
+          ${isHs ? '<span class="cc-badge hs">High Stakes</span>' : ''}
+        </div>
+        <div class="cc-card-actions">
+          <button type="button" class="small" data-action="use" data-agent-id="${escapeHtml(agentId)}">Use Agent</button>
+          <button type="button" class="secondary small" data-action="starter" data-agent-id="${escapeHtml(agentId)}">Load Starter</button>
+          <button type="button" class="secondary small" data-action="add-workflow" data-agent-id="${escapeHtml(agentId)}">Add to Workflow</button>
+          <button type="button" class="secondary small" data-action="boundaries" data-agent-id="${escapeHtml(agentId)}">Boundaries</button>
+        </div>
+      `;
+
+      card.querySelector(`[data-pin-id="${agentId}"]`).addEventListener('click', () => togglePin(agentId));
+      card.querySelector(`[data-action="use"]`).addEventListener('click', () => selectAgentManually(agentId));
+      card.querySelector(`[data-action="starter"]`).addEventListener('click', () => loadAgentStarter(agentId));
+      card.querySelector(`[data-action="add-workflow"]`).addEventListener('click', () => addAgentToWorkflow(agentId));
+      card.querySelector(`[data-action="boundaries"]`).addEventListener('click', () => showAgentBoundaries(agentId));
+
+      grid.append(card);
+    });
+  }
+
+  function togglePin(agentId) {
+    if (sessionState.pinnedAgentIds.has(agentId)) {
+      sessionState.pinnedAgentIds.delete(agentId);
+      showToast('Unpinned agent.');
+    } else {
+      sessionState.pinnedAgentIds.add(agentId);
+      showToast('Pinned agent to quick access.');
+    }
+    renderPinnedRow();
+    renderCommandCenter();
+  }
+
+  function renderPinnedRow() {
+    const row = byId('cc-pinned-chips');
+    const sec = byId('cc-pinned-section');
+    if (!sessionState.pinnedAgentIds.size) {
+      sec.style.display = 'none';
+      return;
+    }
+    sec.style.display = 'flex';
+    row.replaceChildren();
+    sessionState.pinnedAgentIds.forEach(agentId => {
+      const agent = sessionState.catalogAgents.find(a => (a.agentId || a.agent_id) === agentId);
+      const name = agent ? (agent.displayName || agent.name) : agentId;
+      const chip = document.createElement('span');
+      chip.className = 'cc-chip pinned';
+      chip.innerHTML = `
+        <span>★ ${escapeHtml(name)}</span>
+        <span class="unpin-icon" title="Unpin">✕</span>
+      `;
+      chip.querySelector('span:first-child').addEventListener('click', () => selectAgentManually(agentId));
+      chip.querySelector('.unpin-icon').addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePin(agentId);
+      });
+      row.append(chip);
+    });
+  }
+
+  function recordRecentAgent(agentId) {
+    if (!agentId) return;
+    sessionState.recentAgentIds = [agentId, ...sessionState.recentAgentIds.filter(id => id !== agentId)].slice(0, 6);
+    renderRecentRow();
+  }
+
+  function renderRecentRow() {
+    const row = byId('cc-recent-chips');
+    const sec = byId('cc-recent-section');
+    if (!sessionState.recentAgentIds.length) {
+      sec.style.display = 'none';
+      return;
+    }
+    sec.style.display = 'flex';
+    row.replaceChildren();
+    sessionState.recentAgentIds.forEach(agentId => {
+      const agent = sessionState.catalogAgents.find(a => (a.agentId || a.agent_id) === agentId);
+      const name = agent ? (agent.displayName || agent.name) : agentId;
+      const chip = document.createElement('span');
+      chip.className = 'cc-chip';
+      chip.textContent = name;
+      chip.addEventListener('click', () => selectAgentManually(agentId));
+      row.append(chip);
+    });
+  }
+
+  function selectAgentManually(agentId) {
+    const select = byId('opt-agent-override');
+    select.value = agentId;
+    recordRecentAgent(agentId);
+    updateManualOverrideIndicator();
+    triggerReadinessEvaluation();
+    showToast(`Manual route set to: ${getAgentDisplayName(agentId)}`);
+    byId('composer').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function clearManualAgentOverride() {
+    const select = byId('opt-agent-override');
+    select.value = '';
+    updateManualOverrideIndicator();
+    triggerReadinessEvaluation();
+    showToast('Manual route cleared. Auto-routing active.');
+  }
+
+  function updateManualOverrideIndicator() {
+    const select = byId('opt-agent-override');
+    const val = select.value;
+    const indicator = byId('manual-override-indicator');
+    const nameSpan = byId('manual-override-agent-name');
+    if (val) {
+      nameSpan.textContent = getAgentDisplayName(val);
+      indicator.style.display = 'inline-flex';
+    } else {
+      indicator.style.display = 'none';
+    }
+  }
+
+  byId('clear-manual-override-btn').addEventListener('click', clearManualAgentOverride);
+  byId('opt-agent-override').addEventListener('change', () => {
+    const val = byId('opt-agent-override').value;
+    if (val) recordRecentAgent(val);
+    updateManualOverrideIndicator();
+    triggerReadinessEvaluation();
+  });
+
+  function getAgentDisplayName(agentId) {
+    const agent = sessionState.catalogAgents.find(a => (a.agentId || a.agent_id) === agentId);
+    return agent ? (agent.displayName || agent.name) : agentId;
+  }
+
+  function loadAgentStarter(agentId) {
+    const agent = sessionState.catalogAgents.find(a => (a.agentId || a.agent_id) === agentId);
+    if (!agent) return;
+    const example = (agent.examples && agent.examples[0]) || agent.exampleRequestBody;
+    let starterText = '';
+    if (example) {
+      if (example.topic) starterText = `Topic: ${example.topic}\nNotes: ${example.notes || ''}`;
+      else if (example.goal) starterText = `Goal: ${example.goal}`;
+      else if (example.request) starterText = `Request: ${example.request}`;
+      else if (example.problem) starterText = `Problem symptom: ${example.problem}`;
+      else if (example.content) starterText = `Content:\n"""\n${example.content}\n"""`;
+      else if (example.situation) starterText = `Situation: ${example.situation}`;
+      else if (example.careerGoal) starterText = `Career Goal: ${example.careerGoal}`;
+      else if (example.financialGoal) starterText = `Financial Goal: ${example.financialGoal}`;
+      else if (example.academicGoal) starterText = `Academic Goal: ${example.academicGoal}`;
+      else if (example.businessIdea) starterText = `Business Idea: ${example.businessIdea}`;
+      else if (example.primaryGoal) starterText = `Primary Goal: ${example.primaryGoal}`;
+      else if (example.decision) starterText = `Decision: ${example.decision}\nOptions: ${(example.options || []).join(', ')}`;
+      else starterText = `Explore ${agent.displayName || agent.name}`;
+    } else {
+      starterText = `Help me with ${agent.displayName || agent.name}`;
+    }
+
+    byId('prompt-input').value = starterText;
+    selectAgentManually(agentId);
+    byId('prompt-input').focus();
+    showToast(`Loaded starter template for ${getAgentDisplayName(agentId)}`);
+  }
+
+  function showAgentBoundaries(agentId) {
+    const agent = sessionState.catalogAgents.find(a => (a.agentId || a.agent_id) === agentId);
+    if (!agent) return;
+    sessionState.activeBoundariesAgent = agent;
+    const modal = byId('agent-boundaries-modal');
+    byId('modal-agent-name').textContent = `${agent.displayName || agent.name} — Guardrails & Scope`;
+
+    const badgesContainer = byId('modal-agent-badges');
+    badgesContainer.replaceChildren();
+    (agent.badges || ['local-only', 'manual-input', 'non-persistent']).forEach(b => {
+      const span = document.createElement('span');
+      span.className = 'pill inactive';
+      span.textContent = b;
+      badgesContainer.append(span);
+    });
+
+    byId('modal-agent-usewhen').innerHTML = `<strong>Intended Use:</strong> ${escapeHtml(agent.useWhen || 'Specialized response agent.')}`;
+
+    const notesList = byId('modal-safety-notes');
+    notesList.replaceChildren();
+    (agent.safetyNotes || ['Local execution only. No external services or connectors.']).forEach(n => {
+      const li = document.createElement('li');
+      li.textContent = n;
+      notesList.append(li);
+    });
+
+    const hsSec = byId('modal-high-stakes-section');
+    if (agent.isHighStakes || agent.high_stakes) {
+      hsSec.style.display = 'block';
+      byId('modal-high-stakes-text').textContent = 'This agent operates in a high-stakes decision domain. Jarvis provides local informational guidance only; no professional certification, live filings, or financial transactions are performed.';
+    } else {
+      hsSec.style.display = 'none';
+    }
+
+    modal.classList.add('open');
+  }
+
+  byId('close-modal-btn').addEventListener('click', () => {
+    byId('agent-boundaries-modal').classList.remove('open');
+  });
+  byId('agent-boundaries-modal').addEventListener('click', (e) => {
+    if (e.target === byId('agent-boundaries-modal')) {
+      byId('agent-boundaries-modal').classList.remove('open');
+    }
+  });
+
+  byId('cc-search-input').addEventListener('input', renderCommandCenter);
+  byId('cc-category-filter').addEventListener('change', renderCommandCenter);
+  byId('cc-high-stakes-filter').addEventListener('change', renderCommandCenter);
+  byId('cc-pinned-filter').addEventListener('change', renderCommandCenter);
+
+  // ==========================================
+  // Productivity Layer: Playbooks & Workflows
+  // ==========================================
+
+  async function loadPlaybooks() {
+    try {
+      const playbooks = await apiFetch('/api/assistant/productivity/playbooks');
+      if (Array.isArray(playbooks)) {
+        sessionState.builtInPlaybooks = playbooks;
+        populatePlaybooksDropdown(playbooks);
+        if (playbooks.length) {
+          selectPlaybook(playbooks[0].id);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load playbooks from server:', err);
+    }
+  }
+
+  function populatePlaybooksDropdown(playbooks) {
+    const select = byId('playbook-select');
+    if (!select) return;
+    select.replaceChildren();
+    playbooks.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      select.append(opt);
+    });
+    const customOpt = document.createElement('option');
+    customOpt.value = 'custom';
+    customOpt.textContent = 'Custom Workflow';
+    select.append(customOpt);
+  }
+
+  function populateAddStepAgentDropdown(agents) {
+    const select = byId('add-step-agent-select');
+    if (!select) return;
+    select.replaceChildren();
+    agents.forEach(agent => {
+      const opt = document.createElement('option');
+      opt.value = agent.agentId || agent.agent_id;
+      opt.textContent = `${agent.displayName || agent.name} [${agent.category || 'General'}]`;
+      select.append(opt);
+    });
+  }
+
+  function selectPlaybook(playbookId) {
+    sessionState.activePlaybookId = playbookId;
+    byId('playbook-select').value = playbookId;
+    if (playbookId === 'custom') {
+      byId('playbook-description').textContent = 'Custom multi-step workflow. Add steps using the selector below.';
+      if (!sessionState.playbookSteps.length) {
+        sessionState.playbookSteps = [];
+      }
+    } else {
+      const pb = sessionState.builtInPlaybooks.find(p => p.id === playbookId);
+      if (pb) {
+        byId('playbook-description').textContent = pb.description;
+        sessionState.playbookSteps = pb.steps.map((s, idx) => ({
+          stepIndex: idx,
+          agentId: s.agentId,
+          name: s.name || getAgentDisplayName(s.agentId),
+          purpose: s.purpose,
+          suggestedPrompt: s.suggestedPrompt || '',
+          status: 'not_started',
+        }));
+      }
+    }
+    renderPlaybookSteps();
+  }
+
+  byId('playbook-select').addEventListener('change', (e) => {
+    selectPlaybook(e.target.value);
+  });
+
+  byId('reset-playbook-btn').addEventListener('click', () => {
+    selectPlaybook(sessionState.activePlaybookId);
+    showToast('Reset active playbook steps.');
+  });
+
+  function renderPlaybookSteps() {
+    const list = byId('playbook-steps-list');
+    if (!list) return;
+    if (!sessionState.playbookSteps.length) {
+      list.innerHTML = '<div class="muted" style="text-align:center; padding:16px;">No steps in this workflow. Insert steps below.</div>';
+      return;
+    }
+    list.replaceChildren();
+    sessionState.playbookSteps.forEach((step, idx) => {
+      const card = document.createElement('div');
+      card.className = `playbook-step-card ${step.status === 'in_progress' ? 'active-step' : (step.status === 'done' ? 'completed-step' : '')}`;
+      card.innerHTML = `
+        <div class="step-left">
+          <div class="step-num-badge">${idx + 1}</div>
+          <div class="step-details">
+            <div class="step-name">${escapeHtml(step.name || getAgentDisplayName(step.agentId))}</div>
+            <div class="step-purpose">${escapeHtml(step.purpose || 'Execute step')}</div>
+          </div>
+        </div>
+        <div class="step-right">
+          <select class="cc-filter-select" data-step-status="${idx}" style="font-size:0.8rem; padding:4px 6px;">
+            <option value="not_started" ${step.status === 'not_started' ? 'selected' : ''}>Not Started</option>
+            <option value="in_progress" ${step.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+            <option value="done" ${step.status === 'done' ? 'selected' : ''}>Completed</option>
+          </select>
+          <button type="button" class="small" data-prepare-step="${idx}">Prepare Step</button>
+          <button type="button" class="secondary small" data-step-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="Move Up">↑</button>
+          <button type="button" class="secondary small" data-step-down="${idx}" ${idx === sessionState.playbookSteps.length - 1 ? 'disabled' : ''} title="Move Down">↓</button>
+          <button type="button" class="secondary small" data-step-remove="${idx}" title="Remove Step">✕</button>
+        </div>
+      `;
+
+      card.querySelector(`[data-step-status="${idx}"]`).addEventListener('change', (e) => {
+        step.status = e.target.value;
+        renderPlaybookSteps();
+      });
+      card.querySelector(`[data-prepare-step="${idx}"]`).addEventListener('click', () => preparePlaybookStep(idx));
+      card.querySelector(`[data-step-up="${idx}"]`).addEventListener('click', () => movePlaybookStep(idx, -1));
+      card.querySelector(`[data-step-down="${idx}"]`).addEventListener('click', () => movePlaybookStep(idx, 1));
+      card.querySelector(`[data-step-remove="${idx}"]`).addEventListener('click', () => removePlaybookStep(idx));
+
+      list.append(card);
+    });
+  }
+
+  function preparePlaybookStep(stepIndex) {
+    const step = sessionState.playbookSteps[stepIndex];
+    if (!step) return;
+    step.status = 'in_progress';
+    selectAgentManually(step.agentId);
+    const input = byId('prompt-input');
+    if (!input.value.trim() && step.suggestedPrompt) {
+      input.value = step.suggestedPrompt;
+    }
+    input.focus();
+    renderPlaybookSteps();
+    showToast(`Prepared Step ${stepIndex + 1}: ${step.name}`);
+  }
+
+  function movePlaybookStep(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= sessionState.playbookSteps.length) return;
+    const temp = sessionState.playbookSteps[index];
+    sessionState.playbookSteps[index] = sessionState.playbookSteps[target];
+    sessionState.playbookSteps[target] = temp;
+    renderPlaybookSteps();
+  }
+
+  function removePlaybookStep(index) {
+    sessionState.playbookSteps.splice(index, 1);
+    renderPlaybookSteps();
+  }
+
+  function addAgentToWorkflow(agentId) {
+    const name = getAgentDisplayName(agentId);
+    sessionState.playbookSteps.push({
+      stepIndex: sessionState.playbookSteps.length,
+      agentId: agentId,
+      name: name,
+      purpose: `Process with ${name}`,
+      suggestedPrompt: `Task for ${name}: `,
+      status: 'not_started',
+    });
+    switchProductivityTab('panel-playbooks');
+    renderPlaybookSteps();
+    showToast(`Added ${name} to workflow steps.`);
+  }
+
+  byId('add-step-btn').addEventListener('click', () => {
+    const select = byId('add-step-agent-select');
+    const agentId = select.value;
+    if (agentId) addAgentToWorkflow(agentId);
+  });
+
+  // ==========================================
+  // Productivity Layer: Context Kit Builder
+  // ==========================================
+
+  const MAX_KIT_CHARS = 16000;
+
+  function addContextKitItem(type, label, content) {
+    const text = String(content || '').trim();
+    if (!text) {
+      alert('Content is empty.');
+      return;
+    }
+    const currentTotal = getContextKitTotalChars();
+    if (currentTotal + text.length > MAX_KIT_CHARS) {
+      alert(`Adding this item (${text.length} chars) would exceed the Context Kit budget of ${MAX_KIT_CHARS.toLocaleString()} characters.`);
+      return;
+    }
+
+    const item = {
+      id: 'kit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      type: type || 'note',
+      label: label || 'Context Note',
+      content: text,
+      charCount: text.length,
+    };
+    sessionState.contextKit.push(item);
+    renderContextKit();
+    triggerReadinessEvaluation();
+    showToast(`Added "${item.label}" to Context Kit.`);
+  }
+
+  function removeContextKitItem(itemId) {
+    sessionState.contextKit = sessionState.contextKit.filter(item => item.id !== itemId);
+    renderContextKit();
+    triggerReadinessEvaluation();
+  }
+
+  function getContextKitTotalChars() {
+    return sessionState.contextKit.reduce((sum, item) => sum + (item.charCount || 0), 0);
+  }
+
+  function renderContextKit() {
+    const list = byId('kit-items-list');
+    const countSpan = byId('kit-item-count');
+    const budgetText = byId('kit-budget-text');
+    const budgetBar = byId('kit-budget-bar');
+
+    const totalChars = getContextKitTotalChars();
+    if (countSpan) countSpan.textContent = sessionState.contextKit.length;
+    if (budgetText) budgetText.textContent = `${totalChars.toLocaleString()} / ${MAX_KIT_CHARS.toLocaleString()} chars`;
+
+    if (budgetBar) {
+      const pct = Math.min(100, Math.round((totalChars / MAX_KIT_CHARS) * 100));
+      budgetBar.style.width = pct + '%';
+      if (pct > 90) budgetBar.className = 'budget-bar-fill danger';
+      else if (pct > 70) budgetBar.className = 'budget-bar-fill warning';
+      else budgetBar.className = 'budget-bar-fill';
+    }
+
+    if (!list) return;
+    if (!sessionState.contextKit.length) {
+      list.innerHTML = '<div class="muted" style="text-align:center; padding:16px; font-size:0.88rem;">No items in Context Kit. Add custom notes above or click "Add to Context Kit" on answers.</div>';
+      return;
+    }
+
+    list.replaceChildren();
+    sessionState.contextKit.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'context-kit-item';
+      row.innerHTML = `
+        <div style="display:grid; gap:2px; flex:1 1 auto; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span class="muted" style="font-size:0.75rem;">[${escapeHtml(item.type)}]</span>
+            <span class="muted" style="font-size:0.75rem;">${item.charCount.toLocaleString()} chars</span>
+          </div>
+          <div class="muted" style="font-size:0.8rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapeHtml(item.content.slice(0, 120))}</div>
+        </div>
+        <button class="secondary small" data-remove-kit="${item.id}" type="button">✕ Remove</button>
+      `;
+      row.querySelector(`[data-remove-kit="${item.id}"]`).addEventListener('click', () => removeContextKitItem(item.id));
+      list.append(row);
+    });
+  }
+
+  byId('add-kit-note-btn').addEventListener('click', () => {
+    const labelInput = byId('kit-note-label');
+    const contentInput = byId('kit-note-content');
+    const label = labelInput.value.trim() || 'User Note';
+    const content = contentInput.value.trim();
+    if (!content) {
+      alert('Please enter note content.');
+      contentInput.focus();
+      return;
+    }
+    addContextKitItem('note', label, content);
+    labelInput.value = '';
+    contentInput.value = '';
+  });
+
+  byId('clear-kit-btn').addEventListener('click', () => {
+    sessionState.contextKit = [];
+    renderContextKit();
+    triggerReadinessEvaluation();
+    showToast('Context Kit cleared.');
+  });
+
+  byId('insert-kit-btn').addEventListener('click', () => {
+    if (!sessionState.contextKit.length) {
+      alert('Context Kit is empty.');
+      return;
+    }
+    const formatted = sessionState.contextKit.map(item => `### [${item.label}]\n${item.content}`).join('\n\n');
+    const wrapper = `\n\n[Context Kit]\n${formatted}\n[/Context Kit]\n\n`;
+    const input = byId('prompt-input');
+    input.value = (input.value.trim() + wrapper).trim();
+    input.focus();
+    triggerReadinessEvaluation();
+    showToast('Inserted Context Kit into prompt.');
+    byId('composer').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  byId('stage-kit-btn').addEventListener('click', () => {
+    if (!sessionState.contextKit.length) {
+      alert('Context Kit is empty.');
+      return;
+    }
+    const formatted = sessionState.contextKit.map(item => `[${item.label}]: ${item.content}`).join(' | ');
+    setStagedPriorContext({
+      agentId: 'context_kit',
+      agentName: 'Context Kit Builder',
+      responseId: 'kit_' + Date.now(),
+      summary: formatted.slice(0, 500),
+    });
+    showToast('Staged Context Kit as prior context.');
+    byId('composer').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ==========================================
+  // Productivity Layer: Request Readiness Coach
+  // ==========================================
+
+  function triggerReadinessEvaluation() {
+    if (sessionState.readinessDebounceTimer) {
+      clearTimeout(sessionState.readinessDebounceTimer);
+    }
+    sessionState.readinessDebounceTimer = setTimeout(runReadinessEvaluation, 200);
+  }
+
+  async function runReadinessEvaluation() {
+    const input = byId('prompt-input');
+    if (!input) return;
+    const text = input.value.trim();
+    const explicitAgentId = byId('opt-agent-override') ? byId('opt-agent-override').value || null : null;
+    const kitChars = getContextKitTotalChars();
+
+    const charIndicator = byId('char-budget-indicator');
+    if (charIndicator) charIndicator.textContent = `${text.length} chars`;
+
+    try {
+      const res = await apiFetch('/api/assistant/productivity/readiness', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: text,
+          selectedAgentId: explicitAgentId,
+          contextKitChars: kitChars,
+          hasReviewedSources: false,
+          sourceCount: 0,
+          selectedProject: null,
+        })
+      });
+
+      sessionState.currentReadiness = res;
+      updateReadinessUI(res);
+    } catch (err) {
+      console.warn('Readiness check failed:', err);
+    }
+  }
+
+  function updateReadinessUI(readiness) {
+    const card = byId('readiness-coach-card');
+    const pill = byId('readiness-status-pill');
+    const reason = byId('readiness-reason-text');
+    const hsBanner = byId('coach-high-stakes-banner');
+    const sugBox = byId('readiness-suggestion-box');
+    const sugText = byId('readiness-suggestion-text');
+
+    if (!card || !pill || !reason) return;
+
+    card.className = `readiness-coach-card ${readiness.status || 'ready'}`;
+    pill.className = `pill ${readiness.badgeClass || 'succeeded'}`;
+    pill.textContent = readiness.statusDisplay || 'Ready';
+    reason.textContent = readiness.reason || '';
+
+    if (readiness.isHighStakes) {
+      hsBanner.style.display = 'block';
+      hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(readiness.highStakesCategory || 'Sensitive')}):</strong> ${escapeHtml(readiness.highStakesWarning || 'Review safety boundaries before acting.')}`;
+    } else {
+      hsBanner.style.display = 'none';
+    }
+
+    if (readiness.suggestion) {
+      sugBox.style.display = 'flex';
+      sugText.textContent = `Suggestion: ${readiness.suggestion.slice(0, 160)}...`;
+      sessionState.activeSuggestion = readiness.suggestion;
+    } else {
+      sugBox.style.display = 'none';
+      sessionState.activeSuggestion = null;
+    }
+  }
+
+  byId('apply-suggestion-btn').addEventListener('click', () => {
+    if (!sessionState.activeSuggestion) return;
+    const input = byId('prompt-input');
+    const current = input.value.trim();
+    if (current) {
+      input.value = `${current}\n\n${sessionState.activeSuggestion}`;
+    } else {
+      input.value = sessionState.activeSuggestion;
+    }
+    input.focus();
+    triggerReadinessEvaluation();
+    showToast('Applied scaffolding suggestion to prompt.');
+  });
+
+  byId('prompt-input').addEventListener('input', triggerReadinessEvaluation);
+
+  // ==========================================
+  // System Status & Initialization
+  // ==========================================
+
+  // Load system, generation status, and registered projects
+  async function loadSystemStatus() {
+    try {
+      const genStatus = await apiFetch('/api/generation/status');
+      sessionState.generationStatus = genStatus;
+      const pill = byId('generation-pill');
+      if (genStatus.enabled) {
+        pill.className = 'pill active';
+        pill.textContent = `Local Generation: Active (${genStatus.modelName || 'Ollama'})`;
+      } else {
+        pill.className = 'pill inactive';
+        pill.textContent = 'Local Generation: Off (Deterministic)';
+      }
+    } catch (err) {
+      byId('generation-pill').textContent = 'Local Generation: Unavailable';
+    }
+
+    try {
+      const catalog = await apiFetch('/api/assistant/productivity/agents');
+      if (Array.isArray(catalog) && catalog.length) {
+        sessionState.catalogAgents = catalog;
+        populateAgentOverrideDropdown(catalog);
+        populateAddStepAgentDropdown(catalog);
+        renderCommandCenter();
+        byId('agents-pill').textContent = `${catalog.length} Response Agents Ready`;
+      } else {
+        const fallbackCatalog = await apiFetch('/agents/local-response-agents/discovery');
+        if (fallbackCatalog && fallbackCatalog.agents) {
+          sessionState.catalogAgents = fallbackCatalog.agents;
+          populateAgentOverrideDropdown(fallbackCatalog.agents);
+          populateAddStepAgentDropdown(fallbackCatalog.agents);
+          renderCommandCenter();
+          byId('agents-pill').textContent = `${fallbackCatalog.agents.length} Response Agents Ready`;
+        }
+      }
+    } catch (err) {
+      byId('agents-pill').textContent = 'Agents Discovery Error';
+    }
+
+    try {
+      const projects = await apiFetch('/projects');
+      if (Array.isArray(projects)) {
+        sessionState.projects = projects;
+      }
+    } catch (err) {
+      sessionState.projects = [];
+    }
+
+    await loadPlaybooks();
+    triggerReadinessEvaluation();
+  }
 
   // Handle composer submission
   async function handleSubmit(previewOnly = false) {
@@ -2571,6 +3382,7 @@ def unified_assistant_html() -> str:
     btn.addEventListener('click', () => {
       byId('prompt-input').value = btn.getAttribute('data-prompt');
       byId('prompt-input').focus();
+      triggerReadinessEvaluation();
     });
   });
 
@@ -2580,3 +3392,7 @@ def unified_assistant_html() -> str:
 </script>
 </body>
 </html>"""
+    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles())
+    html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels())
+    html = html.replace("<!-- PRODUCTIVITY_READINESS_COACH_PLACEHOLDER -->", productivity_readiness_coach_html())
+    return html

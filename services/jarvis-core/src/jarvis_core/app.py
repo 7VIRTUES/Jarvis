@@ -106,6 +106,11 @@ from .unified_assistant import UnifiedAssistantService
 from .unified_assistant_dashboard import unified_assistant_html
 from .assistant_actions import AssistantActionBridge
 from .assistant_actions_dashboard import assistant_actions_dashboard_html
+from .assistant_productivity import (
+    evaluate_request_readiness,
+    get_builtin_playbooks,
+    get_command_center_agents,
+)
 from .prompt_assembly import classify_high_stakes
 from .lan_security import lan_setup_html, lan_setup_status, require_dashboard_lan_access, require_loopback_request
 from .local_research_agent import LocalResearchAgentService, LocalResearchBriefRequest
@@ -695,6 +700,16 @@ class AssistantCodingExecuteRequest(BaseModel):
     projectName: str = Field(min_length=1, max_length=200)
     confirmation: str = Field(min_length=1, max_length=200)
     actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantReadinessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(default="", max_length=20000)
+    selectedAgentId: str | None = None
+    contextKitChars: int = Field(default=0, ge=0, le=100000)
+    hasReviewedSources: bool = False
+    sourceCount: int = Field(default=0, ge=0, le=100)
+    selectedProject: str | None = None
 
 
 class ValidationRunInput(BaseModel):
@@ -4985,3 +5000,37 @@ def get_assistant_coding_execution(
         return assistant_coding.get_execution_summary(execution_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ==========================================
+# Assistant Productivity Layer Endpoints
+# ==========================================
+
+
+@app.get("/api/assistant/productivity/agents")
+def get_productivity_agents(
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    return get_command_center_agents()
+
+
+@app.get("/api/assistant/productivity/playbooks")
+def get_productivity_playbooks(
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    return get_builtin_playbooks()
+
+
+@app.post("/api/assistant/productivity/readiness")
+def evaluate_productivity_readiness(
+    payload: AssistantReadinessRequest,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    return evaluate_request_readiness(
+        text=payload.text,
+        selected_agent_id=payload.selectedAgentId,
+        context_kit_chars=payload.contextKitChars,
+        has_reviewed_sources=payload.hasReviewedSources,
+        source_count=payload.sourceCount,
+        selected_project=payload.selectedProject,
+    )
