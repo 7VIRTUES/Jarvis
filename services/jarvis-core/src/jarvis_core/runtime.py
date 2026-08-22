@@ -138,7 +138,7 @@ class SafeActionRuntime:
         execution_note: str | None = None,
         task_id: str | None = None,
     ) -> dict[str, object]:
-        if result_status not in {"executed_read_only", "execution_failed"}:
+        if result_status not in {"executed_read_only", "executed_write_report", "execution_failed"}:
             raise ValueError(f"Invalid execution receipt finalization status: {result_status}")
         receipt = self.get_receipt(receipt_id)
         if not receipt:
@@ -165,7 +165,11 @@ class SafeActionRuntime:
         updated_receipt = self.get_receipt(receipt_id) or receipt
         self.logger.append("actions", {"eventType": "receipt_finalized", **updated_receipt})
         if self.events:
-            event_type = "action.executed" if result_status == "executed_read_only" else "action.execution_failed"
+            event_type = (
+                "action.executed"
+                if result_status in {"executed_read_only", "executed_write_report"}
+                else "action.execution_failed"
+            )
             self.events.emit(
                 event_type,
                 str(receipt["task_id"]) if receipt["task_id"] else None,

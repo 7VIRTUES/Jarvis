@@ -284,7 +284,7 @@ def assistant_actions_dashboard_html() -> str:
   <!-- Strategic Boundary Banner -->
   <section class="banner" role="region" aria-label="Action boundary notice">
     <h2>Supervised Action Center</h2>
-    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> supports explicit supervised read-only execution on registered projects; <code>write_report</code> remains dry-run only.</strong> No shell commands, file mutations, or external network actions are executed.</p>
+    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> (read-only) and <code>write_report</code> (non-destructive new Markdown report creation) both support explicit supervised execution on registered projects.</strong> No shell commands, arbitrary file mutations, or external network actions are executed.</p>
   </section>
 
   <!-- Summary Metrics Grid -->
@@ -295,7 +295,7 @@ def assistant_actions_dashboard_html() -> str:
     </div>
     <div class="grid" id="summary-metrics">
       <div class="metric"><span>Total Supervised Tasks</span><strong id="metric-tasks-count">—</strong></div>
-      <div class="metric"><span>Real Read-Only Executed</span><strong id="metric-executed-count">—</strong></div>
+      <div class="metric"><span>Real Actions Executed</span><strong id="metric-executed-count">—</strong></div>
       <div class="metric"><span>Dry-Run Validated</span><strong id="metric-succeeded-count">—</strong></div>
       <div class="metric"><span>Policy Blocked</span><strong id="metric-blocked-count">—</strong></div>
       <div class="metric"><span>Action Receipts</span><strong id="metric-receipts-count">—</strong></div>
@@ -508,7 +508,7 @@ def assistant_actions_dashboard_html() -> str:
       const isTerminal = ['succeeded', 'failed', 'blocked', 'canceled'].includes(task.status);
       const modePill = task.dry_run
         ? '<span class="pill dry-run">dry-run</span>'
-        : '<span class="pill active">real (read-only)</span>';
+        : (task.write_capable ? '<span class="pill active">real (write)</span>' : '<span class="pill active">real (read-only)</span>');
 
       tr.innerHTML = `
         <td><code title="${escapeHtml(task.task_id)}">${escapeHtml(shortId)}...</code></td>
@@ -566,6 +566,7 @@ def assistant_actions_dashboard_html() -> str:
 
       let statusBadge = '';
       if (receipt.result === 'executed_read_only') statusBadge = '<span class="pill active">Executed Read-Only</span>';
+      else if (receipt.result === 'executed_write_report') statusBadge = '<span class="pill active">Created Local Report</span>';
       else if (receipt.result === 'execution_failed') statusBadge = '<span class="pill blocked">Execution Failed</span>';
       else if (receipt.blocked) statusBadge = '<span class="pill blocked">Blocked</span>';
       else if (receipt.approval_required) statusBadge = '<span class="pill approval_required">Approval Required</span>';

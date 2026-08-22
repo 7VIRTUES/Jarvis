@@ -30,6 +30,7 @@ from .diagnostics import DiagnosticExporter
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
+from .report_tool import ReportTool
 from .file_data_agent import FileDataAgentService
 from .knowledge import (
     KnowledgeConflictError,
@@ -246,12 +247,14 @@ local_life_direction_agent = LocalLifeDirectionAgentService()
 local_relationships_agent = LocalRelationshipsAgentService()
 local_emotional_reflection_agent = LocalEmotionalReflectionAgentService()
 unified_assistant = UnifiedAssistantService()
+report_tool = ReportTool(DATA_ROOT / "reports" / "assistant")
 assistant_actions = AssistantActionBridge(
     projects,
     tasks,
     runtime,
     approvals,
     file_data_agent=file_data_agent,
+    report_tool=report_tool,
     workspace_root=WORKSPACE_ROOT,
 )
 
@@ -808,6 +811,21 @@ class AssistantActionExecuteReadOnlyInput(BaseModel):
 
     dryRunTaskId: str
     projectName: str
+    expectedReceiptId: str | None = None
+    confirmation: str
+    sourceAgentId: str = "unified_assistant"
+    sourceResponseId: str | None = None
+    sourceTurnIndex: int | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantActionExecuteReportInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dryRunTaskId: str
+    projectName: str
+    title: str = Field(min_length=1, max_length=160)
+    content: str = Field(min_length=1, max_length=50000)
     expectedReceiptId: str | None = None
     confirmation: str
     sourceAgentId: str = "unified_assistant"
@@ -3182,6 +3200,30 @@ def execute_assistant_action_read_only(
         return assistant_actions.execute_read_only(
             dry_run_task_id=payload.dryRunTaskId,
             project_name=payload.projectName,
+            expected_receipt_id=payload.expectedReceiptId,
+            confirmation=payload.confirmation,
+            source_agent_id=payload.sourceAgentId,
+            source_response_id=payload.sourceResponseId,
+            source_turn_index=payload.sourceTurnIndex,
+            actor=payload.actor,
+        )
+    except (ValueError, KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.post("/api/assistant/actions/execute-report")
+def execute_assistant_action_report(
+    payload: AssistantActionExecuteReportInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_actions.execute_report(
+            dry_run_task_id=payload.dryRunTaskId,
+            project_name=payload.projectName,
+            title=payload.title,
+            content=payload.content,
             expected_receipt_id=payload.expectedReceiptId,
             confirmation=payload.confirmation,
             source_agent_id=payload.sourceAgentId,

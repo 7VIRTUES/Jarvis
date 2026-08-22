@@ -1331,7 +1331,7 @@ def unified_assistant_html() -> str:
                       <label for="action-type-select-${index}">Proposed Action Type</label>
                       <select id="action-type-select-${index}" data-turn-idx="${index}">
                         <option value="inspect_project" ${turn.selectedActionType === 'inspect_project' ? 'selected' : ''}>inspect_project (Read-Only Inspection)</option>
-                        <option value="write_report" ${turn.selectedActionType === 'write_report' ? 'selected' : ''}>write_report (Structured Report Proposal)</option>
+                        <option value="write_report" ${turn.selectedActionType === 'write_report' ? 'selected' : ''}>write_report (Structured Report Creation)</option>
                       </select>
                     </div>
                     <div class="action-field">
@@ -1342,6 +1342,22 @@ def unified_assistant_html() -> str:
                       </select>
                     </div>
                   </div>
+
+                  ${turn.selectedActionType === 'write_report' ? `
+                    <div style="display:grid; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+                      <div class="action-field">
+                        <label for="report-title-input-${index}">Report Title</label>
+                        <input type="text" id="report-title-input-${index}" value="${escapeHtml(turn.reportTitle || `${turn.selectedProject || 'Project'} Summary Report`)}" placeholder="Enter report title..." />
+                      </div>
+                      <div class="action-field">
+                        <label for="report-content-input-${index}">Report Content (Markdown)</label>
+                        <textarea id="report-content-input-${index}" rows="5" style="width:100%; font-family:inherit; font-size:0.85rem; padding:8px; border:1px solid #94a3b8; border-radius:5px; resize:vertical;" placeholder="Review/edit report content...">${escapeHtml(turn.reportContent !== undefined ? turn.reportContent : primaryText)}</textarea>
+                      </div>
+                      <div class="muted" style="font-size:0.8rem;">
+                        <strong>Safe Output Rule:</strong> Report will be saved to Jarvis reports directory (<code>data/jarvis/reports/assistant</code>) as a new <code>.md</code> file. Project source files are never modified.
+                      </div>
+                    </div>
+                  ` : ''}
 
                   <div class="action-preview-box" id="action-policy-preview-${index}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1398,6 +1414,30 @@ def unified_assistant_html() -> str:
                     </div>
                   ` : ''}
 
+                  ${turn.dryRunResult && turn.selectedActionType === 'write_report' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.reportExecutionResult ? `
+                    <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#1e40af;">Ready to Create Local Markdown Report:</strong>
+                        <span class="pill succeeded">Dry-Run Proof Verified</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>report_tool</code> (Non-Destructive Write)
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                        <span class="pill allowed">New File Only</span>
+                        <span class="pill allowed">Markdown Only</span>
+                        <span class="pill allowed">Jarvis Reports Directory</span>
+                        <span class="pill allowed">No Overwrite</span>
+                        <span class="pill allowed">Project Files Unchanged</span>
+                        <span class="pill allowed">Explicit Confirmation</span>
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                        <span class="muted" style="font-size:0.82rem;">Writes a new .md report under data/jarvis/reports/assistant without modifying project source.</span>
+                        <button class="small" style="background:#2563eb; border-color:#2563eb;" type="button" data-action="execute-report" data-turn-idx="${index}">Create Local Report</button>
+                      </div>
+                    </div>
+                  ` : ''}
+
                   ${turn.realExecutionResult ? `
                     <div class="action-result-box succeeded" style="margin-top:10px; border-width:2px; background:#f0fdf4; border-color:#22c55e;">
                       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1432,6 +1472,30 @@ def unified_assistant_html() -> str:
                       ` : ''}
                       <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
                         <button class="secondary small" type="button" data-action="use-inspection-prior" data-turn-idx="${index}">Use inspection result as prior context</button>
+                        <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  ${turn.reportExecutionResult ? `
+                    <div class="action-result-box succeeded" style="margin-top:10px; border-width:2px; background:#eff6ff; border-color:#3b82f6;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#1d4ed8;">Local Markdown report created.</strong>
+                        <span class="pill succeeded">Created Report</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Project: <strong>${escapeHtml(turn.reportExecutionResult.projectName)}</strong> · Real Task ID: <code>${escapeHtml(turn.reportExecutionResult.taskId)}</code> · Receipt ID: <code>${escapeHtml(turn.reportExecutionResult.receiptId)}</code>
+                      </div>
+                      ${turn.reportExecutionResult.reportResult ? `
+                        <div style="background:#fff; border:1px solid #bfdbfe; border-radius:5px; padding:8px 10px; margin:6px 0; font-size:0.84rem; display:grid; gap:4px;">
+                          <div><strong>File:</strong> <code>${escapeHtml(turn.reportExecutionResult.reportResult.filename)}</code></div>
+                          <div><strong>Saved to:</strong> <code>${escapeHtml(turn.reportExecutionResult.reportResult.relativeReportPath)}</code> (Jarvis reports directory)</div>
+                          <div><strong>Size:</strong> ${escapeHtml(turn.reportExecutionResult.reportResult.charCount)} characters (${escapeHtml(turn.reportExecutionResult.reportResult.byteCount)} bytes)</div>
+                          <div style="font-size:0.8rem; color:#166534; font-weight:600;">✓ No project files were modified · Existing files were not overwritten</div>
+                        </div>
+                      ` : ''}
+                      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
+                        <button class="secondary small" type="button" data-action="use-report-prior" data-turn-idx="${index}">Use report summary as prior context</button>
                         <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
                       </div>
                     </div>
@@ -1480,11 +1544,31 @@ def unified_assistant_html() -> str:
           // Form change events
           const typeSelect = turnDiv.querySelector(`#action-type-select-${index}`);
           if (typeSelect) {
-            typeSelect.addEventListener('change', () => updatePolicyPreview(index));
+            typeSelect.addEventListener('change', () => {
+              turn.selectedActionType = typeSelect.value;
+              updatePolicyPreview(index);
+              renderTranscript();
+            });
           }
           const projSelect = turnDiv.querySelector(`#action-project-select-${index}`);
           if (projSelect) {
-            projSelect.addEventListener('change', () => updatePolicyPreview(index));
+            projSelect.addEventListener('change', () => {
+              turn.selectedProject = projSelect.value;
+              updatePolicyPreview(index);
+            });
+          }
+
+          const titleInput = turnDiv.querySelector(`#report-title-input-${index}`);
+          if (titleInput) {
+            titleInput.addEventListener('input', () => {
+              turn.reportTitle = titleInput.value;
+            });
+          }
+          const contentInput = turnDiv.querySelector(`#report-content-input-${index}`);
+          if (contentInput) {
+            contentInput.addEventListener('input', () => {
+              turn.reportContent = contentInput.value;
+            });
           }
 
           // Submit dry run
@@ -1497,6 +1581,12 @@ def unified_assistant_html() -> str:
           const execReadOnlyBtn = turnDiv.querySelector(`[data-action="execute-read-only"]`);
           if (execReadOnlyBtn) {
             execReadOnlyBtn.addEventListener('click', () => submitExecuteReadOnly(index));
+          }
+
+          // Execute write report
+          const execReportBtn = turnDiv.querySelector(`[data-action="execute-report"]`);
+          if (execReportBtn) {
+            execReportBtn.addEventListener('click', () => submitExecuteReport(index));
           }
 
           // Use inspection result as prior context
@@ -1515,6 +1605,24 @@ def unified_assistant_html() -> str:
               });
               byId('composer').scrollIntoView({ behavior: 'smooth' });
               showToast('Staged read-only inspection result as prior context.');
+            });
+          }
+
+          // Use report summary as prior context
+          const useReportPriorBtn = turnDiv.querySelector(`[data-action="use-report-prior"]`);
+          if (useReportPriorBtn) {
+            useReportPriorBtn.addEventListener('click', () => {
+              const res = turn.reportExecutionResult;
+              const rep = res.reportResult || {};
+              const summaryText = `Created local Markdown report '${rep.filename}' (${rep.title}) for project ${res.projectName}. File size: ${rep.charCount} characters. Saved to Jarvis reports directory (${rep.relativeReportPath}).`;
+              setStagedPriorContext({
+                agentId: 'report_tool',
+                agentName: 'Report Tool',
+                responseId: res.receiptId || res.taskId,
+                summary: summaryText,
+              });
+              byId('composer').scrollIntoView({ behavior: 'smooth' });
+              showToast('Staged report summary as prior context.');
             });
           }
         }
@@ -1636,6 +1744,59 @@ def unified_assistant_html() -> str:
       renderTranscript();
     } catch (err) {
       alert(`Read-only inspection failed: ${err.message}`);
+    }
+  }
+
+  // Execute real report creation
+  async function submitExecuteReport(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.dryRunResult) return;
+    const dryRunTask = turn.dryRunResult.task;
+    const projectName = turn.selectedProject || dryRunTask.project_name;
+    const expectedReceiptId = (turn.dryRunResult.receipts && turn.dryRunResult.receipts.length)
+      ? turn.dryRunResult.receipts[0].receipt_id
+      : null;
+
+    const resp = turn.response || {};
+    const primaryText = resp.generatedResponse ? resp.generatedResponse.response : (resp.summary || resp.brief || resp.plan || resp.draft || resp.response || '');
+
+    const titleInput = byId(`report-title-input-${turnIdx}`);
+    const contentInput = byId(`report-content-input-${turnIdx}`);
+    const title = (titleInput ? titleInput.value : (turn.reportTitle || `${projectName} Summary Report`)).trim();
+    const content = (contentInput ? contentInput.value : (turn.reportContent !== undefined ? turn.reportContent : primaryText)).trim();
+
+    if (!title) {
+      alert('Please provide a report title.');
+      return;
+    }
+    if (!content) {
+      alert('Please provide report content before creating.');
+      return;
+    }
+
+    const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
+
+    try {
+      const result = await apiFetch('/api/assistant/actions/execute-report', {
+        method: 'POST',
+        body: JSON.stringify({
+          dryRunTaskId: dryRunTask.task_id,
+          projectName: projectName,
+          title: title,
+          content: content,
+          expectedReceiptId: expectedReceiptId,
+          confirmation: 'WRITE NEW LOCAL REPORT',
+          sourceAgentId: turn.agentId || 'unified_assistant',
+          sourceResponseId: responseId,
+          sourceTurnIndex: turnIdx,
+          actor: 'local_user'
+        })
+      });
+      turn.reportExecutionResult = result;
+      showToast('Local Markdown report created successfully.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Report creation failed: ${err.message}`);
     }
   }
 

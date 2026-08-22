@@ -1,9 +1,9 @@
 {
   "id": "report_tool",
   "name": "Report Tool",
-  "implemented": false,
+  "implemented": true,
   "approvalRequired": false,
   "capabilities": ["write_markdown_report"],
-  "notes": "Report generation writes local Markdown reports only."
+  "notes": "Safe local Markdown report generation only. Writes new files exclusively to fixed Jarvis reports directory without overwrite or project mutation. Explicit user confirmation required."
 }
 
