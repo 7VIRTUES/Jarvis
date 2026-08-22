@@ -41,6 +41,7 @@ ALLOWED_ACTION_TYPES = {
     "command",
     "inspect_project",
     "write_report",
+    "read_project_text_files",
     "codex.plan_execution",
     "codex.prepare_prompt",
     "codex.preview_command",

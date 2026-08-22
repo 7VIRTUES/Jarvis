@@ -284,7 +284,7 @@ def assistant_actions_dashboard_html() -> str:
   <!-- Strategic Boundary Banner -->
   <section class="banner" role="region" aria-label="Action boundary notice">
     <h2>Supervised Action Center</h2>
-    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> (read-only) and <code>write_report</code> (non-destructive new Markdown report creation) both support explicit supervised execution on registered projects.</strong> No shell commands, arbitrary file mutations, or external network actions are executed.</p>
+    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> (read-only metadata inspection), <code>read_project_text_files</code> (bounded source/text reading, max 5 files), and <code>write_report</code> (non-destructive Markdown report creation) all support explicit supervised execution on registered projects.</strong> No shell commands, arbitrary file mutations, or external network actions are executed.</p>
   </section>
 
   <!-- Summary Metrics Grid -->

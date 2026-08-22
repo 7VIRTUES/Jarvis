@@ -3,7 +3,7 @@
   "name": "Filesystem Tool",
   "implemented": true,
   "approvalRequired": false,
-  "capabilities": ["safe_project_inspection"],
-  "notes": "Safe registered-project read-only inspection only. Protected files are detected by pattern and skipped without reading. No arbitrary paths, shell, or file mutations."
+  "capabilities": ["safe_project_inspection", "safe_project_text_read"],
+  "notes": "Safe registered-project read-only inspection and bounded safe text/source file reading only. Protected files are detected by pattern and blocked without reading. No arbitrary paths, shell, or file mutations."
 }
 

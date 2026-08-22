@@ -1331,6 +1331,7 @@ def unified_assistant_html() -> str:
                       <label for="action-type-select-${index}">Proposed Action Type</label>
                       <select id="action-type-select-${index}" data-turn-idx="${index}">
                         <option value="inspect_project" ${turn.selectedActionType === 'inspect_project' ? 'selected' : ''}>inspect_project (Read-Only Inspection)</option>
+                        <option value="read_project_text_files" ${turn.selectedActionType === 'read_project_text_files' ? 'selected' : ''}>read_project_text_files (Read Project Source Files)</option>
                         <option value="write_report" ${turn.selectedActionType === 'write_report' ? 'selected' : ''}>write_report (Structured Report Creation)</option>
                       </select>
                     </div>
@@ -1342,6 +1343,27 @@ def unified_assistant_html() -> str:
                       </select>
                     </div>
                   </div>
+
+                  ${turn.selectedActionType === 'read_project_text_files' ? `
+                    <div style="display:grid; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label style="font-weight:600; font-size:0.85rem;">Select Safe Project Files (Max 5):</label>
+                        <span class="pill ${(turn.selectedRelativePaths || []).length > 0 ? 'allowed' : 'inactive'}">
+                          Selected: ${(turn.selectedRelativePaths || []).length} / 5
+                        </span>
+                      </div>
+                      <div style="display:flex; gap:6px;">
+                        <input type="text" id="file-catalog-search-${index}" placeholder="Filter project files..." style="font-size:0.82rem; padding:4px 8px; flex:1;" value="${escapeHtml(turn.fileCatalogFilter || '')}" />
+                        <button class="secondary small" type="button" data-action="refresh-file-catalog" data-turn-idx="${index}">Refresh</button>
+                      </div>
+                      <div id="file-catalog-list-${index}" style="max-height:160px; overflow-y:auto; border:1px solid #cbd5e1; border-radius:4px; background:#fff; padding:4px;">
+                        ${renderFileCatalogItems(index, turn)}
+                      </div>
+                      <div class="muted" style="font-size:0.8rem;">
+                        <strong>Security Invariant:</strong> Only safe source/text files from registered project are listed. Protected patterns, dependencies, caches, and binary files are automatically excluded.
+                      </div>
+                    </div>
+                  ` : ''}
 
                   ${turn.selectedActionType === 'write_report' ? `
                     <div style="display:grid; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
@@ -1414,6 +1436,30 @@ def unified_assistant_html() -> str:
                     </div>
                   ` : ''}
 
+                  ${turn.dryRunResult && turn.selectedActionType === 'read_project_text_files' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.readExecutionResult ? `
+                    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#166534;">Ready to Read Selected Project Files:</strong>
+                        <span class="pill succeeded">Dry-Run Proof Verified</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only) · Files: <strong>${(turn.selectedRelativePaths || []).length} selected</strong>
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                        <span class="pill allowed">Read Only</span>
+                        <span class="pill allowed">Max 5 Files</span>
+                        <span class="pill allowed">Protected Files Blocked</span>
+                        <span class="pill allowed">No Shell</span>
+                        <span class="pill allowed">No Writes</span>
+                        <span class="pill allowed">Session Only</span>
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                        <span class="muted" style="font-size:0.82rem;">Reads bounded source text synchronously into session memory without persisting content.</span>
+                        <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-project-text-read" data-turn-idx="${index}">Read Selected Project Files</button>
+                      </div>
+                    </div>
+                  ` : ''}
+
                   ${turn.dryRunResult && turn.selectedActionType === 'write_report' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.reportExecutionResult ? `
                     <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
                       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1472,6 +1518,40 @@ def unified_assistant_html() -> str:
                       ` : ''}
                       <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
                         <button class="secondary small" type="button" data-action="use-inspection-prior" data-turn-idx="${index}">Use inspection result as prior context</button>
+                        <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  ${turn.readExecutionResult ? `
+                    <div class="action-result-box succeeded" style="margin-top:10px; border-width:2px; background:#f0fdf4; border-color:#22c55e;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#15803d;">Project source files read successfully.</strong>
+                        <span class="pill succeeded">Read ${turn.readExecutionResult.readResult ? turn.readExecutionResult.readResult.totalFiles : (turn.readExecutionResult.totalFiles || 0)} Files</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Project: <strong>${escapeHtml(turn.readExecutionResult.projectName)}</strong> · Total Size: <strong>${escapeHtml(turn.readExecutionResult.readResult ? turn.readExecutionResult.readResult.totalBytes : (turn.readExecutionResult.totalBytes || 0))} bytes</strong> · Real Task ID: <code>${escapeHtml(turn.readExecutionResult.taskId)}</code> · Receipt ID: <code>${escapeHtml(turn.readExecutionResult.receiptId)}</code>
+                      </div>
+                      ${turn.readExecutionResult.readResult && turn.readExecutionResult.readResult.files ? `
+                        <div style="display:grid; gap:8px; margin-top:8px;">
+                          ${turn.readExecutionResult.readResult.files.map(f => `
+                            <div style="background:#fff; border:1px solid #bbf7d0; border-radius:5px; padding:8px; font-size:0.82rem;">
+                              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <strong><code>${escapeHtml(f.relativePath)}</code></strong>
+                                <span class="muted">${escapeHtml(f.sizeBytes)} bytes · ${escapeHtml(f.lineCount)} lines · SHA: <code>${escapeHtml((f.sha256 || '').slice(0, 10))}...</code></span>
+                              </div>
+                              <pre style="max-height:220px; overflow:auto; background:#0f172a; color:#f8fafc; padding:8px 10px; border-radius:4px; font-family:Consolas, Monaco, 'Courier New', monospace; font-size:0.78rem; line-height:1.4; margin:0; white-space:pre-wrap; word-break:break-all;"><code>${escapeHtml(f.content)}</code></pre>
+                            </div>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                      ${turn.readExecutionResult.readResult && turn.readExecutionResult.readResult.warnings && turn.readExecutionResult.readResult.warnings.length ? `
+                        <div style="font-size:0.82rem; color:#b45309; margin-top:4px;">
+                          <strong>Warnings:</strong> ${turn.readExecutionResult.readResult.warnings.map(w => escapeHtml(w)).join('; ')}
+                        </div>
+                      ` : ''}
+                      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
+                        <button class="secondary small" type="button" data-action="use-source-prior" data-turn-idx="${index}">Use selected file content as prior context</button>
                         <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
                       </div>
                     </div>
@@ -1546,6 +1626,9 @@ def unified_assistant_html() -> str:
           if (typeSelect) {
             typeSelect.addEventListener('change', () => {
               turn.selectedActionType = typeSelect.value;
+              if (turn.selectedActionType === 'read_project_text_files' && turn.selectedProject && !turn.availableProjectFiles) {
+                loadProjectFiles(index, turn.selectedProject);
+              }
               updatePolicyPreview(index);
               renderTranscript();
             });
@@ -1554,9 +1637,37 @@ def unified_assistant_html() -> str:
           if (projSelect) {
             projSelect.addEventListener('change', () => {
               turn.selectedProject = projSelect.value;
+              turn.availableProjectFiles = null;
+              turn.selectedRelativePaths = [];
+              if (turn.selectedActionType === 'read_project_text_files' && turn.selectedProject) {
+                loadProjectFiles(index, turn.selectedProject);
+              }
               updatePolicyPreview(index);
             });
           }
+
+          // Catalog filter & refresh
+          const filterInput = turnDiv.querySelector(`#file-catalog-search-${index}`);
+          if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+              turn.fileCatalogFilter = e.target.value;
+              const listEl = byId(`file-catalog-list-${index}`);
+              if (listEl) {
+                listEl.innerHTML = renderFileCatalogItems(index, turn);
+                bindCatalogCheckboxes(turnDiv, index, turn);
+              }
+            });
+          }
+          const refreshCatalogBtn = turnDiv.querySelector(`[data-action="refresh-file-catalog"]`);
+          if (refreshCatalogBtn) {
+            refreshCatalogBtn.addEventListener('click', () => {
+              if (turn.selectedProject) {
+                loadProjectFiles(index, turn.selectedProject);
+              }
+            });
+          }
+
+          bindCatalogCheckboxes(turnDiv, index, turn);
 
           const titleInput = turnDiv.querySelector(`#report-title-input-${index}`);
           if (titleInput) {
@@ -1577,10 +1688,16 @@ def unified_assistant_html() -> str:
             submitDryRunBtn.addEventListener('click', () => submitDryRun(index));
           }
 
-          // Execute read-only
+          // Execute read-only inspection
           const execReadOnlyBtn = turnDiv.querySelector(`[data-action="execute-read-only"]`);
           if (execReadOnlyBtn) {
             execReadOnlyBtn.addEventListener('click', () => submitExecuteReadOnly(index));
+          }
+
+          // Execute project text read
+          const execProjectTextReadBtn = turnDiv.querySelector(`[data-action="execute-project-text-read"]`);
+          if (execProjectTextReadBtn) {
+            execProjectTextReadBtn.addEventListener('click', () => submitExecuteProjectTextRead(index));
           }
 
           // Execute write report
@@ -1605,6 +1722,28 @@ def unified_assistant_html() -> str:
               });
               byId('composer').scrollIntoView({ behavior: 'smooth' });
               showToast('Staged read-only inspection result as prior context.');
+            });
+          }
+
+          // Use source content as prior context
+          const useSourcePriorBtn = turnDiv.querySelector(`[data-action="use-source-prior"]`);
+          if (useSourcePriorBtn) {
+            useSourcePriorBtn.addEventListener('click', () => {
+              const res = turn.readExecutionResult;
+              const rRes = res.readResult || {};
+              const files = rRes.files || [];
+              let summaryText = `Read source files from project ${res.projectName} (${files.length} files, ${rRes.totalBytes || 0} bytes):\n`;
+              files.forEach(f => {
+                summaryText += `\n--- ${f.relativePath} (${f.lineCount} lines) ---\n${f.content.slice(0, 4000)}\n`;
+              });
+              setStagedPriorContext({
+                agentId: 'filesystem_tool',
+                agentName: 'Filesystem Tool (Source Reader)',
+                responseId: res.receiptId || res.taskId,
+                summary: summaryText.slice(0, 16000),
+              });
+              byId('composer').scrollIntoView({ behavior: 'smooth' });
+              showToast('Staged selected source content as prior context.');
             });
           }
 
@@ -1635,6 +1774,74 @@ def unified_assistant_html() -> str:
     container.lastElementChild?.scrollIntoView({ behavior: 'smooth' });
   }
 
+  function bindCatalogCheckboxes(turnDiv, turnIdx, turn) {
+    const checkboxes = turnDiv.querySelectorAll(`input[data-file-rel]`);
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const rel = cb.getAttribute('data-file-rel');
+        if (!turn.selectedRelativePaths) turn.selectedRelativePaths = [];
+        if (cb.checked) {
+          if (turn.selectedRelativePaths.length >= 5) {
+            cb.checked = false;
+            alert('You can select a maximum of 5 files per execution.');
+            return;
+          }
+          if (!turn.selectedRelativePaths.includes(rel)) {
+            turn.selectedRelativePaths.push(rel);
+          }
+        } else {
+          turn.selectedRelativePaths = turn.selectedRelativePaths.filter(p => p !== rel);
+        }
+        renderTranscript();
+      });
+    });
+  }
+
+  function renderFileCatalogItems(turnIdx, turn) {
+    if (turn.loadingProjectFiles) {
+      return '<div class="muted" style="padding:10px; text-align:center; font-size:0.82rem;">Scanning project for safe text files...</div>';
+    }
+    const files = turn.availableProjectFiles || [];
+    if (!files.length) {
+      return '<div class="muted" style="padding:10px; text-align:center; font-size:0.82rem;">No eligible text files loaded. Click Refresh or select a project.</div>';
+    }
+    const filter = (turn.fileCatalogFilter || '').toLowerCase();
+    const filtered = filter ? files.filter(f => f.relativePath.toLowerCase().includes(filter)) : files;
+    if (!filtered.length) {
+      return `<div class="muted" style="padding:10px; text-align:center; font-size:0.82rem;">No files matching "${escapeHtml(filter)}".</div>`;
+    }
+    const selected = new Set(turn.selectedRelativePaths || []);
+    return filtered.slice(0, 150).map(f => {
+      const isChecked = selected.has(f.relativePath);
+      const sizeKb = (f.sizeBytes / 1024).toFixed(1);
+      return `
+        <label style="display:flex; align-items:center; gap:8px; padding:4px 6px; border-bottom:1px solid #f1f5f9; cursor:pointer; font-size:0.82rem;">
+          <input type="checkbox" data-turn-idx="${turnIdx}" data-file-rel="${escapeHtml(f.relativePath)}" ${isChecked ? 'checked' : ''} />
+          <span style="font-family:Consolas, Monaco, 'Courier New', monospace; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(f.relativePath)}</span>
+          <span class="muted" style="font-size:0.75rem;">${escapeHtml(sizeKb)} KB</span>
+          <span class="pill inactive" style="font-size:0.7rem; padding:1px 5px;">${escapeHtml(f.category || f.extension)}</span>
+        </label>
+      `;
+    }).join('');
+  }
+
+  async function loadProjectFiles(turnIdx, projectName) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !projectName) return;
+    turn.loadingProjectFiles = true;
+    try {
+      const files = await apiFetch(`/api/assistant/actions/project-files?projectName=${encodeURIComponent(projectName)}`);
+      turn.availableProjectFiles = files;
+      turn.loadingProjectFiles = false;
+      renderTranscript();
+    } catch (err) {
+      turn.loadingProjectFiles = false;
+      turn.availableProjectFiles = [];
+      showToast(`Error loading project files: ${err.message}`);
+      renderTranscript();
+    }
+  }
+
   // Update policy preview for a specific turn
   async function updatePolicyPreview(turnIdx) {
     const turn = sessionState.transcript[turnIdx];
@@ -1655,6 +1862,10 @@ def unified_assistant_html() -> str:
       if (pill) { pill.className = 'pill inactive'; pill.textContent = 'NEEDS PROJECT'; }
       if (reason) reason.textContent = turn.policyReason;
       return;
+    }
+
+    if (actionType === 'read_project_text_files' && !turn.availableProjectFiles && !turn.loadingProjectFiles) {
+      loadProjectFiles(turnIdx, projectName);
     }
 
     try {
@@ -1690,6 +1901,11 @@ def unified_assistant_html() -> str:
       return;
     }
 
+    if (actionType === 'read_project_text_files' && (!turn.selectedRelativePaths || turn.selectedRelativePaths.length === 0)) {
+      alert('Please select 1 to 5 safe project files to read before validating dry run.');
+      return;
+    }
+
     const resp = turn.response || {};
     const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
 
@@ -1699,13 +1915,14 @@ def unified_assistant_html() -> str:
         body: JSON.stringify({
           actionType: actionType,
           projectName: projectName,
+          selectedRelativePaths: turn.selectedRelativePaths || [],
           sourceAgentId: turn.agentId || 'unified_assistant',
           sourceResponseId: responseId,
           actor: 'local_user'
         })
       });
       turn.dryRunResult = result;
-      showToast('Dry run validated. No local action was executed.');
+      showToast(result.summary || 'Dry run validated. No local action was executed.');
       renderTranscript();
     } catch (err) {
       alert(`Dry run validation failed: ${err.message}`);
@@ -1744,6 +1961,49 @@ def unified_assistant_html() -> str:
       renderTranscript();
     } catch (err) {
       alert(`Read-only inspection failed: ${err.message}`);
+    }
+  }
+
+  // Execute real project text read
+  async function submitExecuteProjectTextRead(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.dryRunResult) return;
+    const dryRunTask = turn.dryRunResult.task;
+    const projectName = turn.selectedProject || dryRunTask.project_name;
+    const relativePaths = turn.selectedRelativePaths || [];
+
+    if (!relativePaths.length) {
+      alert('Please select at least 1 file to read.');
+      return;
+    }
+
+    const expectedReceiptId = (turn.dryRunResult.receipts && turn.dryRunResult.receipts.length)
+      ? turn.dryRunResult.receipts[0].receipt_id
+      : null;
+
+    const resp = turn.response || {};
+    const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
+
+    try {
+      const result = await apiFetch('/api/assistant/actions/execute-project-text-read', {
+        method: 'POST',
+        body: JSON.stringify({
+          dryRunTaskId: dryRunTask.task_id,
+          projectName: projectName,
+          relativePaths: relativePaths,
+          expectedReceiptId: expectedReceiptId,
+          confirmation: 'READ LOCAL PROJECT FILES',
+          sourceAgentId: turn.agentId || 'unified_assistant',
+          sourceResponseId: responseId,
+          sourceTurnIndex: turnIdx,
+          actor: 'local_user'
+        })
+      });
+      turn.readExecutionResult = result;
+      showToast('Project source files read successfully.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Project source read failed: ${err.message}`);
     }
   }
 

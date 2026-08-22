@@ -30,6 +30,7 @@ from .diagnostics import DiagnosticExporter
 from .docs_center import DocsCenterService
 from .evidence_report_center import EvidenceReportCenterService
 from .events import EventBus
+from .project_text_reader import ProjectTextReader
 from .report_tool import ReportTool
 from .file_data_agent import FileDataAgentService
 from .knowledge import (
@@ -248,6 +249,7 @@ local_relationships_agent = LocalRelationshipsAgentService()
 local_emotional_reflection_agent = LocalEmotionalReflectionAgentService()
 unified_assistant = UnifiedAssistantService()
 report_tool = ReportTool(DATA_ROOT / "reports" / "assistant")
+project_text_reader = ProjectTextReader(projects, WORKSPACE_ROOT)
 assistant_actions = AssistantActionBridge(
     projects,
     tasks,
@@ -255,6 +257,7 @@ assistant_actions = AssistantActionBridge(
     approvals,
     file_data_agent=file_data_agent,
     report_tool=report_tool,
+    project_text_reader=project_text_reader,
     workspace_root=WORKSPACE_ROOT,
 )
 
@@ -780,6 +783,7 @@ class AssistantActionPrepareInput(BaseModel):
     requestText: str
     actionType: str
     projectName: str | None = None
+    selectedRelativePaths: list[str] | None = None
     sourceAgentId: str = "unified_assistant"
     sourceResponseId: str | None = None
     sourceTurnIndex: int | None = None
@@ -799,6 +803,7 @@ class AssistantActionValidateDryRunInput(BaseModel):
 
     actionType: str
     projectName: str
+    selectedRelativePaths: list[str] | None = None
     proposalId: str | None = None
     sourceAgentId: str = "unified_assistant"
     sourceResponseId: str | None = None
@@ -811,6 +816,20 @@ class AssistantActionExecuteReadOnlyInput(BaseModel):
 
     dryRunTaskId: str
     projectName: str
+    expectedReceiptId: str | None = None
+    confirmation: str
+    sourceAgentId: str = "unified_assistant"
+    sourceResponseId: str | None = None
+    sourceTurnIndex: int | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
+
+
+class AssistantActionExecuteProjectTextReadInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dryRunTaskId: str
+    projectName: str
+    relativePaths: list[str] = Field(min_length=1, max_length=5)
     expectedReceiptId: str | None = None
     confirmation: str
     sourceAgentId: str = "unified_assistant"
@@ -3151,6 +3170,7 @@ def prepare_assistant_action(
             request_text=payload.requestText,
             action_type=payload.actionType,
             project_name=payload.projectName,
+            selected_relative_paths=payload.selectedRelativePaths,
             source_agent_id=payload.sourceAgentId,
             source_response_id=payload.sourceResponseId,
             source_turn_index=payload.sourceTurnIndex,
@@ -3181,6 +3201,7 @@ def validate_assistant_action_dry_run(
         return assistant_actions.validate_dry_run(
             action_type=payload.actionType,
             project_name=payload.projectName,
+            selected_relative_paths=payload.selectedRelativePaths,
             proposal_id=payload.proposalId,
             source_agent_id=payload.sourceAgentId,
             source_response_id=payload.sourceResponseId,
@@ -3189,6 +3210,19 @@ def validate_assistant_action_dry_run(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/assistant/actions/project-files")
+def list_assistant_project_files(
+    projectName: str,
+    _: None = Depends(require_dashboard_lan_access),
+) -> list[dict[str, object]]:
+    try:
+        return project_text_reader.list_safe_files(projectName)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @app.post("/api/assistant/actions/execute-read-only")
@@ -3200,6 +3234,29 @@ def execute_assistant_action_read_only(
         return assistant_actions.execute_read_only(
             dry_run_task_id=payload.dryRunTaskId,
             project_name=payload.projectName,
+            expected_receipt_id=payload.expectedReceiptId,
+            confirmation=payload.confirmation,
+            source_agent_id=payload.sourceAgentId,
+            source_response_id=payload.sourceResponseId,
+            source_turn_index=payload.sourceTurnIndex,
+            actor=payload.actor,
+        )
+    except (ValueError, KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.post("/api/assistant/actions/execute-project-text-read")
+def execute_assistant_action_project_text_read(
+    payload: AssistantActionExecuteProjectTextReadInput,
+    _: None = Depends(require_dashboard_lan_access),
+) -> dict[str, object]:
+    try:
+        return assistant_actions.execute_project_text_read(
+            dry_run_task_id=payload.dryRunTaskId,
+            project_name=payload.projectName,
+            relative_paths=payload.relativePaths,
             expected_receipt_id=payload.expectedReceiptId,
             confirmation=payload.confirmation,
             source_agent_id=payload.sourceAgentId,

@@ -10,6 +10,7 @@ from .approvals import ApprovalQueue
 from .file_data_agent import FileDataAgentService
 from .permissions import check_action
 from .project_registry import ProjectRegistry
+from .project_text_reader import ProjectTextReader
 from .report_tool import ReportTool
 from .runtime import ActionRequest, SafeActionRuntime
 from .tasks import TaskQueue
@@ -18,21 +19,25 @@ from .time_utils import utc_now
 
 SUPPORTED_ASSISTANT_ACTION_TYPES: list[str] = [
     "inspect_project",
+    "read_project_text_files",
     "write_report",
 ]
 
 ACTION_DISPLAY_NAMES: dict[str, str] = {
     "inspect_project": "Inspect Registered Project (Read-Only)",
+    "read_project_text_files": "Read Project Text Files (Read-Only)",
     "write_report": "Create Markdown Report (Non-Destructive)",
 }
 
 ACTION_TOOL_IDS: dict[str, str] = {
     "inspect_project": "filesystem_tool",
+    "read_project_text_files": "filesystem_tool",
     "write_report": "report_tool",
 }
 
 ACTION_TASK_TYPES: dict[str, str] = {
     "inspect_project": "inspect",
+    "read_project_text_files": "read_project_text_files",
     "write_report": "report",
 }
 
@@ -50,6 +55,23 @@ INSPECT_PROJECT_SIGNALS: tuple[str, ...] = (
     "check repository",
     "analyze repository",
     "examine codebase",
+)
+
+READ_PROJECT_FILES_SIGNALS: tuple[str, ...] = (
+    "read project file",
+    "read source file",
+    "open source file",
+    "inspect source file",
+    "show file contents",
+    "review these files",
+    "read code",
+    "inspect code file",
+    "read file",
+    "view source code",
+    "show file content",
+    "read source code",
+    "view project file",
+    "read files",
 )
 
 WRITE_REPORT_SIGNALS: tuple[str, ...] = (
@@ -87,6 +109,7 @@ class AssistantActionBridge:
         approvals: ApprovalQueue,
         file_data_agent: FileDataAgentService | None = None,
         report_tool: ReportTool | None = None,
+        project_text_reader: ProjectTextReader | None = None,
         workspace_root: Path | None = None,
     ) -> None:
         self.projects = projects
@@ -95,6 +118,7 @@ class AssistantActionBridge:
         self.approvals = approvals
         self.file_data_agent = file_data_agent
         self.report_tool = report_tool
+        self.project_text_reader = project_text_reader
         self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
         self._active_executions: set[str] = set()
         self._execution_lock = threading.Lock()
@@ -108,6 +132,20 @@ class AssistantActionBridge:
                     "actionType": "inspect_project",
                     "displayLabel": ACTION_DISPLAY_NAMES["inspect_project"],
                     "description": "Read-only inspection and structure check of a registered Jarvis project workspace.",
+                    "targetType": "registered_project_name",
+                    "toolId": "filesystem_tool",
+                    "riskLevel": "low",
+                    "dryRunSupported": True,
+                    "realExecutionSupported": True,
+                    "readOnly": True,
+                    "nonDestructive": True,
+                    "createsNewFileOnly": False,
+                    "executionPermitted": True,
+                },
+                {
+                    "actionType": "read_project_text_files",
+                    "displayLabel": ACTION_DISPLAY_NAMES["read_project_text_files"],
+                    "description": "Read bounded text and source files (max 5 files, 256 KB) from a registered project workspace.",
                     "targetType": "registered_project_name",
                     "toolId": "filesystem_tool",
                     "riskLevel": "low",
@@ -140,6 +178,7 @@ class AssistantActionBridge:
                 "file_deletion",
                 "file_write_unsupervised",
                 "file_overwrite",
+                "file_mutation",
                 "browser_automation",
                 "email_sending",
                 "public_posting",
@@ -149,6 +188,7 @@ class AssistantActionBridge:
             "boundaries": [
                 "Unified Assistant actions are strictly supervised, user-reviewed, and user-confirmed.",
                 "inspect_project performs read-only workspace metadata inspections.",
+                "read_project_text_files reads up to 5 user-selected text/source files (256 KB max) without modifying workspace files.",
                 "write_report writes new Markdown files exclusively to the fixed Jarvis reports directory without modifying project source.",
                 "Only registered project workspaces within the allowed root can be selected as targets.",
                 "Real execution requires matching successful dry-run verification proof.",
@@ -190,11 +230,18 @@ class AssistantActionBridge:
         matched_signals: list[str] = []
         candidate_action: str | None = None
 
-        # Check inspect_project signals
-        for sig in INSPECT_PROJECT_SIGNALS:
+        # Check read_project_text_files signals
+        for sig in READ_PROJECT_FILES_SIGNALS:
             if sig in cleaned:
-                matched_signals.append(f"inspect_signal: '{sig}'")
-                candidate_action = "inspect_project"
+                matched_signals.append(f"read_signal: '{sig}'")
+                candidate_action = "read_project_text_files"
+
+        # Check inspect_project signals if not explicitly reading files
+        if not candidate_action:
+            for sig in INSPECT_PROJECT_SIGNALS:
+                if sig in cleaned:
+                    matched_signals.append(f"inspect_signal: '{sig}'")
+                    candidate_action = "inspect_project"
 
         # Check write_report signals
         for sig in WRITE_REPORT_SIGNALS:
@@ -260,6 +307,7 @@ class AssistantActionBridge:
         request_text: str,
         action_type: str,
         project_name: str | None = None,
+        selected_relative_paths: list[str] | None = None,
         source_agent_id: str = "unified_assistant",
         source_response_id: str | None = None,
         source_turn_index: int | None = None,
@@ -287,6 +335,13 @@ class AssistantActionBridge:
         else:
             missing_fields.append("projectName")
 
+        clean_paths: list[str] = []
+        if normalized_action == "read_project_text_files":
+            if selected_relative_paths:
+                clean_paths = [p.strip() for p in selected_relative_paths if isinstance(p, str) and p.strip()]
+            if not clean_paths:
+                missing_fields.append("selectedRelativePaths (at least 1 file must be selected)")
+
         # Non-executing policy preview
         policy_result = check_action(normalized_action, target=resolved_project_name)
         policy_preview_data = {
@@ -305,6 +360,9 @@ class AssistantActionBridge:
         if not resolved_project_name:
             readiness_status = "needs_project"
             readiness_notes = "A registered project target must be selected before dry-run validation."
+        elif normalized_action == "read_project_text_files" and not clean_paths:
+            readiness_status = "needs_files"
+            readiness_notes = "Select 1 to 5 safe project files to read before dry-run validation."
         elif policy_result.status == "blocked":
             readiness_status = "policy_blocked"
             readiness_notes = f"Action is blocked by Jarvis policy: {policy_result.reason}"
@@ -319,6 +377,8 @@ class AssistantActionBridge:
             f"Supervised action proposal prepared from Assistant turn: {normalized_action} "
             f"on project '{resolved_project_name or 'unselected'}'."
         )
+        if clean_paths:
+            reason_text += f" Target files ({len(clean_paths)}): {', '.join(clean_paths[:3])}"
         if custom_notes:
             reason_text += f" Notes: {custom_notes.strip()}"
 
@@ -331,6 +391,8 @@ class AssistantActionBridge:
             "displayLabel": ACTION_DISPLAY_NAMES.get(normalized_action, normalized_action),
             "projectName": resolved_project_name,
             "safeTarget": safe_target,
+            "selectedRelativePaths": clean_paths,
+            "selectedFileCount": len(clean_paths),
             "proposedToolId": ACTION_TOOL_IDS.get(normalized_action, "filesystem_tool"),
             "riskLevel": "low",
             "reason": reason_text,
@@ -400,6 +462,7 @@ class AssistantActionBridge:
         *,
         action_type: str,
         project_name: str,
+        selected_relative_paths: list[str] | None = None,
         proposal_id: str | None = None,
         source_agent_id: str = "unified_assistant",
         source_response_id: str | None = None,
@@ -450,7 +513,10 @@ class AssistantActionBridge:
 
         status_text: str
         if task["status"] == "succeeded":
-            status_text = "Dry run validated. No local action was executed."
+            if normalized_action == "read_project_text_files":
+                status_text = "Dry run validated. No project files have been read."
+            else:
+                status_text = "Dry run validated. No local action was executed."
         elif task["status"] == "blocked":
             status_text = "Proposal blocked by Jarvis policy. Nothing was executed."
         elif task["status"] == "waiting_for_approval":
@@ -465,6 +531,7 @@ class AssistantActionBridge:
             "actionType": normalized_action,
             "displayLabel": ACTION_DISPLAY_NAMES.get(normalized_action, normalized_action),
             "projectName": proj["name"],
+            "selectedRelativePaths": selected_relative_paths or [],
             "taskId": task_id,
             "task": task,
             "receipts": receipts,
@@ -498,6 +565,9 @@ class AssistantActionBridge:
         if expected_action_type == "inspect_project":
             if task.get("task_type") not in ("inspect", "inspect_project"):
                 raise ValueError(f"Dry-run task type '{task.get('task_type')}' is not an inspection task.")
+        elif expected_action_type == "read_project_text_files":
+            if task.get("task_type") not in ("read_project_text_files", "read", "inspect"):
+                raise ValueError(f"Dry-run task type '{task.get('task_type')}' is not a project text read task.")
         elif expected_action_type == "write_report":
             if task.get("task_type") not in ("report", "write_report"):
                 raise ValueError(f"Dry-run task type '{task.get('task_type')}' is not a report task.")
@@ -580,7 +650,7 @@ class AssistantActionBridge:
                 agent_id=source_agent_id,
                 task_type="inspect",
                 autonomy_level="supervised",
-                dry_run=False,  # Real execution task
+                dry_run=False,
                 write_capable=False,
                 proposed_actions=[{
                     "tool_id": "filesystem_tool",
@@ -689,6 +759,181 @@ class AssistantActionBridge:
                 "sourceTurnIndex": source_turn_index,
                 "summary": f"Read-only inspection executed successfully on '{proj['name']}'.",
                 "inspectionResult": bounded_result,
+                "executedAt": utc_now(),
+            }
+        except Exception as exc:
+            if real_task_id:
+                try:
+                    self.tasks.fail_task(real_task_id, error=str(exc))
+                except Exception:
+                    pass
+                if gate_receipt_id:
+                    try:
+                        self.runtime.finalize_execution_receipt(
+                            gate_receipt_id,
+                            result_status="execution_failed",
+                            execution_note=str(exc),
+                            task_id=real_task_id,
+                        )
+                    except Exception:
+                        pass
+            raise
+        finally:
+            with self._execution_lock:
+                self._active_executions.discard(dry_run_task_id)
+
+    def execute_project_text_read(
+        self,
+        *,
+        dry_run_task_id: str,
+        project_name: str,
+        relative_paths: list[str],
+        expected_receipt_id: str | None = None,
+        confirmation: str = "",
+        source_agent_id: str = "unified_assistant",
+        source_response_id: str | None = None,
+        source_turn_index: int | None = None,
+        actor: str = "local_user",
+    ) -> dict[str, Any]:
+        # 1. Exact confirmation requirement
+        if confirmation.strip() != "READ LOCAL PROJECT FILES":
+            raise ValueError("Explicit confirmation string 'READ LOCAL PROJECT FILES' is required.")
+
+        if not relative_paths:
+            raise ValueError("At least 1 relative file path must be specified.")
+
+        # 2. Concurrency / duplicate execution protection
+        with self._execution_lock:
+            if dry_run_task_id in self._active_executions:
+                raise ValueError(f"Execution for dry-run task '{dry_run_task_id}' is already in progress.")
+            self._active_executions.add(dry_run_task_id)
+
+        real_task_id: str | None = None
+        gate_receipt_id: str | None = None
+
+        try:
+            # 3. Dry-run proof verification
+            _, dry_run_receipt = self.verify_dry_run_proof(
+                dry_run_task_id=dry_run_task_id,
+                project_name=project_name,
+                expected_receipt_id=expected_receipt_id,
+                expected_action_type="read_project_text_files",
+            )
+
+            # 4. Re-resolve registered project at execution time
+            proj = self.projects.get_project(project_name.strip())
+            if not proj:
+                raise KeyError(f"Registered project '{project_name}' no longer found in registry.")
+
+            project_root = Path(proj["path"]).expanduser().resolve()
+            if not project_root.exists() or not project_root.is_dir():
+                raise FileNotFoundError(f"Project directory '{project_root}' does not exist or is not a directory.")
+
+            # 5. Re-validate workspace boundary
+            if self.workspace_root is not None and not project_root.is_relative_to(self.workspace_root):
+                raise PermissionError("Project root escapes the allowed workspace root.")
+
+            # 6. Create real execution task record (dry_run=False, write_capable=False)
+            real_task = self.tasks.create_task(
+                project_name=proj["name"],
+                agent_id=source_agent_id,
+                task_type="read_project_text_files",
+                autonomy_level="supervised",
+                dry_run=False,
+                write_capable=False,
+                proposed_actions=[{
+                    "tool_id": "filesystem_tool",
+                    "action_type": "read_project_text_files",
+                    "target": proj["name"],
+                    "risk_level": "low",
+                }],
+                risk_plan={
+                    "risk_level": "low",
+                    "reason": f"Supervised project source reading for {proj['name']} ({len(relative_paths)} files)",
+                },
+            )
+            real_task_id = real_task["task_id"]
+
+            # 7. SafeActionRuntime execution gate receipt
+            gate_receipt = self.runtime.validate(
+                ActionRequest(
+                    task_id=real_task_id,
+                    agent_id=source_agent_id,
+                    tool_id="filesystem_tool",
+                    action_type="read_project_text_files",
+                    target=proj["name"],
+                    risk_level="low",
+                )
+            )
+            gate_receipt_id = gate_receipt.receipt_id
+
+            if gate_receipt.blocked:
+                self.tasks.block_task(real_task_id, reason=gate_receipt.reason)
+                self.runtime.finalize_execution_receipt(
+                    gate_receipt.receipt_id,
+                    result_status="execution_failed",
+                    execution_note=f"Blocked: {gate_receipt.reason}",
+                    task_id=real_task_id,
+                )
+                return {
+                    "executed": False,
+                    "status": "blocked",
+                    "taskId": real_task_id,
+                    "receiptId": gate_receipt.receipt_id,
+                    "summary": f"Execution blocked by policy: {gate_receipt.reason}",
+                    "readResult": None,
+                }
+
+            if gate_receipt.approval_required and not gate_receipt.approved:
+                self.tasks.block_task(real_task_id, reason="Approval required before execution")
+                return {
+                    "executed": False,
+                    "status": "waiting_for_approval",
+                    "taskId": real_task_id,
+                    "receiptId": gate_receipt.receipt_id,
+                    "summary": "Approval required before execution. Nothing was executed.",
+                    "readResult": None,
+                }
+
+            # 8. Start task lifecycle
+            self.tasks.start_task(real_task_id, mode="read_only")
+
+            # 9. Perform safe bounded source read
+            if not self.project_text_reader:
+                raise RuntimeError("ProjectTextReader is not initialized.")
+
+            read_res = self.project_text_reader.read_text_files(
+                project_name=proj["name"],
+                relative_paths=relative_paths,
+            )
+
+            # 10. Finalize execution receipt (metadata only, no content stored)
+            finalized_receipt = self.runtime.finalize_execution_receipt(
+                gate_receipt.receipt_id,
+                result_status="executed_read_only",
+                execution_note=f"Read {read_res['totalFiles']} text files ({read_res['totalBytes']} bytes)",
+                task_id=real_task_id,
+            )
+
+            # 11. Complete task lifecycle
+            self.tasks.succeed_task(
+                real_task_id,
+                summary=f"Read {read_res['totalFiles']} project text files safely ({read_res['totalBytes']} bytes).",
+            )
+
+            return {
+                "executed": True,
+                "status": "succeeded",
+                "actionType": "read_project_text_files",
+                "toolId": "filesystem_tool",
+                "projectName": proj["name"],
+                "taskId": real_task_id,
+                "receiptId": finalized_receipt.get("receipt_id", gate_receipt.receipt_id),
+                "dryRunTaskId": dry_run_task_id,
+                "sourceResponseId": source_response_id,
+                "sourceTurnIndex": source_turn_index,
+                "summary": f"Read {read_res['totalFiles']} text files successfully from '{proj['name']}'.",
+                "readResult": read_res,
                 "executedAt": utc_now(),
             }
         except Exception as exc:
