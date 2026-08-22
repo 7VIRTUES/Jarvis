@@ -56,7 +56,7 @@ AGENT_PRIMARY_FIELD_MAPPINGS: dict[str, dict[str, Any]] = {
     "local_decision_agent": {
         "primary_field": "decision",
         "required_fields": ["decision", "options"],
-        "default_output_type": "safest",
+        "default_output_type": "balanced",
         "output_type_key": "decisionStyle",
     },
     "local_troubleshooting_agent": {
@@ -325,7 +325,7 @@ class UnifiedRoutingEngine:
             normalized_override = explicit_agent_id.strip()
             if normalized_override in self.agents_by_id:
                 agent = self.agents_by_id[normalized_override]
-                high_stakes_info = classify_high_stakes(agent["agentId"], agent["category"])
+                is_high_stakes = classify_high_stakes(agent["agentId"], agent["category"])
                 alternatives = self._find_alternatives(lower_text, exclude_id=agent["agentId"], count=3)
                 return {
                     "selected_agent_id": agent["agentId"],
@@ -338,9 +338,9 @@ class UnifiedRoutingEngine:
                     "alternatives": alternatives,
                     "is_ambiguous": False,
                     "ambiguity_reason": None,
-                    "high_stakes": high_stakes_info["is_high_stakes"],
-                    "high_stakes_category": high_stakes_info["high_stakes_category"],
-                    "safety_reminders": self._get_safety_reminders(agent["category"], high_stakes_info["is_high_stakes"]),
+                    "high_stakes": is_high_stakes,
+                    "high_stakes_category": agent["category"] if is_high_stakes else None,
+                    "safety_reminders": self._get_safety_reminders(agent["category"], is_high_stakes),
                 }
 
         # Calculate deterministic score for each agent
@@ -476,7 +476,7 @@ class UnifiedRoutingEngine:
                 + ", ".join(top_signals[:4]) + "."
             )
 
-        high_stakes_info = classify_high_stakes(top_agent["agentId"], top_agent["category"])
+        is_high_stakes = classify_high_stakes(top_agent["agentId"], top_agent["category"])
 
         return {
             "selected_agent_id": top_agent["agentId"],
@@ -489,9 +489,9 @@ class UnifiedRoutingEngine:
             "alternatives": alternatives,
             "is_ambiguous": is_ambiguous,
             "ambiguity_reason": ambiguity_reason,
-            "high_stakes": high_stakes_info["is_high_stakes"],
-            "high_stakes_category": high_stakes_info["high_stakes_category"],
-            "safety_reminders": self._get_safety_reminders(top_agent["category"], high_stakes_info["is_high_stakes"]),
+            "high_stakes": is_high_stakes,
+            "high_stakes_category": top_agent["category"] if is_high_stakes else None,
+            "safety_reminders": self._get_safety_reminders(top_agent["category"], is_high_stakes),
         }
 
     def _find_alternatives(self, lower_text: str, exclude_id: str, count: int = 4) -> list[dict[str, Any]]:
@@ -552,6 +552,116 @@ class UnifiedRoutingEngine:
                     "High-stakes area: Consult qualified professionals or authoritative sources before taking action."
                 )
         return reminders
+
+
+def _parse_structured_decision_request(text: str) -> dict[str, Any] | None:
+    start_tag = "[Decision Request]"
+    end_tag = "[/Decision Request]"
+    start_idx = text.find(start_tag)
+    end_idx = text.find(end_tag)
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return None
+
+    block = text[start_idx + len(start_tag) : end_idx].strip()
+    lines = block.splitlines()
+
+    decision = ""
+    decision_style = "balanced"
+    options: list[str] = []
+    criteria: list[str] = []
+    constraints: list[str] = []
+    priorities: list[str] = []
+    context_notes_lines: list[str] = []
+
+    current_section: str | None = None
+
+    for line in lines:
+        stripped = line.strip()
+        lower = stripped.lower()
+        if lower.startswith("decision:"):
+            decision = stripped[len("decision:") :].strip()
+            current_section = None
+            continue
+        elif lower.startswith("decision style:") or lower.startswith("style:"):
+            style_val = stripped.split(":", 1)[1].strip().lower()
+            if style_val in ("balanced", "safest", "fastest", "cheapest", "highest_upside"):
+                decision_style = style_val
+            else:
+                decision_style = "balanced"
+            current_section = None
+            continue
+        elif lower.startswith("options:"):
+            current_section = "options"
+            opt_inline = stripped[len("options:") :].strip()
+            if opt_inline:
+                for item in opt_inline.split(","):
+                    val = item.strip().lstrip("-*• ").strip()
+                    if val and val not in options and len(options) < 12:
+                        options.append(val)
+            continue
+        elif lower.startswith("criteria:"):
+            current_section = "criteria"
+            crit_inline = stripped[len("criteria:") :].strip()
+            if crit_inline:
+                for item in crit_inline.split(","):
+                    val = item.strip().lstrip("-*• ").strip()
+                    if val and val not in criteria:
+                        criteria.append(val)
+            continue
+        elif lower.startswith("constraints:"):
+            current_section = "constraints"
+            const_inline = stripped[len("constraints:") :].strip()
+            if const_inline:
+                for item in const_inline.split(","):
+                    val = item.strip().lstrip("-*• ").strip()
+                    if val and val not in constraints:
+                        constraints.append(val)
+            continue
+        elif lower.startswith("priorities:"):
+            current_section = "priorities"
+            prio_inline = stripped[len("priorities:") :].strip()
+            if prio_inline:
+                for item in prio_inline.split(","):
+                    val = item.strip().lstrip("-*• ").strip()
+                    if val and val not in priorities:
+                        priorities.append(val)
+            continue
+        elif lower.startswith("context notes:") or lower.startswith("context:"):
+            current_section = "contextNotes"
+            cn_inline = stripped.split(":", 1)[1].strip()
+            if cn_inline:
+                context_notes_lines.append(cn_inline)
+            continue
+
+        if current_section == "options":
+            val = stripped.lstrip("-*• ").strip()
+            if val and val not in options:
+                if len(options) < 12:
+                    options.append(val)
+        elif current_section == "criteria":
+            val = stripped.lstrip("-*• ").strip()
+            if val and val not in criteria:
+                criteria.append(val)
+        elif current_section == "constraints":
+            val = stripped.lstrip("-*• ").strip()
+            if val and val not in constraints:
+                constraints.append(val)
+        elif current_section == "priorities":
+            val = stripped.lstrip("-*• ").strip()
+            if val and val not in priorities:
+                priorities.append(val)
+        elif current_section == "contextNotes":
+            context_notes_lines.append(line)
+
+    return {
+        "decision": decision,
+        "options": options[:12],
+        "criteria": criteria,
+        "constraints": constraints,
+        "priorities": priorities,
+        "contextNotes": "\n".join(context_notes_lines).strip(),
+        "decisionStyle": decision_style,
+    }
 
 
 class UnifiedRequestAdapter:
@@ -618,13 +728,23 @@ class UnifiedRequestAdapter:
             payload["constraints"] = []
             payload["severity"] = "balanced"
         elif agent_id == "local_decision_agent":
-            payload["decision"] = cleaned_request
-            payload["options"] = []
-            payload["criteria"] = []
-            payload["constraints"] = []
-            payload["priorities"] = []
-            payload["contextNotes"] = ""
-            payload["decisionStyle"] = default_output
+            parsed = _parse_structured_decision_request(cleaned_request)
+            if parsed:
+                payload["decision"] = parsed["decision"] or cleaned_request
+                payload["options"] = parsed["options"]
+                payload["criteria"] = parsed["criteria"]
+                payload["constraints"] = parsed["constraints"]
+                payload["priorities"] = parsed["priorities"]
+                payload["contextNotes"] = parsed["contextNotes"]
+                payload["decisionStyle"] = parsed["decisionStyle"]
+            else:
+                payload["decision"] = cleaned_request
+                payload["options"] = []
+                payload["criteria"] = []
+                payload["constraints"] = []
+                payload["priorities"] = []
+                payload["contextNotes"] = ""
+                payload["decisionStyle"] = default_output
         elif agent_id == "local_troubleshooting_agent":
             payload["problem"] = cleaned_request
             payload["symptoms"] = []
