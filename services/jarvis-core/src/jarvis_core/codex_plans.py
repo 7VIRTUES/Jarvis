@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from .approvals import ApprovalQueue
 from .codex_constants import ALLOWED_SANDBOX_MODE, COMMAND_TEMPLATE, OUTPUT_RELATIVE, PROMPT_RELATIVE
+from .codex_execution_control import generate_scope_manifest
 from .codex_paths import validate_codex_project_paths
 from .events import EventBus
 from .permissions import check_action, check_command
@@ -40,6 +41,8 @@ class CodexPlanInput:
     sandbox_mode: str = ALLOWED_SANDBOX_MODE
     prompt_path: str = str(PROMPT_RELATIVE)
     output_path: str = str(OUTPUT_RELATIVE)
+    conservative: bool = False
+    execution_mode: str = "standard"
 
 
 class CodexPlanService:
@@ -73,7 +76,28 @@ class CodexPlanService:
             return self._blocked_plan(plan_id, payload, str(project_path or Path(str(project["path"]))), payload.prompt_path, payload.output_path, reason, now)
 
         assert project_path is not None and prompt_path is not None and output_path is not None
-        prompt = self.build_prompt(payload, project_path)
+        is_conservative = payload.conservative or payload.execution_mode in ("assistant_conservative", "extreme_budget")
+        if is_conservative:
+            try:
+                manifest, manifest_block = generate_scope_manifest(
+                    project_path,
+                    payload.project_name,
+                    payload.allowed_files or [],
+                )
+                prompt = self.build_conservative_prompt(payload, project_path, manifest_block)
+            except Exception as exc:
+                return self._blocked_plan(
+                    plan_id,
+                    payload,
+                    str(project_path),
+                    payload.prompt_path,
+                    payload.output_path,
+                    f"conservative plan scope validation failed: {exc}",
+                    now,
+                )
+        else:
+            prompt = self.build_prompt(payload, project_path)
+
         preview = self.build_command_preview(project_path, prompt_path, output_path, payload.sandbox_mode)
         risk_reasons = [risk.reason]
         risk_level = risk.risk_level if risk.approval_required else "medium"
@@ -105,6 +129,27 @@ class CodexPlanService:
         self.events.emit("codex.approval_requested", payload.task_id, {"plan_id": plan_id, "approval_id": approval["approval_id"]})
         self.events.emit("codex.plan_created", payload.task_id, {"plan_id": plan_id, "status": status})
         return self.get_plan(plan_id)  # type: ignore[return-value]
+
+    def create_conservative_plan(self, payload: CodexPlanInput) -> dict[str, Any]:
+        conservative_payload = CodexPlanInput(
+            task_id=payload.task_id,
+            project_name=payload.project_name,
+            agent_id=payload.agent_id,
+            tool_id=payload.tool_id,
+            action_type=payload.action_type,
+            task_goal=payload.task_goal,
+            exact_scope=payload.exact_scope,
+            non_goals=payload.non_goals,
+            allowed_files=payload.allowed_files,
+            test_commands=[],
+            risk_plan=payload.risk_plan,
+            sandbox_mode=payload.sandbox_mode,
+            prompt_path=payload.prompt_path,
+            output_path=payload.output_path,
+            conservative=True,
+            execution_mode="extreme_budget",
+        )
+        return self.create_plan(conservative_payload)
 
     def list_plans(self) -> list[dict[str, Any]]:
         rows = self.conn.execute(self._select_sql() + " order by created_at").fetchall()
@@ -179,6 +224,44 @@ class CodexPlanService:
                 "",
                 "## Test Commands",
                 "\n".join(f"- {item}" for item in (payload.test_commands or ["python -m pytest"])),
+                "",
+                "## Required Final Report Format",
+                REQUIRED_IMPLEMENTATION_REPORT_FORMAT,
+            ]
+        ) + "\n"
+
+    def build_conservative_prompt(self, payload: CodexPlanInput, project_path: Path, manifest_block: str) -> str:
+        allowed_list = "\n".join(f"- {item}" for item in (payload.allowed_files or []))
+        return "\n".join(
+            [
+                "# Jarvis Codex Task Prompt (Extreme-Budget Conservative Mode)",
+                "",
+                f"Project name: {payload.project_name}",
+                f"Project path: {project_path}",
+                "",
+                "## Execution Mode",
+                "Extreme-Budget Single-Run. Exactly one Codex run. Automated repairs and automated checks are disabled.",
+                "",
+                "## Task Goal",
+                payload.task_goal or "No goal provided.",
+                "",
+                "## Exact Scope",
+                payload.exact_scope or "Stay within the requested task only.",
+                "",
+                "## Non-Goals",
+                payload.non_goals or "Do not implement unrelated features.",
+                "",
+                "## Safety Boundaries",
+                "Modify existing approved files only. Do not create new files, delete files, rename files, or edit unapproved files. Do not read secrets, run destructive commands, push, merge, reset hard, or install packages.",
+                "",
+                "## Approved Allowed Files",
+                allowed_list or "- (none)",
+                "",
+                "## Blocked Actions",
+                "git push; git merge; git reset --hard; rm -rf; del /s; file deletion; file rename; file creation; dependency editing; secret reads; browser sessions; payments; connector execution.",
+                "",
+                "## Approved Scope Manifest",
+                manifest_block,
                 "",
                 "## Required Final Report Format",
                 REQUIRED_IMPLEMENTATION_REPORT_FORMAT,

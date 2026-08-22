@@ -642,6 +642,15 @@ class CodexPlanRequest(BaseModel):
     sandboxMode: str = "workspace-write"
     promptPath: str = ".jarvis/prompts/current-task.md"
     outputPath: str = ".jarvis/reports/latest-codex-output.md"
+    conservative: bool = False
+    executionMode: str = "standard"
+
+
+class CodexExecutionCancelInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmation: str
+    expectedExecutionId: str | None = None
+    actor: str = Field(default="local_user", min_length=1, max_length=200)
 
 
 class ValidationRunInput(BaseModel):
@@ -4716,6 +4725,8 @@ def create_codex_plan(payload: CodexPlanRequest) -> dict[str, object]:
             sandbox_mode=payload.sandboxMode,
             prompt_path=payload.promptPath,
             output_path=payload.outputPath,
+            conservative=payload.conservative,
+            execution_mode=payload.executionMode,
         )
     )
 
@@ -4760,3 +4771,29 @@ def reject_codex_plan(plan_id: str, payload: ApprovalResolutionInput) -> dict[st
 @app.post("/codex/plans/{plan_id}/execute")
 def execute_codex_plan(plan_id: str) -> dict[str, object]:
     return codex_execution.execute_plan(plan_id)
+
+
+@app.get("/api/codex/execution/active")
+@app.get("/codex/execution/active")
+def get_active_codex_execution() -> dict[str, object]:
+    active = codex_execution.execution_tracker.get_active()
+    return {
+        "active": active is not None,
+        "execution": active,
+    }
+
+
+@app.post("/api/codex/execution/cancel")
+@app.post("/codex/execution/cancel")
+def cancel_active_codex_execution(payload: CodexExecutionCancelInput) -> dict[str, object]:
+    success, message, info = codex_execution.execution_tracker.cancel_active(
+        confirmation=payload.confirmation,
+        expected_execution_id=payload.expectedExecutionId,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {
+        "success": True,
+        "message": message,
+        "execution": info,
+    }

@@ -11,6 +11,14 @@ from uuid import uuid4
 
 from .approvals import ApprovalQueue
 from .codex_constants import ALLOWED_SANDBOX_MODE
+from .codex_execution_control import (
+    SCOPE_MANIFEST_BEGIN,
+    CodexActiveExecutionTracker,
+    inspect_git_clean_baseline,
+    parse_scope_manifest,
+    review_conservative_git_diff,
+    verify_stale_files,
+)
 from .codex_paths import validate_codex_project_paths
 from .codex_plans import CodexPlanService
 from .events import EventBus
@@ -40,6 +48,7 @@ class CodexExecutionService:
         codex_detector: Callable[[], str | None] | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
         check_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+        execution_tracker: CodexActiveExecutionTracker | None = None,
     ):
         self.conn = conn
         self.events = events
@@ -50,11 +59,19 @@ class CodexExecutionService:
         self.codex_detector = codex_detector or (lambda: shutil.which("codex"))
         self.runner = runner or subprocess.run
         self.check_runner = check_runner or subprocess.run
+        self.execution_tracker = execution_tracker or CodexActiveExecutionTracker()
 
-    def execute_plan(self, plan_id: str) -> dict[str, Any]:
+    def execute_plan(self, plan_id: str, execution_mode: str = "auto") -> dict[str, Any]:
+        plan = self.plans.get_plan(plan_id)
+        is_conservative = (
+            execution_mode in {"assistant_conservative", "extreme_budget", "conservative"}
+            or (execution_mode == "auto" and plan is not None and SCOPE_MANIFEST_BEGIN in str(plan.get("prompt", "")))
+        )
+        if is_conservative:
+            return self.execute_conservative_plan(plan_id)
+
         execution_id = str(uuid4())
         started_at = utc_now()
-        plan = self.plans.get_plan(plan_id)
         task_id = str(plan["task_id"]) if plan else ""
         project_name = str(plan["project_name"]) if plan else ""
         self.events.emit("codex.execution_requested", task_id or None, {"plan_id": plan_id, "execution_id": execution_id})
@@ -159,6 +176,170 @@ class CodexExecutionService:
         finally:
             if lock_inserted:
                 self._release_lock(str(plan["project_name"]), str(plan["task_id"]))
+
+    def execute_conservative_plan(self, plan_id: str) -> dict[str, Any]:
+        execution_id = str(uuid4())
+        started_at = utc_now()
+        plan = self.plans.get_plan(plan_id)
+        task_id = str(plan["task_id"]) if plan else ""
+        project_name = str(plan["project_name"]) if plan else ""
+        self.events.emit("codex.execution_requested", task_id or None, {"plan_id": plan_id, "execution_id": execution_id, "mode": "assistant_conservative"})
+
+        validation = self._validate_plan(plan)
+        if validation:
+            receipt = self.runtime.validate(ActionRequest("coding_agent", "codex.execute", validation, task_id or None, "codex_tool", "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, validation, None)
+
+        assert plan is not None
+        prompt_content = str(plan.get("prompt", ""))
+        parse_err, manifest = parse_scope_manifest(prompt_content, expected_project_name=project_name)
+        if parse_err or manifest is None:
+            reason = f"conservative execution requires valid approved scope manifest: {parse_err}"
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", reason, task_id, str(plan["tool_id"]), "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, reason, None)
+
+        project_path = Path(str(plan["project_path"])).resolve()
+        prompt_path = Path(str(plan["prompt_path"])).resolve()
+        output_path = Path(str(plan["output_path"])).resolve()
+
+        # Stale files check
+        stale_err = verify_stale_files(project_path, manifest)
+        if stale_err:
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", stale_err, task_id, str(plan["tool_id"]), "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, stale_err, None)
+
+        # Clean git baseline check
+        baseline_err, baseline_meta = inspect_git_clean_baseline(project_path)
+        if baseline_err:
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", baseline_err, task_id, str(plan["tool_id"]), "high"))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), "{}", None, "", "", None, receipt.receipt_id, baseline_err, None)
+
+        argv = list(plan["command_preview"]["argv"])
+        policy = check_action("codex.execute_approved_plan", plan_id)
+        command_policy = check_command(" ".join(argv))
+        if policy.status == "blocked" or command_policy.status == "blocked":
+            reason = policy.reason if policy.status == "blocked" else command_policy.reason
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", reason, task_id, str(plan["tool_id"]), str(plan["risk_level"])))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, reason, None)
+
+        lock_allowed, lock_inserted = self._acquire_execution_lock(project_name, task_id)
+        if not lock_allowed:
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", "project is locked", task_id, str(plan["tool_id"]), str(plan["risk_level"])))
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, "project is locked", None)
+
+        try:
+            self.execution_tracker.set_active(
+                execution_id=execution_id,
+                plan_id=plan_id,
+                task_id=task_id,
+                project_name=project_name,
+                phase="preflight",
+            )
+        except RuntimeError as exc:
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute", str(exc), task_id, str(plan["tool_id"]), str(plan["risk_level"])))
+            if lock_inserted:
+                self._release_lock(project_name, task_id)
+            return self._record_execution(execution_id, plan_id, task_id, project_name, "blocked", started_at, utc_now(), plan["command_preview"]["preview"], None, "", "", str(output_path), receipt.receipt_id, str(exc), None)
+
+        receipt_id = None
+        proc: subprocess.Popen[str] | None = None
+        try:
+            self.execution_tracker.update_phase(execution_id, "starting")
+            prompt_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            prompt_path.write_text(self._execution_prompt(plan), encoding="utf-8")
+            self.events.emit("codex.prompt_prepared", task_id, {"plan_id": plan_id, "prompt_path": str(prompt_path)})
+            receipt = self.runtime.validate(ActionRequest(str(plan["agent_id"]), "codex.execute_approved_plan", plan_id, task_id, str(plan["tool_id"]), str(plan["risk_level"])))
+            receipt_id = receipt.receipt_id
+            self.events.emit("codex.execution_receipt_created", task_id, {"plan_id": plan_id, "execution_id": execution_id, "receipt_id": receipt_id})
+            self._insert_running(execution_id, plan, started_at, receipt_id)
+            self.events.emit("codex.execution_started", task_id, {"plan_id": plan_id, "execution_id": execution_id, "mode": "assistant_conservative", "head": baseline_meta.get("headSha")})
+
+            proc = subprocess.Popen(
+                argv,
+                cwd=str(project_path),
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            self.execution_tracker.update_phase(execution_id, "running", proc)
+
+            try:
+                stdout_raw, stderr_raw = proc.communicate(timeout=3600)
+                exit_code = proc.returncode
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stdout_raw, stderr_raw = proc.communicate()
+                exit_code = -1
+
+            finished_at = utc_now()
+            stdout_excerpt = redact_output(stdout_raw)
+            stderr_excerpt = redact_output(stderr_raw)
+
+            # Check if cancellation was requested
+            active_info = self.execution_tracker.get_active()
+            is_cancelled = active_info is not None and active_info.get("cancellationRequested", False)
+
+            self.execution_tracker.update_phase(execution_id, "reviewing_diff")
+            post_review = review_conservative_git_diff(project_path, manifest)
+            # Add pre-execution baseline metadata
+            post_review["baselineHeadSha"] = baseline_meta.get("headSha")
+            post_review["baselineBranch"] = baseline_meta.get("branch")
+
+            check_plan = {"checks": [], "reason": "automated checks skipped by extreme-budget policy"}
+            check_results = {"status": "skipped", "reason": "Automated checks were skipped by extreme-budget policy.", "checks": []}
+            repair_results = {"status": "skipped", "reason": "Automated repairs were skipped by extreme-budget policy.", "attempts": []}
+
+            if is_cancelled:
+                status = "canceled"
+                blocked_reason = "Codex execution was stopped by user request."
+            elif exit_code != 0:
+                status = "failed"
+                blocked_reason = f"Codex CLI exited with non-zero code {exit_code}."
+            elif post_review["requiresUserReview"]:
+                status = "blocked"
+                blocked_reason = "; ".join(post_review["reasons"])
+            else:
+                status = "succeeded"
+                blocked_reason = None
+
+            self._finish_execution(
+                execution_id,
+                status,
+                finished_at,
+                exit_code,
+                stdout_excerpt,
+                stderr_excerpt,
+                blocked_reason,
+                None,
+                post_review,
+                check_plan,
+                check_results,
+                repair_results,
+            )
+
+            if status == "blocked":
+                self.events.emit("codex.post_review_blocked", task_id, {"plan_id": plan_id, "execution_id": execution_id, "reasons": post_review["reasons"]})
+                self.events.emit("codex.execution_blocked", task_id, {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
+            elif status == "canceled":
+                self.events.emit("codex.canceled", task_id, {"plan_id": plan_id, "execution_id": execution_id, "reason": blocked_reason})
+            else:
+                event_type = "codex.execution_succeeded" if status == "succeeded" else "codex.execution_failed"
+                self.events.emit(event_type, task_id, {"plan_id": plan_id, "execution_id": execution_id, "exit_code": exit_code, "postReview": post_review, "checkResults": check_results, "repairResults": repair_results})
+
+            return self.get_execution(execution_id)  # type: ignore[return-value]
+
+        except Exception as exc:
+            finished_at = utc_now()
+            self._finish_execution(execution_id, "failed", finished_at, None, "", "", None, redact_output(str(exc)))
+            self.events.emit("codex.execution_failed", task_id, {"plan_id": plan_id, "execution_id": execution_id, "error": type(exc).__name__})
+            return self.get_execution(execution_id)  # type: ignore[return-value]
+        finally:
+            self.execution_tracker.clear(execution_id)
+            if lock_inserted:
+                self._release_lock(project_name, task_id)
 
     def get_execution(self, execution_id: str) -> dict[str, Any] | None:
         row = self.conn.execute(self._select_sql() + " where execution_id = ?", (execution_id,)).fetchone()
