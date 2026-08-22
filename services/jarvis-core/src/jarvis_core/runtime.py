@@ -105,6 +105,78 @@ class SafeActionRuntime:
         )
         self.conn.commit()
 
+    def get_receipt(self, receipt_id: str) -> dict[str, object] | None:
+        if not self.conn:
+            return None
+        row = self.conn.execute(
+            "select receipt_id, task_id, agent_id, tool_id, action_type, target, approved, blocked, approval_required, risk_level, started_at, finished_at, result, reason from action_receipts where receipt_id = ?",
+            (receipt_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "receipt_id": row[0],
+            "task_id": row[1],
+            "agent_id": row[2],
+            "tool_id": row[3],
+            "action_type": row[4],
+            "target": row[5],
+            "approved": bool(row[6]),
+            "blocked": bool(row[7]),
+            "approval_required": bool(row[8]),
+            "risk_level": row[9],
+            "started_at": row[10],
+            "finished_at": row[11],
+            "result": row[12],
+            "reason": row[13],
+        }
+
+    def finalize_execution_receipt(
+        self,
+        receipt_id: str,
+        result_status: str,
+        execution_note: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, object]:
+        if result_status not in {"executed_read_only", "execution_failed"}:
+            raise ValueError(f"Invalid execution receipt finalization status: {result_status}")
+        receipt = self.get_receipt(receipt_id)
+        if not receipt:
+            raise KeyError(f"Receipt not found: {receipt_id}")
+        if task_id and receipt["task_id"] != task_id:
+            raise ValueError("Task ID mismatch for execution receipt")
+        if receipt["blocked"]:
+            raise PermissionError("Blocked receipts cannot be finalized as executed")
+        if receipt["approval_required"] and not receipt["approved"]:
+            raise PermissionError("Unresolved approval-required receipts cannot be finalized as executed")
+
+        finished_at = utc_now()
+        reason = str(receipt["reason"])
+        if execution_note:
+            reason = f"{reason} | {execution_note}"
+
+        if self.conn:
+            self.conn.execute(
+                "update action_receipts set result = ?, finished_at = ?, reason = ? where receipt_id = ?",
+                (result_status, finished_at, reason, receipt_id),
+            )
+            self.conn.commit()
+
+        updated_receipt = self.get_receipt(receipt_id) or receipt
+        self.logger.append("actions", {"eventType": "receipt_finalized", **updated_receipt})
+        if self.events:
+            event_type = "action.executed" if result_status == "executed_read_only" else "action.execution_failed"
+            self.events.emit(
+                event_type,
+                str(receipt["task_id"]) if receipt["task_id"] else None,
+                {
+                    "receipt_id": receipt_id,
+                    "action_type": receipt["action_type"],
+                    "result": result_status,
+                },
+            )
+        return updated_receipt
+
     def list_receipts(self, task_id: str | None = None) -> list[dict[str, object]]:
         if not self.conn:
             return []
@@ -136,4 +208,6 @@ class SafeActionRuntime:
             }
             for row in rows
         ]
+
+
 

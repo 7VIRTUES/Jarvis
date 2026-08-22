@@ -74,6 +74,47 @@ class TaskQueue:
             self._release_lock(task["project_name"], task_id)
         return self.get_task(task_id)  # type: ignore[return-value]
 
+    def start_task(self, task_id: str, mode: str = "read_only") -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise KeyError("task not found")
+        if task["status"] in TERMINAL_STATUSES:
+            raise ValueError(f"cannot start terminal task: {task['status']}")
+        self._set_status(task_id, "running", started=True)
+        self.events.emit("task.started", task_id, {"mode": mode})
+        return self.get_task(task_id)  # type: ignore[return-value]
+
+    def succeed_task(self, task_id: str, summary: str = "action executed successfully") -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise KeyError("task not found")
+        self._set_status(task_id, "succeeded", finished=True, summary=summary)
+        self.events.emit("task.succeeded", task_id, {"summary": summary})
+        if task.get("write_capable"):
+            self._release_lock(task["project_name"], task_id)
+        return self.get_task(task_id)  # type: ignore[return-value]
+
+    def fail_task(self, task_id: str, error: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise KeyError("task not found")
+        self._set_status(task_id, "failed", finished=True, error=error)
+        self.events.emit("task.failed", task_id, {"error": error})
+        if task.get("write_capable"):
+            self._release_lock(task["project_name"], task_id)
+        return self.get_task(task_id)  # type: ignore[return-value]
+
+    def block_task(self, task_id: str, reason: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise KeyError("task not found")
+        self._set_status(task_id, "blocked", finished=True, error=reason)
+        self.events.emit("task.blocked", task_id, {"reason": reason})
+        if task.get("write_capable"):
+            self._release_lock(task["project_name"], task_id)
+        return self.get_task(task_id)  # type: ignore[return-value]
+
+
     def _run_dry_plan(self, task_id: str, project_name: str, agent_id: str, proposed_actions: list[dict[str, Any]], risk_plan: dict[str, Any]) -> None:
         self._set_status(task_id, "running", started=True)
         self.events.emit("task.started", task_id, {"mode": "dry_run"})

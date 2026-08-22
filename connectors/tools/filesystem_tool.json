@@ -1,9 +1,9 @@
 {
   "id": "filesystem_tool",
   "name": "Filesystem Tool",
-  "implemented": false,
-  "approvalRequired": true,
+  "implemented": true,
+  "approvalRequired": false,
   "capabilities": ["safe_project_inspection"],
-  "notes": "Protected files may be detected by name but not read."
+  "notes": "Safe registered-project read-only inspection only. Protected files are detected by pattern and skipped without reading. No arbitrary paths, shell, or file mutations."
 }
 

@@ -283,8 +283,8 @@ def assistant_actions_dashboard_html() -> str:
 <main>
   <!-- Strategic Boundary Banner -->
   <section class="banner" role="region" aria-label="Action boundary notice">
-    <h2>Supervised Dry-Run Boundary</h2>
-    <p>Action Center currently supports action proposal review, policy checks, and dry-run validation through the Safe Action Runtime. <strong>No Assistant action executes real filesystem mutations, commands, or external network actions from this page.</strong></p>
+    <h2>Supervised Action Center</h2>
+    <p>Action Center manages supervised action proposals, policy previews, and execution receipts. <strong><code>inspect_project</code> supports explicit supervised read-only execution on registered projects; <code>write_report</code> remains dry-run only.</strong> No shell commands, file mutations, or external network actions are executed.</p>
   </section>
 
   <!-- Summary Metrics Grid -->
@@ -295,9 +295,9 @@ def assistant_actions_dashboard_html() -> str:
     </div>
     <div class="grid" id="summary-metrics">
       <div class="metric"><span>Total Supervised Tasks</span><strong id="metric-tasks-count">—</strong></div>
+      <div class="metric"><span>Real Read-Only Executed</span><strong id="metric-executed-count">—</strong></div>
       <div class="metric"><span>Dry-Run Validated</span><strong id="metric-succeeded-count">—</strong></div>
       <div class="metric"><span>Policy Blocked</span><strong id="metric-blocked-count">—</strong></div>
-      <div class="metric"><span>Pending Approvals</span><strong id="metric-approvals-count">—</strong></div>
       <div class="metric"><span>Action Receipts</span><strong id="metric-receipts-count">—</strong></div>
     </div>
   </section>
@@ -306,13 +306,13 @@ def assistant_actions_dashboard_html() -> str:
   <section>
     <div class="controls-row">
       <div>
-        <h2 style="margin:0; font-size:1.15rem;">Supervised Dry-Run Tasks</h2>
-        <p class="muted" style="margin:2px 0 0;">Tasks dispatched through TaskQueue with hard-coded <code>dry_run=True</code>.</p>
+        <h2 style="margin:0; font-size:1.15rem;">Supervised Tasks</h2>
+        <p class="muted" style="margin:2px 0 0;">Tasks dispatched through TaskQueue. Real execution tasks and dry-run validations are auditable below.</p>
       </div>
       <div class="filter-group">
         <select id="filter-task-status" aria-label="Filter task status">
           <option value="">All Statuses</option>
-          <option value="succeeded">Succeeded (Validated)</option>
+          <option value="succeeded">Succeeded</option>
           <option value="blocked">Blocked</option>
           <option value="waiting_for_approval">Waiting for Approval</option>
           <option value="running">Running</option>
@@ -478,9 +478,9 @@ def assistant_actions_dashboard_html() -> str:
 
   function updateMetrics() {
     byId('metric-tasks-count').textContent = state.tasks.length;
-    byId('metric-succeeded-count').textContent = state.tasks.filter(t => t.status === 'succeeded').length;
+    byId('metric-executed-count').textContent = state.tasks.filter(t => !t.dry_run && t.status === 'succeeded').length;
+    byId('metric-succeeded-count').textContent = state.tasks.filter(t => t.dry_run && t.status === 'succeeded').length;
     byId('metric-blocked-count').textContent = state.tasks.filter(t => t.status === 'blocked').length;
-    byId('metric-approvals-count').textContent = state.approvals.filter(a => a.status === 'pending').length;
     byId('metric-receipts-count').textContent = state.receipts.length;
   }
 
@@ -506,6 +506,9 @@ def assistant_actions_dashboard_html() -> str:
       const tr = document.createElement('tr');
       const shortId = (task.task_id || '').slice(0, 8);
       const isTerminal = ['succeeded', 'failed', 'blocked', 'canceled'].includes(task.status);
+      const modePill = task.dry_run
+        ? '<span class="pill dry-run">dry-run</span>'
+        : '<span class="pill active">real (read-only)</span>';
 
       tr.innerHTML = `
         <td><code title="${escapeHtml(task.task_id)}">${escapeHtml(shortId)}...</code></td>
@@ -513,8 +516,8 @@ def assistant_actions_dashboard_html() -> str:
         <td><span class="muted">${escapeHtml(task.agent_id || '—')}</span></td>
         <td>${escapeHtml(task.task_type || '—')}</td>
         <td><span class="pill ${escapeHtml(task.status)}">${escapeHtml(task.status)}</span></td>
-        <td><span class="pill dry-run">dry-run</span></td>
-        <td>${escapeHtml(task.summary || task.error || 'Validated without execution')}</td>
+        <td>${modePill}</td>
+        <td>${escapeHtml(task.summary || task.error || (task.dry_run ? 'Validated without execution' : 'Executed'))}</td>
         <td class="muted" style="font-size:0.8rem;">${escapeHtml(task.created_at || '—')}</td>
         <td>
           ${!isTerminal ? `<button class="danger small" data-cancel-id="${escapeHtml(task.task_id)}">Cancel</button>` : '<span class="muted">—</span>'}
@@ -562,7 +565,9 @@ def assistant_actions_dashboard_html() -> str:
       card.className = 'item-card';
 
       let statusBadge = '';
-      if (receipt.blocked) statusBadge = '<span class="pill blocked">Blocked</span>';
+      if (receipt.result === 'executed_read_only') statusBadge = '<span class="pill active">Executed Read-Only</span>';
+      else if (receipt.result === 'execution_failed') statusBadge = '<span class="pill blocked">Execution Failed</span>';
+      else if (receipt.blocked) statusBadge = '<span class="pill blocked">Blocked</span>';
       else if (receipt.approval_required) statusBadge = '<span class="pill approval_required">Approval Required</span>';
       else if (receipt.approved) statusBadge = '<span class="pill allowed">Allowed</span>';
       else statusBadge = `<span class="pill inactive">${escapeHtml(receipt.result || 'unknown')}</span>`;

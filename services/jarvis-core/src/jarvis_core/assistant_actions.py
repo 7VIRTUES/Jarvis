@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import re
+import threading
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from .approvals import ApprovalQueue
+from .file_data_agent import FileDataAgentService
 from .permissions import check_action
 from .project_registry import ProjectRegistry
-from .runtime import SafeActionRuntime
+from .runtime import ActionRequest, SafeActionRuntime
 from .tasks import TaskQueue
 from .time_utils import utc_now
 
@@ -23,7 +26,7 @@ ACTION_DISPLAY_NAMES: dict[str, str] = {
 }
 
 ACTION_TOOL_IDS: dict[str, str] = {
-    "inspect_project": "report_tool",
+    "inspect_project": "filesystem_tool",
     "write_report": "report_tool",
 }
 
@@ -73,7 +76,7 @@ UNSUPPORTED_INTENT_PATTERNS: list[tuple[str, str]] = [
 
 
 class AssistantActionBridge:
-    """Supervised bridge connecting Unified Assistant responses to Safe Action Runtime dry-run validation."""
+    """Supervised bridge connecting Unified Assistant responses to Safe Action Runtime validation and real read-only execution."""
 
     def __init__(
         self,
@@ -81,34 +84,45 @@ class AssistantActionBridge:
         tasks: TaskQueue,
         runtime: SafeActionRuntime,
         approvals: ApprovalQueue,
+        file_data_agent: FileDataAgentService | None = None,
+        workspace_root: Path | None = None,
     ) -> None:
         self.projects = projects
         self.tasks = tasks
         self.runtime = runtime
         self.approvals = approvals
+        self.file_data_agent = file_data_agent
+        self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
+        self._active_executions: set[str] = set()
+        self._execution_lock = threading.Lock()
 
     def get_capabilities(self) -> dict[str, Any]:
         return {
             "implemented": True,
-            "dryRunOnly": True,
-            "realExecutionImplemented": False,
+            "realExecutionImplemented": True,
             "supportedActionTypes": [
                 {
                     "actionType": "inspect_project",
                     "displayLabel": ACTION_DISPLAY_NAMES["inspect_project"],
                     "description": "Read-only inspection and structure check of a registered Jarvis project workspace.",
                     "targetType": "registered_project_name",
+                    "toolId": "filesystem_tool",
                     "riskLevel": "low",
-                    "dryRunOnly": True,
-                    "executionPermitted": False,
+                    "dryRunSupported": True,
+                    "realExecutionSupported": True,
+                    "readOnly": True,
+                    "executionPermitted": True,
                 },
                 {
                     "actionType": "write_report",
                     "displayLabel": ACTION_DISPLAY_NAMES["write_report"],
                     "description": "Prepare a structured local report proposal for a registered project (dry-run validation only; no file is written).",
                     "targetType": "registered_project_name",
+                    "toolId": "report_tool",
                     "riskLevel": "low",
-                    "dryRunOnly": True,
+                    "dryRunSupported": True,
+                    "realExecutionSupported": False,
+                    "readOnly": False,
                     "executionPermitted": False,
                 },
             ],
@@ -125,12 +139,12 @@ class AssistantActionBridge:
                 "external_connectors",
             ],
             "boundaries": [
-                "Unified Assistant actions are strictly supervised and dry-run only.",
+                "Unified Assistant actions are strictly supervised and user-confirmed.",
+                "Only inspect_project supports real read-only execution; write_report remains dry-run only.",
                 "Only registered project workspaces within the allowed root can be selected as targets.",
-                "No response agent has action execution authority.",
-                "Dry-run validation passes through SafeActionRuntime and creates auditable receipts.",
-                "Approvals are authorization records only and never trigger automated execution.",
-                "No file mutation, command execution, or external network action occurs.",
+                "Real execution requires matching successful dry-run verification proof.",
+                "SafeActionRuntime creates execution-gate receipts before read-only inspection runs.",
+                "No file mutation, shell command execution, or external network action occurs.",
             ],
         }
 
@@ -273,8 +287,8 @@ class AssistantActionBridge:
             "allowed": policy_result.allowed,
             "reason": policy_result.reason,
             "riskLevel": "low",
-            "dryRunOnly": True,
-            "executionPermitted": False,
+            "dryRunSupported": True,
+            "realExecutionSupported": normalized_action == "inspect_project",
         }
 
         # Determine readiness state
@@ -308,7 +322,7 @@ class AssistantActionBridge:
             "displayLabel": ACTION_DISPLAY_NAMES.get(normalized_action, normalized_action),
             "projectName": resolved_project_name,
             "safeTarget": safe_target,
-            "proposedToolId": ACTION_TOOL_IDS.get(normalized_action, "report_tool"),
+            "proposedToolId": ACTION_TOOL_IDS.get(normalized_action, "filesystem_tool"),
             "riskLevel": "low",
             "reason": reason_text,
             "reportTitle": report_title.strip() if report_title else None,
@@ -320,8 +334,8 @@ class AssistantActionBridge:
                 "readinessStatus": readiness_status,
             },
             "status": readiness_status,
-            "executionPermitted": False,
-            "dryRunOnly": True,
+            "dryRunSupported": True,
+            "realExecutionSupported": normalized_action == "inspect_project",
             "userReviewRequired": True,
             "createdAt": created_at,
         }
@@ -340,8 +354,8 @@ class AssistantActionBridge:
                 "allowed": False,
                 "reason": f"Action type '{normalized_action}' is not supported by Assistant Action Bridge.",
                 "riskLevel": "high",
-                "dryRunOnly": True,
-                "executionPermitted": False,
+                "dryRunSupported": False,
+                "realExecutionSupported": False,
             }
 
         resolved_name: str | None = None
@@ -355,8 +369,8 @@ class AssistantActionBridge:
                     "allowed": False,
                     "reason": f"Project '{project_name}' is not registered in Jarvis project registry.",
                     "riskLevel": "medium",
-                    "dryRunOnly": True,
-                    "executionPermitted": False,
+                    "dryRunSupported": False,
+                    "realExecutionSupported": False,
                 }
             resolved_name = proj["name"]
 
@@ -368,8 +382,8 @@ class AssistantActionBridge:
             "allowed": result.allowed,
             "reason": result.reason,
             "riskLevel": "low",
-            "dryRunOnly": True,
-            "executionPermitted": False,
+            "dryRunSupported": True,
+            "realExecutionSupported": normalized_action == "inspect_project",
         }
 
     def validate_dry_run(
@@ -392,7 +406,7 @@ class AssistantActionBridge:
         if not proj:
             raise ValueError(f"Project '{normalized_project}' is not registered in Jarvis project registry.")
 
-        tool_id = ACTION_TOOL_IDS.get(normalized_action, "report_tool")
+        tool_id = ACTION_TOOL_IDS.get(normalized_action, "filesystem_tool")
         task_type = ACTION_TASK_TYPES.get(normalized_action, "inspect")
 
         proposed_actions = [
@@ -448,9 +462,237 @@ class AssistantActionBridge:
             "approvals": task_approvals,
             "dryRunOnly": True,
             "executed": False,
+            "realExecutionAvailable": normalized_action == "inspect_project" and task["status"] == "succeeded",
             "summary": status_text,
             "validatedAt": utc_now(),
         }
+
+    def verify_dry_run_proof(
+        self,
+        dry_run_task_id: str,
+        project_name: str,
+        expected_receipt_id: str | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        task = self.tasks.get_task(dry_run_task_id)
+        if not task:
+            raise ValueError(f"Dry-run task '{dry_run_task_id}' not found.")
+        if not task.get("dry_run"):
+            raise ValueError("Specified task is not a dry-run task.")
+        if task.get("status") != "succeeded":
+            raise ValueError(f"Dry-run task status is '{task.get('status')}', but must be 'succeeded'.")
+        if task.get("project_name") != project_name:
+            raise ValueError(
+                f"Dry-run task project '{task.get('project_name')}' does not match requested project '{project_name}'."
+            )
+        if task.get("task_type") not in ("inspect", "inspect_project"):
+            raise ValueError(f"Dry-run task type '{task.get('task_type')}' is not an inspection task.")
+
+        receipts = self.runtime.list_receipts(task_id=dry_run_task_id)
+        matching_receipt: dict[str, Any] | None = None
+        for r in receipts:
+            if r.get("action_type") == "inspect_project" and r.get("target") == project_name:
+                if expected_receipt_id:
+                    if r.get("receipt_id") == expected_receipt_id:
+                        matching_receipt = r
+                        break
+                else:
+                    matching_receipt = r
+                    break
+
+        if not matching_receipt:
+            raise ValueError(f"No matching valid dry-run receipt found for inspect_project on '{project_name}'.")
+        if matching_receipt.get("blocked"):
+            raise PermissionError(f"Dry-run receipt was blocked by policy: {matching_receipt.get('reason')}")
+        if matching_receipt.get("approval_required") and not matching_receipt.get("approved"):
+            raise PermissionError(f"Dry-run receipt requires unresolved approval: {matching_receipt.get('reason')}")
+        if not matching_receipt.get("approved"):
+            raise PermissionError("Dry-run receipt was not approved by policy.")
+
+        return task, matching_receipt
+
+    def execute_read_only(
+        self,
+        *,
+        dry_run_task_id: str,
+        project_name: str,
+        expected_receipt_id: str | None = None,
+        confirmation: str = "",
+        source_agent_id: str = "unified_assistant",
+        source_response_id: str | None = None,
+        source_turn_index: int | None = None,
+        actor: str = "local_user",
+    ) -> dict[str, Any]:
+        # 1. Exact confirmation requirement
+        if confirmation.strip() != "EXECUTE READ-ONLY INSPECTION":
+            raise ValueError("Explicit confirmation string 'EXECUTE READ-ONLY INSPECTION' is required.")
+
+        # 2. Concurrency / duplicate execution protection
+        with self._execution_lock:
+            if dry_run_task_id in self._active_executions:
+                raise ValueError(f"Execution for dry-run task '{dry_run_task_id}' is already in progress.")
+            self._active_executions.add(dry_run_task_id)
+
+        real_task_id: str | None = None
+        gate_receipt_id: str | None = None
+
+        try:
+            # 3. Dry-run proof verification
+            _, dry_run_receipt = self.verify_dry_run_proof(
+                dry_run_task_id=dry_run_task_id,
+                project_name=project_name,
+                expected_receipt_id=expected_receipt_id,
+            )
+
+            # 4. Re-resolve registered project at execution time
+            proj = self.projects.get_project(project_name.strip())
+            if not proj:
+                raise KeyError(f"Registered project '{project_name}' no longer found in registry.")
+
+            project_root = Path(proj["path"]).expanduser().resolve()
+            if not project_root.exists() or not project_root.is_dir():
+                raise FileNotFoundError(f"Project directory '{project_root}' does not exist or is not a directory.")
+
+            # 5. Re-validate workspace boundary
+            if self.workspace_root is not None and not project_root.is_relative_to(self.workspace_root):
+                raise PermissionError("Project root escapes the allowed workspace root.")
+
+            # 6. Create real execution task record (dry_run=False)
+            real_task = self.tasks.create_task(
+                project_name=proj["name"],
+                agent_id=source_agent_id,
+                task_type="inspect",
+                autonomy_level="supervised",
+                dry_run=False,  # Real execution task
+                write_capable=False,
+                proposed_actions=[{
+                    "tool_id": "filesystem_tool",
+                    "action_type": "inspect_project",
+                    "target": proj["name"],
+                    "risk_level": "low",
+                }],
+                risk_plan={
+                    "risk_level": "low",
+                    "reason": f"Supervised read-only inspection execution for {proj['name']}",
+                },
+            )
+            real_task_id = real_task["task_id"]
+
+            # 7. SafeActionRuntime execution gate receipt
+            gate_receipt = self.runtime.validate(
+                ActionRequest(
+                    task_id=real_task_id,
+                    agent_id=source_agent_id,
+                    tool_id="filesystem_tool",
+                    action_type="inspect_project",
+                    target=proj["name"],
+                    risk_level="low",
+                )
+            )
+            gate_receipt_id = gate_receipt.receipt_id
+
+            if gate_receipt.blocked:
+                self.tasks.block_task(real_task_id, reason=gate_receipt.reason)
+                self.runtime.finalize_execution_receipt(
+                    gate_receipt.receipt_id,
+                    result_status="execution_failed",
+                    execution_note=f"Blocked: {gate_receipt.reason}",
+                    task_id=real_task_id,
+                )
+                return {
+                    "executed": False,
+                    "status": "blocked",
+                    "taskId": real_task_id,
+                    "receiptId": gate_receipt.receipt_id,
+                    "summary": f"Execution blocked by policy: {gate_receipt.reason}",
+                    "inspectionResult": None,
+                }
+
+            if gate_receipt.approval_required and not gate_receipt.approved:
+                self.tasks.block_task(real_task_id, reason="Approval required before execution")
+                return {
+                    "executed": False,
+                    "status": "waiting_for_approval",
+                    "taskId": real_task_id,
+                    "receiptId": gate_receipt.receipt_id,
+                    "summary": "Approval required before execution. Nothing was executed.",
+                    "inspectionResult": None,
+                }
+
+            # 8. Start task lifecycle
+            self.tasks.start_task(real_task_id, mode="read_only")
+
+            # 9. Perform trusted read-only inspection
+            if self.file_data_agent:
+                raw_summary = self.file_data_agent.local_summary(proj["name"])
+            else:
+                service = FileDataAgentService(self.projects, self.workspace_root or project_root.parent)
+                raw_summary = service.local_summary(proj["name"])
+
+            # Bounded summary data
+            bounded_result = {
+                "projectName": raw_summary.get("projectName", proj["name"]),
+                "projectRoot": raw_summary.get("projectRoot", str(project_root)),
+                "scannedFiles": raw_summary.get("scannedFiles", 0),
+                "skippedFiles": raw_summary.get("skippedFiles", 0),
+                "skippedDirs": raw_summary.get("skippedDirs", 0),
+                "skippedDirList": raw_summary.get("skippedDirList", []),
+                "protectedSkippedFiles": raw_summary.get("protectedSkippedFiles", 0),
+                "runtimeSkippedDirs": raw_summary.get("runtimeSkippedDirs", 0),
+                "fileTypeCounts": raw_summary.get("fileTypeCounts", {}),
+                "docsDetected": raw_summary.get("docsDetected", []),
+                "warnings": raw_summary.get("warnings", []),
+                "limitations": raw_summary.get("limitations", []),
+            }
+
+            # 10. Finalize execution receipt
+            finalized_receipt = self.runtime.finalize_execution_receipt(
+                gate_receipt.receipt_id,
+                result_status="executed_read_only",
+                execution_note=f"Scanned {bounded_result['scannedFiles']} files safely",
+                task_id=real_task_id,
+            )
+
+            # 11. Complete task lifecycle
+            self.tasks.succeed_task(
+                real_task_id,
+                summary=f"Read-only project inspection executed successfully. Scanned {bounded_result['scannedFiles']} files.",
+            )
+
+            return {
+                "executed": True,
+                "status": "succeeded",
+                "actionType": "inspect_project",
+                "toolId": "filesystem_tool",
+                "projectName": proj["name"],
+                "taskId": real_task_id,
+                "receiptId": finalized_receipt.get("receipt_id", gate_receipt.receipt_id),
+                "dryRunTaskId": dry_run_task_id,
+                "sourceResponseId": source_response_id,
+                "sourceTurnIndex": source_turn_index,
+                "summary": f"Read-only inspection executed successfully on '{proj['name']}'.",
+                "inspectionResult": bounded_result,
+                "executedAt": utc_now(),
+            }
+        except Exception as exc:
+            if real_task_id:
+                try:
+                    self.tasks.fail_task(real_task_id, error=str(exc))
+                except Exception:
+                    pass
+                if gate_receipt_id:
+                    try:
+                        self.runtime.finalize_execution_receipt(
+                            gate_receipt_id,
+                            result_status="execution_failed",
+                            execution_note=str(exc),
+                            task_id=real_task_id,
+                        )
+                    except Exception:
+                        pass
+            raise
+        finally:
+            with self._execution_lock:
+                self._active_executions.discard(dry_run_task_id)
 
     def get_task_action_view(self, task_id: str) -> dict[str, Any] | None:
         task = self.tasks.get_task(task_id)
@@ -463,6 +705,6 @@ class AssistantActionBridge:
             "task": task,
             "receipts": receipts,
             "approvals": task_approvals,
-            "dryRunOnly": task.get("dry_run", True),
-            "executed": False,
+            "dryRun": task.get("dry_run", True),
+            "executed": not task.get("dry_run", True) and task.get("status") == "succeeded",
         }

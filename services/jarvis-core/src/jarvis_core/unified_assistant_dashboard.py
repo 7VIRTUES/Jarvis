@@ -1367,10 +1367,71 @@ def unified_assistant_html() -> str:
                         <span class="pill ${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'validated')}">${escapeHtml(turn.dryRunResult.task ? turn.dryRunResult.task.status : 'done')}</span>
                       </div>
                       <div class="muted" style="font-size:0.84rem;">
-                        Task ID: <code>${escapeHtml(turn.dryRunResult.taskId)}</code>
+                        Dry-Run Task ID: <code>${escapeHtml(turn.dryRunResult.taskId)}</code>
                         ${turn.dryRunResult.receipts && turn.dryRunResult.receipts.length ? ` · Receipt ID: <code>${escapeHtml(turn.dryRunResult.receipts[0].receipt_id)}</code>` : ''}
                       </div>
                       <div style="margin-top:4px;">
+                        <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  ${turn.dryRunResult && turn.selectedActionType === 'inspect_project' && turn.dryRunResult.task && turn.dryRunResult.task.status === 'succeeded' && !turn.realExecutionResult ? `
+                    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px; margin-top:8px; display:grid; gap:8px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#166534;">Ready for Supervised Read-Only Execution:</strong>
+                        <span class="pill succeeded">Dry-Run Proof Verified</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Target: <strong>${escapeHtml(turn.selectedProject)}</strong> · Tool: <code>filesystem_tool</code> (Read-Only)
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem;">
+                        <span class="pill allowed">Read-Only</span>
+                        <span class="pill allowed">Registered-Project Only</span>
+                        <span class="pill allowed">No Shell / No Writes</span>
+                        <span class="pill allowed">Protected Files Skipped</span>
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">
+                        <span class="muted" style="font-size:0.82rem;">Inspects workspace metadata synchronously without file modification.</span>
+                        <button class="small" style="background:#15803d; border-color:#15803d;" type="button" data-action="execute-read-only" data-turn-idx="${index}">Execute Read-Only Inspection</button>
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  ${turn.realExecutionResult ? `
+                    <div class="action-result-box succeeded" style="margin-top:10px; border-width:2px; background:#f0fdf4; border-color:#22c55e;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#15803d;">Read-only inspection executed.</strong>
+                        <span class="pill succeeded">Executed Read-Only</span>
+                      </div>
+                      <div class="muted" style="font-size:0.84rem;">
+                        Project: <strong>${escapeHtml(turn.realExecutionResult.projectName)}</strong> · Real Task ID: <code>${escapeHtml(turn.realExecutionResult.taskId)}</code> · Receipt ID: <code>${escapeHtml(turn.realExecutionResult.receiptId)}</code>
+                      </div>
+                      ${turn.realExecutionResult.inspectionResult ? `
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:6px; margin:6px 0;">
+                          <div style="background:#fff; border:1px solid #bbf7d0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                            <span class="muted">Scanned Files:</span> <strong>${escapeHtml(turn.realExecutionResult.inspectionResult.scannedFiles)}</strong>
+                          </div>
+                          <div style="background:#fff; border:1px solid #bbf7d0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                            <span class="muted">Protected Skipped:</span> <strong>${escapeHtml(turn.realExecutionResult.inspectionResult.protectedSkippedFiles)}</strong>
+                          </div>
+                          <div style="background:#fff; border:1px solid #bbf7d0; border-radius:4px; padding:6px 8px; font-size:0.82rem;">
+                            <span class="muted">Skipped Dirs:</span> <strong>${escapeHtml(turn.realExecutionResult.inspectionResult.skippedDirs)}</strong>
+                          </div>
+                        </div>
+                        ${turn.realExecutionResult.inspectionResult.docsDetected && turn.realExecutionResult.inspectionResult.docsDetected.length ? `
+                          <div style="font-size:0.82rem; color:var(--muted); margin-top:4px;">
+                            <strong>Detected Documentation:</strong> ${turn.realExecutionResult.inspectionResult.docsDetected.map(d => `<code>${escapeHtml(d.relativePath || d.filename || d.title || 'doc')}</code>`).join(', ')}
+                          </div>
+                        ` : ''}
+                        ${turn.realExecutionResult.inspectionResult.warnings && turn.realExecutionResult.inspectionResult.warnings.length ? `
+                          <div style="font-size:0.82rem; color:#b45309; margin-top:2px;">
+                            <strong>Warnings:</strong> ${turn.realExecutionResult.inspectionResult.warnings.map(w => escapeHtml(w)).join('; ')}
+                          </div>
+                        ` : ''}
+                      ` : ''}
+                      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
+                        <button class="secondary small" type="button" data-action="use-inspection-prior" data-turn-idx="${index}">Use inspection result as prior context</button>
                         <a href="/actions" class="button-link small" style="display:inline-block; font-size:0.8rem; padding:3px 8px; background:var(--accent); color:#fff; border-radius:4px; text-decoration:none;">View in Action Center</a>
                       </div>
                     </div>
@@ -1430,6 +1491,31 @@ def unified_assistant_html() -> str:
           const submitDryRunBtn = turnDiv.querySelector(`[data-action="submit-dry-run"]`);
           if (submitDryRunBtn) {
             submitDryRunBtn.addEventListener('click', () => submitDryRun(index));
+          }
+
+          // Execute read-only
+          const execReadOnlyBtn = turnDiv.querySelector(`[data-action="execute-read-only"]`);
+          if (execReadOnlyBtn) {
+            execReadOnlyBtn.addEventListener('click', () => submitExecuteReadOnly(index));
+          }
+
+          // Use inspection result as prior context
+          const useInspPriorBtn = turnDiv.querySelector(`[data-action="use-inspection-prior"]`);
+          if (useInspPriorBtn) {
+            useInspPriorBtn.addEventListener('click', () => {
+              const res = turn.realExecutionResult;
+              const insp = res.inspectionResult || {};
+              const docList = (insp.docsDetected || []).map(d => d.relativePath || d.filename).join(', ') || 'none';
+              const summaryText = `Inspected project ${res.projectName}: Scanned ${insp.scannedFiles} files, ${insp.protectedSkippedFiles} protected files skipped. Documentation: ${docList}. File types: ${JSON.stringify(insp.fileTypeCounts || {})}.`;
+              setStagedPriorContext({
+                agentId: 'filesystem_tool',
+                agentName: 'Filesystem Tool (Inspection)',
+                responseId: res.receiptId || res.taskId,
+                summary: summaryText,
+              });
+              byId('composer').scrollIntoView({ behavior: 'smooth' });
+              showToast('Staged read-only inspection result as prior context.');
+            });
           }
         }
       }
@@ -1515,6 +1601,41 @@ def unified_assistant_html() -> str:
       renderTranscript();
     } catch (err) {
       alert(`Dry run validation failed: ${err.message}`);
+    }
+  }
+
+  // Execute real read-only inspection
+  async function submitExecuteReadOnly(turnIdx) {
+    const turn = sessionState.transcript[turnIdx];
+    if (!turn || !turn.dryRunResult) return;
+    const dryRunTask = turn.dryRunResult.task;
+    const projectName = turn.selectedProject || dryRunTask.project_name;
+    const expectedReceiptId = (turn.dryRunResult.receipts && turn.dryRunResult.receipts.length)
+      ? turn.dryRunResult.receipts[0].receipt_id
+      : null;
+
+    const resp = turn.response || {};
+    const responseId = (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null;
+
+    try {
+      const result = await apiFetch('/api/assistant/actions/execute-read-only', {
+        method: 'POST',
+        body: JSON.stringify({
+          dryRunTaskId: dryRunTask.task_id,
+          projectName: projectName,
+          expectedReceiptId: expectedReceiptId,
+          confirmation: 'EXECUTE READ-ONLY INSPECTION',
+          sourceAgentId: turn.agentId || 'unified_assistant',
+          sourceResponseId: responseId,
+          sourceTurnIndex: turnIdx,
+          actor: 'local_user'
+        })
+      });
+      turn.realExecutionResult = result;
+      showToast('Read-only project inspection executed successfully.');
+      renderTranscript();
+    } catch (err) {
+      alert(`Read-only inspection failed: ${err.message}`);
     }
   }
 
