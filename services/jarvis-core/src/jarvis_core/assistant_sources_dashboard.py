@@ -173,7 +173,7 @@ def sources_dashboard_html() -> str:
   <section class="productivity-panel" id="panel-sources">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
       <div>
-        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Reviewed Public Sources (<span id="src-total-count">0</span> / 5 included)</h3>
+        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Reviewed Public Sources (<span id="src-included-count">0</span> / 5 included · <span id="src-total-count">0</span> / 5 in session)</h3>
         <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Optional manual reviewed-public-source context for Unified Assistant requests. Session-only · Bounded excerpt · No auto-fetch.</p>
       </div>
       <div style="display:flex; align-items:center; gap:6px;">
@@ -193,7 +193,7 @@ def sources_dashboard_html() -> str:
     <!-- Sources Grid Container -->
     <div class="sources-grid" id="sources-grid">
       <div class="empty-state" style="padding:24px;">
-        No reviewed sources in this session. Add a public URL manually if your request would benefit from reviewed source context.
+        No reviewed sources in this session. Add a public URL manually if your request would benefit from reviewed source context. Sources are fetched only when you explicitly click "Fetch Excerpt" and are never retrieved in the background.
       </div>
     </div>
   </section>
@@ -259,7 +259,7 @@ def sources_dashboard_html() -> str:
 def sources_dashboard_scripts() -> str:
     return """
   // ==========================================
-  // Reviewed Public Sources Workspace (v0.1E Pass 11)
+  // Reviewed Public Sources Workspace (v0.1E Pass 13)
   // ==========================================
 
   const MAX_SESSION_SOURCES = 5;
@@ -293,12 +293,14 @@ def sources_dashboard_scripts() -> str:
     const total = sessionState.reviewedSources.length;
     const included = getIncludedReviewedSources().length;
 
-    const tabSpan = byId('sources-tab-count');
+    const tabSpan = byId('tab-count-sources');
+    const includedSpan = byId('src-included-count');
     const totalSpan = byId('src-total-count');
     const compBadge = byId('composer-sources-badge');
 
     if (tabSpan) tabSpan.textContent = included;
-    if (totalSpan) totalSpan.textContent = included;
+    if (includedSpan) includedSpan.textContent = included;
+    if (totalSpan) totalSpan.textContent = total;
 
     if (compBadge) {
       if (included === 0) {
@@ -337,6 +339,28 @@ def sources_dashboard_scripts() -> str:
         body: JSON.stringify({ url: rawUrl.trim() })
       });
 
+      // Duplicate URL Detection (Part I)
+      const normalizedOrRaw = (res.normalized_url || rawUrl.trim()).toLowerCase();
+      const existing = sessionState.reviewedSources.find(s =>
+        (s.sourceUrl || '').toLowerCase() === normalizedOrRaw ||
+        (s.finalUrl || '').toLowerCase() === normalizedOrRaw ||
+        ((s.validationResult && s.validationResult.normalized_url) || '').toLowerCase() === normalizedOrRaw
+      );
+
+      if (existing) {
+        if (fb) {
+          fb.style.display = 'block';
+          fb.innerHTML = `<span style="color:#d97706; font-weight:600;">Notice:</span> Source already exists in this session.`;
+        }
+        const existingCard = document.querySelector(`[data-source-id="${existing.id}"]`);
+        if (existingCard) {
+          existingCard.scrollIntoView({ behavior: 'smooth' });
+          existingCard.style.outline = '2px solid #f59e0b';
+          setTimeout(() => { existingCard.style.outline = ''; }, 1800);
+        }
+        return;
+      }
+
       if (fb) {
         fb.style.display = 'block';
         if (res.is_allowed) {
@@ -371,7 +395,9 @@ def sources_dashboard_scripts() -> str:
       sessionState.reviewedSources.push(newSource);
       updateSourcesCounters();
       renderSourcesGrid();
-      triggerReadinessEvaluation();
+      if (typeof triggerReadinessEvaluation === 'function') {
+        triggerReadinessEvaluation();
+      }
 
       // Clear input
       if (byId('source-url-input')) byId('source-url-input').value = '';
@@ -430,7 +456,9 @@ def sources_dashboard_scripts() -> str:
     } finally {
       updateSourcesCounters();
       renderSourcesGrid();
-      triggerReadinessEvaluation();
+      if (typeof triggerReadinessEvaluation === 'function') {
+        triggerReadinessEvaluation();
+      }
     }
   }
 
@@ -441,60 +469,47 @@ def sources_dashboard_scripts() -> str:
     if (!sessionState.reviewedSources.length) {
       grid.innerHTML = `
         <div class="empty-state" style="padding:24px;">
-          No reviewed sources in this session. Add a public URL manually if your request would benefit from reviewed source context.
+          No reviewed sources in this session. Add a public URL manually if your request would benefit from reviewed source context. Sources are fetched only when you explicitly click "Fetch Excerpt" and are never retrieved in the background.
         </div>
       `;
       return;
     }
 
     grid.replaceChildren();
-    sessionState.reviewedSources.forEach((s) => {
+    sessionState.reviewedSources.forEach(s => {
       const card = document.createElement('div');
-      card.className = `source-card ${s.included ? 'included' : ''} ${s.status === 'blocked' ? 'blocked' : (s.status === 'failed' ? 'failed' : '')}`;
-
-      let statusBadge = '';
-      if (s.status === 'draft') statusBadge = '<span class="pill inactive">Draft URL</span>';
-      else if (s.status === 'validated') statusBadge = '<span class="pill waiting_for_approval">Validated · Ready to Fetch</span>';
-      else if (s.status === 'fetching') statusBadge = '<span class="pill active">Fetching Excerpt...</span>';
-      else if (s.status === 'fetched') {
-        statusBadge = s.included ? '<span class="pill succeeded">✓ Included in Next Request</span>' : '<span class="pill moderate">Fetched — Review Required</span>';
-      } else if (s.status === 'blocked') statusBadge = '<span class="pill blocked">Blocked by Policy</span>';
-      else if (s.status === 'failed') statusBadge = '<span class="pill danger">Fetch Unavailable</span>';
+      card.className = `source-card ${s.included ? 'included' : ''} ${s.status === 'blocked' ? 'blocked' : ''}`;
+      card.setAttribute('data-source-id', s.id);
 
       card.innerHTML = `
         <div class="source-card-header">
-          <div>
-            <div class="source-card-title">${escapeHtml(s.title || 'Untitled Source')}</div>
-            <div class="source-card-url">${escapeHtml(s.sourceUrl)}</div>
-            ${(s.finalUrl && s.finalUrl !== s.sourceUrl) ? `<div class="source-card-url" style="color:#0284c7;">↳ Final: ${escapeHtml(s.finalUrl)}</div>` : ''}
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            ${statusBadge}
-          </div>
+          <span class="source-card-title">${escapeHtml(s.title || 'Reviewed Public Source')}</span>
+          <span class="pill ${s.status === 'fetched' ? (s.included ? 'succeeded' : 'allowed') : (s.status === 'blocked' ? 'danger' : 'inactive')}">
+            ${s.status === 'fetching' ? 'Fetching...' : (s.status === 'fetched' ? (s.included ? 'Included' : 'Fetched') : (s.status === 'blocked' ? 'Blocked' : 'Validated'))}
+          </span>
+        </div>
+
+        <div class="source-card-meta">
+          <span><strong>Domain:</strong> ${escapeHtml(s.domain || 'Unknown')}</span>
+          ${s.fetchedAt ? `<span><strong>Fetched:</strong> ${new Date(s.fetchedAt).toLocaleTimeString()}</span>` : ''}
+          ${s.recencyNote ? `<span><strong>Recency:</strong> ${escapeHtml(s.recencyNote)}</span>` : ''}
+        </div>
+
+        <div class="source-card-url" title="${escapeHtml(s.sourceUrl)}">
+          ${escapeHtml(s.sourceUrl)}
         </div>
 
         ${s.errorMessage ? `
-          <div class="banner warning" style="margin:0; font-size:0.8rem; padding:6px 10px;">
-            <strong>Notice:</strong> ${escapeHtml(s.errorMessage)}
+          <div class="banner warning" style="margin:0; font-size:0.8rem; padding:6px 8px;">
+            ⚠️ ${escapeHtml(s.errorMessage)}
           </div>
         ` : ''}
 
-        ${s.fetched && s.excerpt ? `
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-              <span class="muted" style="font-size:0.78rem; font-weight:600;">Bounded Excerpt (${s.excerpt.length} chars):</span>
-              <span class="muted" style="font-size:0.75rem;">Type: ${escapeHtml(s.contentType || 'text/plain')}</span>
-            </div>
-            <div class="source-excerpt-box">${escapeHtml(s.excerpt)}</div>
+        ${s.excerpt ? `
+          <div class="source-excerpt-box">
+            ${escapeHtml(s.excerpt)}
           </div>
         ` : ''}
-
-        <div class="source-card-meta">
-          ${s.domain ? `<span class="pill" style="font-size:0.72rem;">${escapeHtml(s.domain)}</span>` : ''}
-          ${s.fetchedAt ? `<span class="muted" style="font-size:0.72rem;">Fetched: ${escapeHtml(new Date(s.fetchedAt).toLocaleTimeString())}</span>` : ''}
-          ${s.recencyNote ? `<span class="evidence-item-tag citation" style="font-size:0.72rem;">${escapeHtml(s.recencyNote)}</span>` : ''}
-          ${(s.qualityWarnings && s.qualityWarnings.length) ? `<span class="diff-badge" style="background:#fef3c7; color:#92400e;">${s.qualityWarnings.length} Warning(s)</span>` : ''}
-        </div>
 
         ${s.fetched ? `
           <div class="source-card-notes">
@@ -541,13 +556,17 @@ def sources_dashboard_scripts() -> str:
         s.included = !s.included;
         updateSourcesCounters();
         renderSourcesGrid();
-        triggerReadinessEvaluation();
+        if (typeof triggerReadinessEvaluation === 'function') {
+          triggerReadinessEvaluation();
+        }
       });
       card.querySelector('[data-src-action="remove"]')?.addEventListener('click', () => {
         sessionState.reviewedSources = sessionState.reviewedSources.filter(item => item.id !== s.id);
         updateSourcesCounters();
         renderSourcesGrid();
-        triggerReadinessEvaluation();
+        if (typeof triggerReadinessEvaluation === 'function') {
+          triggerReadinessEvaluation();
+        }
       });
 
       grid.append(card);
@@ -602,15 +621,19 @@ def sources_dashboard_scripts() -> str:
     }
 
     const notesSec = byId('src-detail-notes-sec');
-    const notesText = byId('src-detail-notes');
-    if (s.userNotes) {
+    const notesEl = byId('src-detail-notes');
+    if (s.userNotes && s.userNotes.trim()) {
       notesSec.style.display = 'block';
-      notesText.textContent = s.userNotes;
+      notesEl.textContent = s.userNotes;
     } else {
       notesSec.style.display = 'none';
     }
 
-    drawer.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('drawer-source-detail');
+    } else {
+      drawer.classList.add('open');
+    }
   }
 
   function initSourcesDashboardEventHandlers() {
@@ -633,23 +656,41 @@ def sources_dashboard_scripts() -> str:
         sessionState.reviewedSources = [];
         updateSourcesCounters();
         renderSourcesGrid();
-        triggerReadinessEvaluation();
+        if (typeof triggerReadinessEvaluation === 'function') {
+          triggerReadinessEvaluation();
+        }
         showToast('Cleared session sources.');
       }
     });
 
     byId('close-source-detail-btn')?.addEventListener('click', () => {
-      byId('drawer-source-detail')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') {
+        closeOverlayModal('drawer-source-detail');
+      } else {
+        byId('drawer-source-detail')?.classList.remove('open');
+      }
     });
     byId('drawer-source-detail')?.addEventListener('click', (e) => {
-      if (e.target === byId('drawer-source-detail')) byId('drawer-source-detail').classList.remove('open');
+      if (e.target === byId('drawer-source-detail')) {
+        if (typeof closeOverlayModal === 'function') {
+          closeOverlayModal('drawer-source-detail');
+        } else {
+          byId('drawer-source-detail').classList.remove('open');
+        }
+      }
     });
 
     byId('src-detail-add-kit-btn')?.addEventListener('click', () => {
       const s = sessionState.activeDetailSource;
       if (!s || !s.excerpt) return;
-      addContextKitItem('reviewed_source', `Reviewed Source — ${s.title || s.domain || 'Excerpt'}`, `Source URL: ${s.sourceUrl}\nDomain: ${s.domain}\n\nExcerpt:\n${s.excerpt}`);
-      byId('drawer-source-detail')?.classList.remove('open');
+      if (typeof addContextKitItem === 'function') {
+        addContextKitItem('reviewed_source', `Reviewed Source — ${s.title || s.domain || 'Excerpt'}`, `Source URL: ${s.sourceUrl}\nDomain: ${s.domain}\n\nExcerpt:\n${s.excerpt}`);
+      }
+      if (typeof closeOverlayModal === 'function') {
+        closeOverlayModal('drawer-source-detail');
+      } else {
+        byId('drawer-source-detail')?.classList.remove('open');
+      }
     });
 
     byId('src-detail-insert-composer-btn')?.addEventListener('click', () => {
@@ -657,12 +698,16 @@ def sources_dashboard_scripts() -> str:
       if (!s || !s.excerpt) return;
       const snippet = `[Reviewed Source: ${s.title || s.domain}]\nURL: ${s.sourceUrl}\nExcerpt: ${s.excerpt}\n`;
       const input = byId('prompt-input');
-      input.value = (input.value.trim() ? `${input.value.trim()}\n\n${snippet}` : snippet).trim();
-      input.focus();
-      triggerReadinessEvaluation();
-      byId('drawer-source-detail')?.classList.remove('open');
+      if (input) {
+        input.value = (input.value.trim() ? `${input.value.trim()}\n\n${snippet}` : snippet).trim();
+      }
+      if (typeof closeOverlayModal === 'function') {
+        closeOverlayModal('drawer-source-detail');
+      } else {
+        byId('drawer-source-detail')?.classList.remove('open');
+      }
       showToast('Inserted source excerpt into prompt composer.');
-      byId('composer').scrollIntoView({ behavior: 'smooth' });
+      byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     });
 
     byId('composer-sources-badge')?.addEventListener('click', () => {

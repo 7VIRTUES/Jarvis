@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .assistant_dashboard_shared import (
+    shared_dashboard_scripts,
+    shared_dashboard_styles,
+)
 from .assistant_productivity_dashboard import (
     productivity_html_panels,
     productivity_readiness_coach_html,
@@ -2863,36 +2867,49 @@ def unified_assistant_html() -> str:
       'panel-sources'
     ];
     if (tabId === 'panel-decision-composer-wrap') {
-      openDecisionComposer();
+      if (typeof openDecisionComposer === 'function') openDecisionComposer();
       return;
     }
     tabs.forEach(id => {
       const panel = byId(id);
-      const btn = document.querySelector(`[data-panel="${id}"]`);
-      if (!panel || !btn) return;
+      const btn = document.querySelector(`[data-prod-tab="${id}"], [data-panel="${id}"]`);
+      if (!panel) return;
       if (id === tabId) {
         const isOpen = panel.classList.contains('open');
         if (isOpen) {
           panel.classList.remove('open');
-          btn.classList.remove('active');
+          if (btn) {
+            btn.classList.remove('active');
+            btn.setAttribute('aria-selected', 'false');
+          }
         } else {
           panel.classList.add('open');
-          btn.classList.add('active');
-          if (id === 'panel-result-board') renderResultBoard();
+          if (btn) {
+            btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            try {
+              btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            } catch (e) {}
+          }
+          if (id === 'panel-result-board' && typeof renderResultBoard === 'function') renderResultBoard();
           if (id === 'panel-playbooks' && typeof renderPlaybookSteps === 'function') renderPlaybookSteps();
           if (id === 'panel-sources' && typeof renderSourcesGrid === 'function') renderSourcesGrid();
+          if (id === 'panel-comparison' && typeof renderComparisonWorkspace === 'function') renderComparisonWorkspace();
         }
       } else {
         panel.classList.remove('open');
-        btn.classList.remove('active');
+        if (btn) {
+          btn.classList.remove('active');
+          btn.setAttribute('aria-selected', 'false');
+        }
       }
     });
   }
 
   document.querySelectorAll('.prod-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const targetPanel = btn.getAttribute('data-panel');
-      switchProductivityTab(targetPanel);
+      const targetPanel = btn.getAttribute('data-prod-tab') || btn.getAttribute('data-panel');
+      if (targetPanel) switchProductivityTab(targetPanel);
     });
   });
 
@@ -3525,8 +3542,8 @@ def unified_assistant_html() -> str:
 </script>
 </body>
 </html>"""
-    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles() + "\n" + results_dashboard_styles() + "\n" + sources_dashboard_styles() + "\n" + workflows_dashboard_styles())
+    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", shared_dashboard_styles() + "\n" + productivity_styles() + "\n" + results_dashboard_styles() + "\n" + sources_dashboard_styles() + "\n" + workflows_dashboard_styles())
     html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels() + "\n" + results_dashboard_html_panels() + "\n" + sources_dashboard_html() + "\n" + workflows_dashboard_html())
     html = html.replace("<!-- PRODUCTIVITY_READINESS_COACH_PLACEHOLDER -->", productivity_readiness_coach_html())
-    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", results_dashboard_scripts() + "\n" + sources_dashboard_scripts() + "\n" + workflows_dashboard_scripts())
+    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", shared_dashboard_scripts() + "\n" + results_dashboard_scripts() + "\n" + sources_dashboard_scripts() + "\n" + workflows_dashboard_scripts())
     return html

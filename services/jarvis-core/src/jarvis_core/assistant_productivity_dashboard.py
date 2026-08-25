@@ -20,10 +20,16 @@ def productivity_styles() -> str:
     }
     .prod-tabs {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
       gap: 6px;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
     }
     .prod-tab-btn {
+      flex-shrink: 0;
+      white-space: nowrap;
       background: #f8fafc;
       border: 1px solid #cbd5e1;
       color: #334155;
@@ -98,234 +104,112 @@ def productivity_styles() -> str:
     }
     .cc-pinned-section, .cc-recent-section {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
       font-size: 0.84rem;
+      flex-wrap: wrap;
     }
     .cc-chip-row {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      align-items: center;
     }
-    .cc-chip {
+    .cc-agent-chip {
       background: #ffffff;
       border: 1px solid #cbd5e1;
-      padding: 3px 8px;
       border-radius: 14px;
-      font-size: 0.82rem;
-      font-weight: 500;
-      color: var(--text);
+      padding: 2px 10px;
+      font-size: 0.8rem;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      cursor: pointer;
-      transition: all 0.15s ease;
+      gap: 4px;
+      transition: all 0.12s ease;
     }
-    .cc-chip:hover {
-      background: var(--accent-light);
+    .cc-agent-chip:hover {
       border-color: var(--accent);
-      color: var(--accent-dark);
+      background: #f0fdf4;
     }
-    .cc-chip.pinned {
-      background: #fffbeb;
-      border-color: #fde68a;
-      color: #92400e;
-    }
-    .cc-chip .unpin-icon {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      cursor: pointer;
-    }
-    .cc-chip .unpin-icon:hover {
-      color: var(--danger);
-    }
-
-    /* Agent Grid */
     .cc-agent-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 12px;
-      max-height: 480px;
-      overflow-y: auto;
-      padding-right: 4px;
+      margin-top: 4px;
     }
     .cc-agent-card {
       background: #ffffff;
       border: 1px solid var(--border);
-      border-radius: 7px;
-      padding: 12px;
+      border-radius: 8px;
+      padding: 12px 14px;
       display: grid;
       gap: 8px;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
     }
     .cc-agent-card:hover {
       border-color: var(--accent);
-      box-shadow: 0 2px 6px rgba(21, 94, 155, 0.12);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
     }
-    .cc-agent-card.high-stakes-card {
-      border-left: 4px solid #ea580c;
+    .cc-agent-card.selected {
+      border-color: var(--accent);
+      background: #f0fdf4;
     }
-    .cc-card-top {
+    .cc-agent-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       gap: 6px;
     }
-    .cc-card-name {
+    .cc-agent-name {
       font-weight: 700;
-      font-size: 0.92rem;
+      font-size: 0.95rem;
       color: var(--accent-dark);
     }
-    .cc-card-cat {
-      font-size: 0.76rem;
-      color: var(--muted);
-      background: #f1f5f9;
+    .cc-agent-category {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
       padding: 2px 6px;
       border-radius: 4px;
-      white-space: nowrap;
-    }
-    .cc-card-desc {
-      font-size: 0.83rem;
-      color: #334155;
-      line-height: 1.4;
-    }
-    .cc-card-badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      font-size: 0.74rem;
-    }
-    .cc-badge {
       background: #e2e8f0;
       color: #475569;
-      padding: 1px 5px;
-      border-radius: 3px;
     }
-    .cc-badge.hs {
-      background: #ffedd5;
-      color: #9a3412;
-      font-weight: 600;
+    .cc-agent-desc {
+      font-size: 0.84rem;
+      color: #475569;
+      line-height: 1.35;
     }
-    .cc-card-actions {
+    .cc-agent-footer {
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+      justify-content: space-between;
       align-items: center;
       margin-top: 4px;
-      padding-top: 6px;
-      border-top: 1px solid #f1f5f9;
-    }
-    .cc-card-actions button {
-      padding: 3px 8px;
-      font-size: 0.78rem;
+      font-size: 0.8rem;
     }
 
-    /* Playbooks Styles */
-    .playbook-steps-list {
-      display: grid;
-      gap: 10px;
-    }
-    .playbook-step-card {
+    /* Context Kit Styles */
+    .kit-budget-meter {
       background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 7px;
-      padding: 12px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .playbook-step-card.active-step {
-      background: #eff6ff;
-      border-color: #93c5fd;
-      border-left: 5px solid var(--accent);
-    }
-    .playbook-step-card.completed-step {
-      background: #f0fdf4;
-      border-color: #bbf7d0;
-      border-left: 5px solid #16a34a;
-    }
-    .step-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1 1 300px;
-    }
-    .step-num-badge {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 700;
-      font-size: 0.85rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .step-details {
-      display: grid;
-      gap: 2px;
-    }
-    .step-name {
-      font-weight: 700;
-      font-size: 0.92rem;
-      color: var(--text);
-    }
-    .step-purpose {
-      font-size: 0.82rem;
-      color: var(--muted);
-    }
-    .step-right {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Context Kit Builder Styles */
-    .context-kit-items-list {
-      display: grid;
-      gap: 8px;
-      max-height: 260px;
-      overflow-y: auto;
-    }
-    .context-kit-item {
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
+      border: 1px solid #e2e8f0;
       border-radius: 6px;
-      padding: 8px 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 6px;
       font-size: 0.86rem;
     }
-    .kit-budget-meter {
-      display: grid;
-      gap: 4px;
-      font-size: 0.84rem;
-      color: var(--muted);
-    }
     .budget-bar-track {
-      height: 6px;
       background: #e2e8f0;
-      border-radius: 3px;
+      height: 8px;
+      border-radius: 4px;
       overflow: hidden;
+      width: 100%;
     }
     .budget-bar-fill {
-      height: 100%;
       background: var(--accent);
+      height: 100%;
       width: 0%;
-      transition: width 0.2s ease, background 0.2s ease;
+      transition: width 0.2s ease;
     }
     .budget-bar-fill.warning {
       background: #f59e0b;
@@ -333,69 +217,51 @@ def productivity_styles() -> str:
     .budget-bar-fill.danger {
       background: #ef4444;
     }
-
-    /* Request Readiness Coach Bar */
-    .readiness-coach-card {
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 7px;
-      padding: 10px 14px;
+    .context-kit-items-list {
       display: grid;
       gap: 8px;
-      margin-bottom: 8px;
-      transition: border-color 0.2s ease;
     }
-    .readiness-coach-card.ready {
-      border-left: 5px solid #16a34a;
-      background: #f0fdf4;
-    }
-    .readiness-coach-card.needs_context, .readiness-coach-card.ambiguous_route {
-      border-left: 5px solid #d97706;
-      background: #fffbeb;
-    }
-    .readiness-coach-card.needs_input, .readiness-coach-card.needs_project {
-      border-left: 5px solid #dc2626;
-      background: #fef2f2;
-    }
-    .readiness-coach-card.high_stakes_source_gap {
-      border-left: 5px solid #ea580c;
-      background: #fff7ed;
-    }
-    .readiness-top-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 0.86rem;
-    }
-    .readiness-reason-text {
-      font-size: 0.88rem;
-      color: #1e293b;
-      line-height: 1.4;
-    }
-    .readiness-suggestion-box {
+    .context-kit-item-card {
       background: #ffffff;
-      border: 1px dashed #cbd5e1;
-      border-radius: 5px;
-      padding: 8px 10px;
-      font-size: 0.84rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 6px;
+      font-size: 0.85rem;
+    }
+    .context-kit-item-header {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      align-items: center;
+    }
+    .context-kit-item-type {
+      font-weight: 700;
+      color: var(--accent-dark);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .context-kit-item-content {
+      font-size: 0.82rem;
+      color: #334155;
+      background: #f8fafc;
+      padding: 6px 8px;
+      border-radius: 4px;
+      max-height: 80px;
+      overflow-y: auto;
+      white-space: pre-wrap;
     }
 
     /* Boundaries Modal */
     .boundaries-modal-backdrop {
-      display: none;
       position: fixed;
       inset: 0;
-      background: rgba(15, 23, 42, 0.6);
-      z-index: 200;
+      background: rgba(15, 23, 42, 0.5);
+      display: none;
       align-items: center;
       justify-content: center;
+      z-index: 999;
       padding: 16px;
     }
     .boundaries-modal-backdrop.open {
@@ -403,80 +269,80 @@ def productivity_styles() -> str:
     }
     .boundaries-modal-card {
       background: #ffffff;
-      border-radius: 9px;
-      max-width: 600px;
-      width: 100%;
-      max-height: 85vh;
-      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
       padding: 20px;
+      width: 100%;
+      max-width: 580px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
+    """
+
+
+def productivity_html_toolbar() -> str:
+    return """
+  <!-- Productivity Workspace Toolbar Strip -->
+  <div class="prod-toolbar" id="prod-toolbar">
+    <div class="prod-tabs" role="tablist" aria-label="Productivity Workspaces">
+      <button class="prod-tab-btn" data-prod-tab="panel-command-center" role="tab" aria-selected="false" type="button">
+        ⚡ Command Center (<span id="tab-count-agents">37</span>)
+      </button>
+      <button class="prod-tab-btn" data-prod-tab="panel-playbooks" role="tab" aria-selected="false" type="button">
+        📚 Playbooks &amp; Workflows
+      </button>
+      <button class="prod-tab-btn" data-prod-tab="panel-sources" role="tab" aria-selected="false" type="button">
+        🌐 Reviewed Sources (<span id="tab-count-sources">0</span>)
+      </button>
+      <button class="prod-tab-btn" data-prod-tab="panel-context-kit" role="tab" aria-selected="false" type="button">
+        🧰 Context Kit (<span id="tab-count-kit">0</span>)
+      </button>
+      <button class="prod-tab-btn" data-prod-tab="panel-result-board" role="tab" aria-selected="false" type="button">
+        📊 Result Board (<span id="tab-count-results">0</span>)
+      </button>
+      <button class="prod-tab-btn" data-prod-tab="panel-comparison" role="tab" aria-selected="false" type="button">
+        ⚖️ Multi-Result Compare (<span id="tab-count-compare">0</span>)
+      </button>
+    </div>
+    <div style="font-size:0.8rem; color:#64748b;">
+      <span id="prod-session-status">Local-only · In-memory session</span>
+    </div>
+  </div>
     """
 
 
 def productivity_html_panels() -> str:
     return """
-  <!-- Productivity Layer Toolbar (Tabs) -->
-  <section class="prod-toolbar" aria-label="Productivity workspace helpers">
-    <div class="prod-tabs">
-      <button type="button" class="prod-tab-btn" id="tab-command-center" data-panel="panel-command-center">
-        ⚡ Command Center (37)
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-playbooks" data-panel="panel-playbooks">
-        📋 Playbooks
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-context-kit" data-panel="panel-context-kit">
-        🧰 Context Kit (<span id="kit-item-count">0</span>)
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-result-board" data-panel="panel-result-board">
-        📊 Result Board (<span id="rb-tab-count">0</span>)
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-comparison" data-panel="panel-comparison">
-        ⚖️ Comparison (<span id="cmp-tab-count">0</span>)
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-sources" data-panel="panel-sources">
-        🌐 Sources (<span id="sources-tab-count">0</span>)
-      </button>
-      <button type="button" class="prod-tab-btn" id="tab-decision-composer" data-panel="panel-decision-composer-wrap">
-        🎯 Decision Composer
-      </button>
-    </div>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span id="manual-override-indicator" class="pill override" style="display:none;">
-        Manual Route: <strong id="manual-override-agent-name"></strong>
-        <button id="clear-manual-override-btn" class="secondary small" style="margin-left:4px; padding:1px 5px;" type="button">✕ Auto</button>
-      </span>
-    </div>
-  </section>
-
-  <!-- PANEL 1: Agent Command Center -->
+  <!-- PANEL 1: Command Center -->
   <section class="productivity-panel" id="panel-command-center">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Agent Command Center</h3>
-      <span class="muted" style="font-size:0.84rem;">Exposing all 37 canonical response agents · Local-only · Manual input only</span>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div>
+        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Local Response Agent Command Center</h3>
+        <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Select from 37 canonical single-turn local response agents. Fully manual selection and dispatch.</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="pill" id="cc-total-count-pill" style="font-size:0.8rem;">37 Agents Available</span>
+      </div>
     </div>
 
     <!-- Filter & Search Bar -->
     <div class="cc-filter-bar">
-      <input type="search" id="cc-search-input" class="cc-search-input" placeholder="Search by name, category, capabilities, keywords...">
+      <input type="search" id="cc-search-input" class="cc-search-input" placeholder="Search agents by name, tag, or description...">
       <select id="cc-category-filter" class="cc-filter-select">
-        <option value="">All Categories</option>
-        <option value="Coding/Core">Coding / Core (12)</option>
-        <option value="Health/Food/Home">Health / Food / Home (3)</option>
-        <option value="Safety/Emergency">Safety / Emergency (3)</option>
-        <option value="Creativity/Hobbies">Creativity / Hobbies (3)</option>
-        <option value="Knowledge/Coordinator">Knowledge / Coordinator (2)</option>
-        <option value="Life/Admin">Life / Admin (4)</option>
-        <option value="Social/Family">Social / Family (4)</option>
-        <option value="School/Career">School / Career (4)</option>
-        <option value="Finance/Housing/Travel">Finance / Housing / Travel (2)</option>
+        <option value="all">All Categories</option>
+        <option value="General">General / Orchestration</option>
+        <option value="Coding">Coding & Architecture</option>
+        <option value="Research">Research & Synthesis</option>
+        <option value="Review">Review & Hardening</option>
+        <option value="High-Stakes">High-Stakes Analysis</option>
       </select>
-      <label class="toggle-label" style="font-size:0.85rem;">
-        <input type="checkbox" id="cc-high-stakes-filter">
-        <span>High-Stakes Only</span>
-      </label>
+      <select id="cc-sort-select" class="cc-filter-select">
+        <option value="default">Default Catalog Order</option>
+        <option value="name_asc">Name (A-Z)</option>
+        <option value="name_desc">Name (Z-A)</option>
+        <option value="category">Category</option>
+      </select>
       <label class="toggle-label" style="font-size:0.85rem;">
         <input type="checkbox" id="cc-pinned-filter">
         <span>Pinned Only</span>
@@ -498,67 +364,6 @@ def productivity_html_panels() -> str:
     <!-- Agent Cards Grid -->
     <div class="cc-agent-grid" id="cc-agent-grid">
       <!-- Injected via JavaScript from canonical discovery catalog -->
-    </div>
-  </section>
-
-  <!-- PANEL 2: Playbooks & Manual Workflows -->
-  <section class="productivity-panel" id="panel-playbooks">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-      <div>
-        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Manual Workflow Playbooks (<span id="wf-step-count">0</span> / 8 steps)</h3>
-        <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Multi-step deliberate thinking patterns. Step execution, input staging, and output attachment are strictly manual.</p>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <select id="playbook-select" class="cc-filter-select">
-          <!-- Built-in playbooks injected via JS -->
-        </select>
-        <button id="reset-playbook-btn" class="secondary small" type="button">Reset Playbook</button>
-        <button id="open-wf-packet-btn" class="small" type="button">📋 Workflow Packet</button>
-      </div>
-    </div>
-
-    <!-- Workflow Progress & Status Header -->
-    <div class="wf-progress-container">
-      <div id="playbook-description" class="muted" style="font-size:0.88rem;"></div>
-
-      <div class="wf-metric-grid">
-        <span class="wf-metric-pill">Total: <strong id="wf-stat-total">0</strong></span>
-        <span class="wf-metric-pill">Completed: <strong id="wf-stat-completed">0</strong></span>
-        <span class="wf-metric-pill">In Progress: <strong id="wf-stat-in-progress">0</strong></span>
-        <span class="wf-metric-pill">Not Started: <strong id="wf-stat-not-started">0</strong></span>
-        <span class="wf-metric-pill">Needs Review: <strong id="wf-stat-needs-review">0</strong></span>
-        <span class="wf-metric-pill">Outputs Attached: <strong id="wf-stat-attached">0</strong></span>
-        <span class="wf-metric-pill">Current: <strong id="wf-current-step-label">None</strong></span>
-        <span class="wf-metric-pill">Session Sources: <strong id="wf-stat-sources">0</strong></span>
-        <span class="wf-metric-pill">Context Kit: <strong id="wf-stat-kit">0</strong></span>
-      </div>
-
-      <div class="wf-progress-bar-track">
-        <div class="wf-progress-bar-fill" id="wf-progress-bar"></div>
-      </div>
-
-      <div id="wf-completed-banner" class="banner allowed" style="display:none; font-size:0.84rem; margin:0; padding:8px 12px;">
-        <strong>Workflow marked complete for this session.</strong> All steps have been manually marked Completed. Use the Workflow Packet or Decision Composer to synthesize final actions.
-      </div>
-    </div>
-
-    <!-- Steps List Container -->
-    <div class="wf-steps-list" id="playbook-steps-list">
-      <!-- Injected via JavaScript -->
-    </div>
-
-    <!-- Workflow Artifacts Summary -->
-    <div id="wf-artifacts-summary" class="wf-artifacts-summary"></div>
-
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding-top:6px; border-top:1px solid #e2e8f0;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span>Insert Step (Max 8):</span>
-        <select id="add-step-agent-select" class="cc-filter-select">
-          <!-- 37 agents list injected via JS -->
-        </select>
-        <button id="add-step-btn" class="secondary small" type="button">+ Add Step</button>
-      </div>
-      <span class="muted" style="font-size:0.82rem;">Manual advancement only · Zero automated chaining</span>
     </div>
   </section>
 
@@ -595,7 +400,7 @@ def productivity_html_panels() -> str:
 
     <!-- Items List -->
     <div class="context-kit-items-list" id="kit-items-list">
-      <div class="muted" style="text-align:center; padding:16px; font-size:0.88rem;">No items in Context Kit. Add custom notes above or click "Add to Kit" on previous answers.</div>
+      <div class="empty-state" style="padding:16px;">No items in Context Kit. Add custom notes above or click "Add to Kit" on previous answers. Context Kit is session-only and never stored permanently.</div>
     </div>
 
     <!-- Kit Actions -->

@@ -4,7 +4,7 @@ from __future__ import annotations
 def workflows_dashboard_styles() -> str:
     return """
     /* ========================================================
-       Manual Multi-Agent Workflow Workspace Styles (v0.1E Pass 12)
+       Manual Multi-Agent Workflow Workspace Styles (v0.1E Pass 13)
        ======================================================== */
 
     .wf-progress-container {
@@ -62,6 +62,8 @@ def workflows_dashboard_styles() -> str:
       gap: 10px;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
       position: relative;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
     .wf-step-card.current {
       border-color: #3b82f6;
@@ -154,6 +156,10 @@ def workflows_dashboard_styles() -> str:
       border-color: #f59e0b;
       background: #fffbeb;
     }
+    .wf-attached-card.stale {
+      border-color: #f87171;
+      background: #fff5f5;
+    }
     .wf-attached-header {
       display: flex;
       justify-content: space-between;
@@ -185,6 +191,67 @@ def workflows_dashboard_styles() -> str:
 
 def workflows_dashboard_html() -> str:
     return """
+  <!-- PANEL 2: Playbooks & Manual Workflows -->
+  <section class="productivity-panel" id="panel-playbooks">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div>
+        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Manual Workflow Playbooks (<span id="wf-step-count">0</span> / 8 steps)</h3>
+        <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Multi-step deliberate thinking patterns. Step execution, input staging, and output attachment are strictly manual.</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <select id="playbook-select" class="cc-filter-select" aria-label="Select Workflow Playbook">
+          <!-- Built-in playbooks injected via JS -->
+        </select>
+        <button id="reset-playbook-btn" class="secondary small" type="button">Reset Playbook</button>
+        <button id="open-wf-packet-btn" class="small" type="button">📋 Workflow Packet</button>
+      </div>
+    </div>
+
+    <!-- Workflow Progress & Status Header -->
+    <div class="wf-progress-container">
+      <div id="playbook-description" class="muted" style="font-size:0.88rem;"></div>
+
+      <div class="wf-metric-grid">
+        <span class="wf-metric-pill">Total: <strong id="wf-stat-total">0</strong></span>
+        <span class="wf-metric-pill">Completed: <strong id="wf-stat-completed">0</strong></span>
+        <span class="wf-metric-pill">In Progress: <strong id="wf-stat-in-progress">0</strong></span>
+        <span class="wf-metric-pill">Not Started: <strong id="wf-stat-not-started">0</strong></span>
+        <span class="wf-metric-pill">Needs Review: <strong id="wf-stat-needs-review">0</strong></span>
+        <span class="wf-metric-pill">Outputs Attached: <strong id="wf-stat-attached">0</strong></span>
+        <span class="wf-metric-pill">Current: <strong id="wf-current-step-label">None</strong></span>
+        <span class="wf-metric-pill">Session Sources: <strong id="wf-stat-sources">0</strong></span>
+        <span class="wf-metric-pill">Context Kit: <strong id="wf-stat-kit">0</strong></span>
+      </div>
+
+      <div class="wf-progress-bar-track">
+        <div class="wf-progress-bar-fill" id="wf-progress-bar"></div>
+      </div>
+
+      <div id="wf-completed-banner" class="banner allowed" style="display:none; font-size:0.84rem; margin:0; padding:8px 12px;">
+        <strong>Workflow marked complete for this session.</strong> All steps have been manually marked Completed. Use the Workflow Packet or Decision Composer to synthesize final actions.
+      </div>
+    </div>
+
+    <!-- Steps List Container -->
+    <div class="wf-steps-list" id="playbook-steps-list">
+      <!-- Injected via JavaScript -->
+    </div>
+
+    <!-- Workflow Artifacts Summary -->
+    <div id="wf-artifacts-summary" class="wf-artifacts-summary"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding-top:6px; border-top:1px solid #e2e8f0;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span>Insert Step (Max 8):</span>
+        <select id="add-step-agent-select" class="cc-filter-select" aria-label="Select Agent to Insert as Workflow Step">
+          <!-- 37 agents list injected via JS -->
+        </select>
+        <button id="add-step-btn" class="secondary small" type="button">+ Add Step</button>
+      </div>
+      <span class="muted" style="font-size:0.82rem;">Manual advancement only · Zero automated chaining</span>
+    </div>
+  </section>
+
   <!-- MODAL: Attach Transcript Turn to Workflow Step -->
   <div class="results-modal-backdrop" id="modal-attach-workflow">
     <div class="results-modal-card" style="max-width:540px;">
@@ -213,6 +280,28 @@ def workflows_dashboard_html() -> str:
       <div style="display:flex; justify-content:flex-end; gap:8px; padding-top:8px; border-top:1px solid #e2e8f0;">
         <button id="cancel-attach-btn" class="secondary small" type="button">Cancel</button>
         <button id="confirm-attach-btn" class="small" type="button" style="background:#15803d; border-color:#15803d;">Attach Output</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Select Target Step Picker (Replaces prompt() for Step Linkage) -->
+  <div class="results-modal-backdrop" id="modal-step-target-selector">
+    <div class="results-modal-card" style="max-width:520px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="step-target-modal-title" style="margin:0; color:var(--accent-dark);">Select Target Workflow Step</h3>
+        <button id="close-step-target-modal-btn" class="secondary small" type="button">✕ Close</button>
+      </div>
+
+      <div style="display:grid; gap:10px; font-size:0.86rem;">
+        <p id="step-target-modal-desc" class="muted" style="margin:0; font-size:0.84rem;"></p>
+        <div id="step-target-radio-list" style="display:grid; gap:6px; max-height:240px; overflow-y:auto; padding-right:4px;">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; padding-top:8px; border-top:1px solid #e2e8f0;">
+        <button id="cancel-step-target-btn" class="secondary small" type="button">Cancel</button>
+        <button id="confirm-step-target-btn" class="small" type="button">Confirm Selection</button>
       </div>
     </div>
   </div>
@@ -275,7 +364,7 @@ def workflows_dashboard_html() -> str:
 def workflows_dashboard_scripts() -> str:
     return """
   // ==========================================
-  // Manual Multi-Agent Workflow Workspace (v0.1E Pass 12)
+  // Manual Multi-Agent Workflow Workspace (v0.1E Pass 13)
   // ==========================================
 
   const MAX_WORKFLOW_STEPS = 8;
@@ -283,6 +372,7 @@ def workflows_dashboard_scripts() -> str:
 
   sessionState.currentWorkflowStepId = null;
   sessionState.pendingAttachTurn = null;
+  sessionState.pendingStepTargetCallback = null;
 
   function createWorkflowStep(agentId, name, purpose, suggestedPrompt) {
     const dName = name || getAgentDisplayName(agentId);
@@ -296,11 +386,11 @@ def workflows_dashboard_scripts() -> str:
       userNotes: '', // max 2,000 chars
 
       // Explicit input mode
-      inputMode: 'none', // 'none' | 'prev_step_output' | 'specific_step_output' | 'result_board' | 'context_kit' | 'review_packet' | 'custom_notes'
+      inputMode: 'none', // 'none' | 'prev_step_output' | 'specific_step_output' | 'result_board' | 'context_kit' | 'custom_notes'
       inputRef: null, // stepId or resultBoardId
       inputLabel: '',
 
-      // Attached Assistant output
+      // Attached Assistant output reference-first (A4)
       attachedOutputRef: null,
 
       // Manual review flags
@@ -357,12 +447,31 @@ def workflows_dashboard_scripts() -> str:
     });
   }
 
+  // Complete Workflow Dirty-State Detection (A2)
   function hasWorkflowDirtyState() {
+    if (!sessionState.playbookSteps || !sessionState.playbookSteps.length) {
+      return false;
+    }
+    if (sessionState.activePlaybookId === 'custom') {
+      return sessionState.playbookSteps.length > 0;
+    }
+    const pb = sessionState.builtInPlaybooks?.find(p => p.id === sessionState.activePlaybookId);
+    if (pb && sessionState.playbookSteps.length !== pb.steps.length) {
+      return true;
+    }
     return sessionState.playbookSteps.some(s =>
-      s.attachedOutputRef || (s.userNotes && s.userNotes.trim()) || s.status !== 'not_started' || s.reviewFlags.needsReview
+      s.attachedOutputRef != null ||
+      (s.userNotes && s.userNotes.trim().length > 0) ||
+      s.status !== 'not_started' ||
+      s.inputMode !== 'none' ||
+      s.inputRef !== null ||
+      s.reviewFlags.needsReview ||
+      s.reviewFlags.potentialConflict ||
+      s.reviewFlags.blockedOnInput
     );
   }
 
+  // Clean Custom Initialization & Reset Semantics (A1)
   function selectPlaybook(playbookId, skipConfirm = false) {
     if (!skipConfirm && hasWorkflowDirtyState()) {
       if (!confirm('Switching playbooks will discard current step notes and attached outputs for this session. Continue?')) {
@@ -377,11 +486,9 @@ def workflows_dashboard_scripts() -> str:
 
     if (playbookId === 'custom') {
       byId('playbook-description').textContent = 'Custom multi-step workflow. Add up to 8 agent steps manually.';
-      if (!sessionState.playbookSteps.length) {
-        sessionState.playbookSteps = [];
-      }
+      sessionState.playbookSteps = [];
     } else {
-      const pb = sessionState.builtInPlaybooks.find(p => p.id === playbookId);
+      const pb = sessionState.builtInPlaybooks?.find(p => p.id === playbookId);
       if (pb) {
         byId('playbook-description').textContent = pb.description;
         sessionState.playbookSteps = pb.steps.map((s) => createWorkflowStep(
@@ -393,6 +500,23 @@ def workflows_dashboard_scripts() -> str:
       }
     }
     renderPlaybookSteps();
+  }
+
+  // Reference-First Output Content Resolution (A4 & A5)
+  function resolveWorkflowAttachedOutputContent(attachedRef) {
+    if (!attachedRef) return { text: '', isStale: false, excerpt: '' };
+    if (attachedRef.turnIndex !== null && attachedRef.turnIndex !== undefined && sessionState.transcript) {
+      const turn = sessionState.transcript[attachedRef.turnIndex];
+      if (turn && turn.response) {
+        const resp = turn.response;
+        const primaryText = resp.summary || resp.decision || resp.response || resp.plan || (typeof resp === 'string' ? resp : JSON.stringify(resp));
+        if (primaryText) {
+          return { text: primaryText, isStale: false, excerpt: primaryText.slice(0, 300) };
+        }
+      }
+    }
+    // If transcript turn is missing or empty, handle as stale
+    return { text: '', isStale: true, excerpt: attachedRef.excerpt || '' };
   }
 
   function resolveStepInputContext(step) {
@@ -407,15 +531,21 @@ def workflows_dashboard_scripts() -> str:
       }
       for (let i = stepIdx - 1; i >= 0; i--) {
         const prev = sessionState.playbookSteps[i];
-        if (prev.attachedOutputRef && prev.attachedOutputRef.fullContent) {
-          return {
-            text: prev.attachedOutputRef.fullContent,
-            label: `Previous Attached Output (Step ${i + 1}: ${prev.attachedOutputRef.agentName})`,
-            agentName: prev.attachedOutputRef.agentName,
-            agentId: prev.attachedOutputRef.agentId,
-            responseId: prev.attachedOutputRef.responseId,
-            valid: true,
-          };
+        if (prev.attachedOutputRef) {
+          const resolved = resolveWorkflowAttachedOutputContent(prev.attachedOutputRef);
+          if (resolved.isStale) {
+            return { text: '', label: `Previous Attached Output (Step ${i + 1}) is no longer available in transcript`, valid: false };
+          }
+          if (resolved.text) {
+            return {
+              text: resolved.text,
+              label: `Previous Attached Output (Step ${i + 1}: ${prev.attachedOutputRef.agentName})`,
+              agentName: prev.attachedOutputRef.agentName,
+              agentId: prev.attachedOutputRef.agentId,
+              responseId: prev.attachedOutputRef.responseId,
+              valid: true,
+            };
+          }
         }
       }
       return { text: '', label: 'No previous attached workflow output is available.', valid: false };
@@ -427,8 +557,12 @@ def workflows_dashboard_scripts() -> str:
       if (!targetStep || !targetStep.attachedOutputRef) {
         return { text: '', label: 'Referenced workflow step has no attached output.', valid: false };
       }
+      const resolved = resolveWorkflowAttachedOutputContent(targetStep.attachedOutputRef);
+      if (resolved.isStale) {
+        return { text: '', label: `Attached output from ${targetStep.name} is no longer available in transcript.`, valid: false };
+      }
       return {
-        text: targetStep.attachedOutputRef.fullContent || '',
+        text: resolved.text,
         label: `Attached Output from ${targetStep.name}`,
         agentName: targetStep.attachedOutputRef.agentName,
         agentId: targetStep.attachedOutputRef.agentId,
@@ -441,7 +575,7 @@ def workflows_dashboard_scripts() -> str:
       if (!step.inputRef) return { text: '', label: 'No Result Board item selected', valid: false };
       const rbItem = sessionState.resultBoard?.find(r => r.id === step.inputRef);
       if (!rbItem) {
-        return { text: '', label: 'Referenced Result Board item is no longer available.', valid: false };
+        return { text: '', label: 'Referenced Result Board item is no longer available in this session.', valid: false };
       }
       return {
         text: rbItem.primaryText || '',
@@ -560,7 +694,7 @@ def workflows_dashboard_scripts() -> str:
     if (!steps.length) {
       list.innerHTML = `
         <div class="empty-state" style="padding:24px;">
-          No workflow steps yet. Choose a built-in playbook above or add an existing response agent manually.
+          No workflow steps yet. Choose a built-in playbook above or add an existing response agent manually. Nothing runs automatically.
         </div>
       `;
       return;
@@ -573,7 +707,18 @@ def workflows_dashboard_scripts() -> str:
       card.className = `wf-step-card ${isCurrent ? 'current' : ''} ${step.status === 'completed' ? 'completed' : (step.status === 'needs_review' || step.reviewFlags.needsReview ? 'needs-review' : '')}`;
 
       const resolvedInput = resolveStepInputContext(step);
-      const isHighStakes = (step.attachedOutputRef && step.attachedOutputRef.highStakes);
+
+      // Workflow High-Stakes Visibility (Part K)
+      const agentMeta = sessionState.catalogAgents?.find(a => (a.agentId || a.agent_id) === step.agentId);
+      const isAgentHighStakes = !!(agentMeta && (agentMeta.category === 'High-Stakes' || agentMeta.highStakes || (agentMeta.metadata && agentMeta.metadata.high_stakes)));
+      const isAttachedHighStakes = !!(step.attachedOutputRef && step.attachedOutputRef.highStakes);
+      const isHighStakes = isAgentHighStakes || isAttachedHighStakes;
+
+      // Stale Attached Output check (A4 & A5)
+      let resolvedOutput = null;
+      if (step.attachedOutputRef) {
+        resolvedOutput = resolveWorkflowAttachedOutputContent(step.attachedOutputRef);
+      }
 
       card.innerHTML = `
         <div class="wf-step-header">
@@ -581,11 +726,11 @@ def workflows_dashboard_scripts() -> str:
             <span class="wf-step-num">${idx + 1}</span>
             <span class="wf-step-name">${escapeHtml(step.name)}</span>
             ${isCurrent ? '<span class="pill active">Current Step</span>' : ''}
-            ${step.attachedOutputRef ? '<span class="pill succeeded">Output Attached</span>' : '<span class="pill inactive">Awaiting Output</span>'}
+            ${step.attachedOutputRef ? (resolvedOutput && resolvedOutput.isStale ? '<span class="pill danger">Output Stale</span>' : '<span class="pill succeeded">Output Attached</span>') : '<span class="pill inactive">Awaiting Output</span>'}
             ${isHighStakes ? '<span class="diff-badge" style="background:#fee2e2; color:#991b1b;">High Stakes</span>' : ''}
           </div>
           <div style="display:flex; align-items:center; gap:6px;">
-            <select class="cc-filter-select" data-wf-status="${step.stepId}" style="font-size:0.8rem; padding:3px 6px;">
+            <select class="cc-filter-select" data-wf-status="${step.stepId}" style="font-size:0.8rem; padding:3px 6px;" aria-label="Step status">
               <option value="not_started" ${step.status === 'not_started' ? 'selected' : ''}>Not Started</option>
               <option value="in_progress" ${step.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
               <option value="needs_review" ${step.status === 'needs_review' ? 'selected' : ''}>Needs Review</option>
@@ -598,11 +743,17 @@ def workflows_dashboard_scripts() -> str:
           <strong>Purpose:</strong> ${escapeHtml(step.purpose)}
         </div>
 
+        ${isHighStakes && activeSourcesCount === 0 && isCurrent ? `
+          <div class="banner warning" style="margin:2px 0 0; font-size:0.8rem; padding:6px 10px;">
+            <strong>High-Stakes Step:</strong> 0 reviewed public sources attached to session. High-stakes requests are safer when validated against verified external evidence.
+          </div>
+        ` : ''}
+
         <!-- Input Source Configuration -->
         <div class="wf-config-row">
           <div class="wf-field">
             <label>Input Source for Step:</label>
-            <select class="cc-filter-select" data-wf-input-mode="${step.stepId}">
+            <select class="cc-filter-select" data-wf-input-mode="${step.stepId}" aria-label="Input mode for step">
               <option value="none" ${step.inputMode === 'none' ? 'selected' : ''}>None / Fresh Request</option>
               <option value="prev_step_output" ${step.inputMode === 'prev_step_output' ? 'selected' : ''}>Previous Workflow Step Output</option>
               <option value="specific_step_output" ${step.inputMode === 'specific_step_output' ? 'selected' : ''}>Specific Workflow Step Output</option>
@@ -676,7 +827,7 @@ def workflows_dashboard_scripts() -> str:
 
         <!-- Attached Output Card (if present) -->
         ${step.attachedOutputRef ? `
-          <div class="wf-attached-card ${step.attachedOutputRef.agentId !== step.agentId ? 'mismatch' : ''}">
+          <div class="wf-attached-card ${resolvedOutput && resolvedOutput.isStale ? 'stale' : (step.attachedOutputRef.agentId !== step.agentId ? 'mismatch' : '')}">
             <div class="wf-attached-header">
               <div>
                 <strong>Attached Output:</strong> ${escapeHtml(step.attachedOutputRef.agentName)}
@@ -687,14 +838,24 @@ def workflows_dashboard_scripts() -> str:
                 ${step.attachedOutputRef.sourceCount > 0 ? `<span class="pill allowed" style="font-size:0.7rem;">${step.attachedOutputRef.sourceCount} Sources</span>` : ''}
               </div>
             </div>
-            <div style="font-size:0.82rem; color:#334155; line-height:1.4; background:rgba(255,255,255,0.7); padding:6px 8px; border-radius:4px; max-height:80px; overflow-y:auto;">
-              ${escapeHtml(step.attachedOutputRef.excerpt)}
-            </div>
+
+            ${resolvedOutput && resolvedOutput.isStale ? `
+              <div class="banner warning" style="margin:0; font-size:0.8rem; padding:6px 8px;">
+                ⚠️ Attached result is no longer available in this session transcript.
+              </div>
+            ` : `
+              <div style="font-size:0.82rem; color:#334155; line-height:1.4; background:rgba(255,255,255,0.7); padding:6px 8px; border-radius:4px; max-height:80px; overflow-y:auto;">
+                ${escapeHtml(resolvedOutput ? resolvedOutput.excerpt : step.attachedOutputRef.excerpt)}
+              </div>
+            `}
+
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-top:2px;">
               <div style="display:flex; gap:6px;">
-                <button class="secondary small" type="button" data-wf-attached-action="view" data-step-id="${step.stepId}">🔍 View Result</button>
-                <button class="secondary small" type="button" data-wf-attached-action="add-board" data-step-id="${step.stepId}">📊 Add to Result Board</button>
-                <button class="secondary small" type="button" data-wf-attached-action="use-input" data-step-id="${step.stepId}">➡️ Use as Input for Another Step</button>
+                ${resolvedOutput && !resolvedOutput.isStale ? `
+                  <button class="secondary small" type="button" data-wf-attached-action="view" data-step-id="${step.stepId}">🔍 View Result</button>
+                  <button class="secondary small" type="button" data-wf-attached-action="add-board" data-step-id="${step.stepId}">📊 Add to Result Board</button>
+                  <button class="secondary small" type="button" data-wf-attached-action="use-input" data-step-id="${step.stepId}">➡️ Use as Input for Another Step</button>
+                ` : ''}
               </div>
               <button class="secondary small danger" type="button" data-wf-attached-action="detach" data-step-id="${step.stepId}">Detach</button>
             </div>
@@ -713,9 +874,9 @@ def workflows_dashboard_scripts() -> str:
             </button>
           </div>
           <div style="display:flex; gap:4px;">
-            <button class="secondary small" type="button" data-wf-action="up" data-step-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Move Step Up">↑</button>
-            <button class="secondary small" type="button" data-wf-action="down" data-step-idx="${idx}" ${idx === steps.length - 1 ? 'disabled' : ''} title="Move Step Down">↓</button>
-            <button class="secondary small danger" type="button" data-wf-action="remove" data-step-idx="${idx}" title="Remove Step">✕</button>
+            <button class="secondary small" type="button" data-wf-action="up" data-step-idx="${idx}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Step Up" title="Move Step Up">↑</button>
+            <button class="secondary small" type="button" data-wf-action="down" data-step-idx="${idx}" ${idx === steps.length - 1 ? 'disabled' : ''} aria-label="Move Step Down" title="Move Step Down">↓</button>
+            <button class="secondary small danger" type="button" data-wf-action="remove" data-step-idx="${idx}" aria-label="Remove Step" title="Remove Step">✕</button>
           </div>
         </div>
       `;
@@ -782,19 +943,9 @@ def workflows_dashboard_scripts() -> str:
         }
       });
 
+      // Non-prompt modal picker for Step Input linkage (Part J)
       card.querySelector(`[data-wf-attached-action="use-input"]`)?.addEventListener('click', () => {
-        const targetStep = prompt(`Enter target Step number (1–${steps.length}) to receive this output as its input source:`, `${Math.min(steps.length, idx + 2)}`);
-        if (targetStep) {
-          const tIdx = parseInt(targetStep, 10) - 1;
-          if (tIdx >= 0 && tIdx < steps.length && tIdx !== idx) {
-            steps[tIdx].inputMode = 'specific_step_output';
-            steps[tIdx].inputRef = step.stepId;
-            renderPlaybookSteps();
-            showToast(`Configured Step ${tIdx + 1} input to receive output from Step ${idx + 1}.`);
-          } else {
-            alert('Invalid target step number.');
-          }
-        }
+        openTargetStepPickerForOutput(step.stepId);
       });
 
       card.querySelector(`[data-wf-attached-action="detach"]`)?.addEventListener('click', () => {
@@ -871,7 +1022,7 @@ def workflows_dashboard_scripts() -> str:
         agentId: resolvedInput.agentId,
         agentName: resolvedInput.agentName || getAgentDisplayName(resolvedInput.agentId),
         responseId: resolvedInput.responseId || '',
-        summary: resolvedInput.text.slice(0, 1000),
+        summary: resolvedInput.text.slice(0, 4000),
       });
     }
 
@@ -978,7 +1129,11 @@ def workflows_dashboard_scripts() -> str:
       updateAttachMismatchWarning(turn.agentId, firstStep.agentId, firstStep.name, agentName);
     }
 
-    modal.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('modal-attach-workflow');
+    } else {
+      modal.classList.add('open');
+    }
   }
 
   function updateAttachMismatchWarning(turnAgentId, stepAgentId, stepName, turnAgentName) {
@@ -1007,6 +1162,7 @@ def workflows_dashboard_scripts() -> str:
     const agentName = turn.route ? turn.route.selected_display_name : turn.agentId;
     const sourceCount = (resp.source_evidence && resp.source_evidence.length) || (turn.preparedPayload?.web_context?.length) || 0;
 
+    // Reference-first storage: do not duplicate full response body
     step.attachedOutputRef = {
       turnIndex: turnIndex,
       responseId: (resp.responseContext && resp.responseContext.responseId) || (resp.generation && resp.generation.responseId) || null,
@@ -1014,17 +1170,138 @@ def workflows_dashboard_scripts() -> str:
       agentName: agentName,
       displayLabel: `Turn #${turnIndex + 1} (${agentName})`,
       excerpt: primaryText.slice(0, 300),
-      fullContent: primaryText,
       highStakes: !!(turn.route && turn.route.high_stakes),
       sourceCount: sourceCount,
       generationMode: resp.actualMode || 'standard',
       attachedAt: new Date().toISOString(),
     };
 
-    byId('modal-attach-workflow')?.classList.remove('open');
+    if (typeof closeOverlayModal === 'function') {
+      closeOverlayModal('modal-attach-workflow');
+    } else {
+      byId('modal-attach-workflow')?.classList.remove('open');
+    }
     sessionState.pendingAttachTurn = null;
     renderPlaybookSteps();
     showToast(`Attached Turn #${turnIndex + 1} to "${step.name}".`);
+  }
+
+  // ==========================================
+  // Modal Step Target Selector (Part J - Eliminates prompt())
+  // ==========================================
+
+  function openTargetStepModal(title, description, availableSteps, onConfirm) {
+    const modal = byId('modal-step-target-selector');
+    if (!modal) return;
+
+    byId('step-target-modal-title').textContent = title || 'Select Target Step';
+    byId('step-target-modal-desc').textContent = description || 'Choose which workflow step should receive this input:';
+
+    const radioList = byId('step-target-radio-list');
+    radioList.replaceChildren();
+
+    if (!availableSteps.length) {
+      radioList.innerHTML = '<div class="muted" style="padding:10px;">No compatible workflow steps available.</div>';
+      byId('confirm-step-target-btn').disabled = true;
+    } else {
+      byId('confirm-step-target-btn').disabled = false;
+      availableSteps.forEach((s, idx) => {
+        const row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.style.padding = '8px 10px';
+        row.style.background = '#f8fafc';
+        row.style.border = '1px solid #e2e8f0';
+        row.style.borderRadius = '5px';
+        row.style.cursor = 'pointer';
+
+        row.innerHTML = `
+          <input type="radio" name="target-step-pick" value="${s.stepId}" ${idx === 0 ? 'checked' : ''}>
+          <div style="flex:1;">
+            <strong>Step ${sessionState.playbookSteps.indexOf(s) + 1}: ${escapeHtml(s.name)}</strong>
+            <div class="muted" style="font-size:0.78rem;">${escapeHtml(s.purpose)}</div>
+          </div>
+        `;
+        radioList.append(row);
+      });
+    }
+
+    sessionState.pendingStepTargetCallback = onConfirm;
+
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('modal-step-target-selector');
+    } else {
+      modal.classList.add('open');
+    }
+  }
+
+  function assignResultBoardToWorkflow(rbItemId) {
+    if (!sessionState.playbookSteps.length) {
+      alert('No steps in current workflow. Select or create a playbook first.');
+      return;
+    }
+    const rbItem = sessionState.resultBoard?.find(r => r.id === rbItemId);
+    const label = rbItem ? `${rbItem.agentDisplayName} Result` : 'Result Board entry';
+
+    openTargetStepModal(
+      'Assign Result Board Entry to Step',
+      `Select which workflow step will receive ${label} as its input:`,
+      sessionState.playbookSteps,
+      (targetStepId) => {
+        const targetStep = sessionState.playbookSteps.find(s => s.stepId === targetStepId);
+        if (targetStep) {
+          targetStep.inputMode = 'result_board';
+          targetStep.inputRef = rbItemId;
+          switchProductivityTab('panel-playbooks');
+          renderPlaybookSteps();
+          showToast(`Assigned Result Board entry as input for "${targetStep.name}".`);
+        }
+      }
+    );
+  }
+
+  function openTargetStepPickerForOutput(fromStepId) {
+    const fromStep = sessionState.playbookSteps.find(s => s.stepId === fromStepId);
+    const eligibleSteps = sessionState.playbookSteps.filter(s => s.stepId !== fromStepId);
+
+    if (!eligibleSteps.length) {
+      alert('No other workflow steps exist to receive this output as input.');
+      return;
+    }
+
+    openTargetStepModal(
+      'Use Output as Input for Another Step',
+      `Select which workflow step should receive the output from "${fromStep ? fromStep.name : 'this step'}":`,
+      eligibleSteps,
+      (targetStepId) => {
+        const targetStep = sessionState.playbookSteps.find(s => s.stepId === targetStepId);
+        if (targetStep) {
+          targetStep.inputMode = 'specific_step_output';
+          targetStep.inputRef = fromStepId;
+          renderPlaybookSteps();
+          showToast(`Configured "${targetStep.name}" input to receive output from "${fromStep ? fromStep.name : 'Step'}".`);
+        }
+      }
+    );
+  }
+
+  function assignContextKitToCurrentWorkflow() {
+    if (!sessionState.currentWorkflowStepId) {
+      if (sessionState.playbookSteps.length > 0) {
+        sessionState.currentWorkflowStepId = sessionState.playbookSteps[0].stepId;
+      } else {
+        alert('No workflow steps available.');
+        return;
+      }
+    }
+    const step = sessionState.playbookSteps.find(s => s.stepId === sessionState.currentWorkflowStepId);
+    if (step) {
+      step.inputMode = 'context_kit';
+      switchProductivityTab('panel-playbooks');
+      renderPlaybookSteps();
+      showToast(`Assigned Context Kit as input for "${step.name}".`);
+    }
   }
 
   // ==========================================
@@ -1043,6 +1320,7 @@ def workflows_dashboard_scripts() -> str:
       selector.innerHTML = '<div class="muted" style="padding:6px;">No steps currently have attached outputs. Attach outputs to workflow steps first.</div>';
     } else {
       stepsWithOutputs.forEach((s) => {
+        const resolved = resolveWorkflowAttachedOutputContent(s.attachedOutputRef);
         const row = document.createElement('label');
         row.style.display = 'flex';
         row.style.alignItems = 'center';
@@ -1051,10 +1329,10 @@ def workflows_dashboard_scripts() -> str:
         row.style.cursor = 'pointer';
 
         row.innerHTML = `
-          <input type="checkbox" class="wf-packet-step-cb" value="${s.stepId}" checked>
+          <input type="checkbox" class="wf-packet-step-cb" value="${s.stepId}" ${resolved.isStale ? '' : 'checked'}>
           <span>
             <strong>${escapeHtml(s.name)}</strong> — ${escapeHtml(s.attachedOutputRef.agentName)}
-            <span class="muted" style="font-size:0.75rem;">(${s.attachedOutputRef.fullContent.length} chars)</span>
+            ${resolved.isStale ? '<span class="pill danger" style="font-size:0.7rem; margin-left:4px;">Stale</span>' : `<span class="muted" style="font-size:0.75rem;">(${resolved.text.length} chars)</span>`}
           </span>
         `;
 
@@ -1064,7 +1342,11 @@ def workflows_dashboard_scripts() -> str:
     }
 
     updateWorkflowPacketPreview();
-    drawer.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('drawer-workflow-packet');
+    } else {
+      drawer.classList.add('open');
+    }
   }
 
   function buildWorkflowPacketText() {
@@ -1079,6 +1361,8 @@ def workflows_dashboard_scripts() -> str:
 
     sessionState.playbookSteps.forEach((s, idx) => {
       if (!checkedStepIds.includes(s.stepId) || !s.attachedOutputRef) return;
+      const resolved = resolveWorkflowAttachedOutputContent(s.attachedOutputRef);
+      if (resolved.isStale || !resolved.text) return;
 
       text += `--------------------------------------------------\n`;
       text += `STEP ${idx + 1}: ${s.name}\n`;
@@ -1090,7 +1374,7 @@ def workflows_dashboard_scripts() -> str:
       if (s.attachedOutputRef.highStakes) text += `High-Stakes Category: YES\n`;
       if (s.reviewFlags.needsReview) text += `Flag: NEEDS REVIEW\n`;
       if (s.reviewFlags.potentialConflict) text += `Flag: POTENTIAL CONFLICT\n`;
-      text += `\nOutput Content:\n${s.attachedOutputRef.fullContent}\n`;
+      text += `\nOutput Content:\n${resolved.text}\n`;
       text += `--------------------------------------------------\n\n`;
     });
 
@@ -1137,18 +1421,21 @@ def workflows_dashboard_scripts() -> str:
     if (actionType === 'add_kit') {
       if (typeof addContextKitItem === 'function') {
         addContextKitItem('workflow_packet', 'Workflow Synthesis Packet', packetText);
-        byId('drawer-workflow-packet')?.classList.remove('open');
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+        else byId('drawer-workflow-packet')?.classList.remove('open');
       }
     } else if (actionType === 'stage_prior') {
+      // Full packet staged without silent 4k slice (Part A3)
       if (typeof setStagedPriorContext === 'function') {
         setStagedPriorContext({
           agentId: 'workflow_synthesis',
           agentName: 'Workflow Synthesis Packet',
           responseId: 'wf_packet_' + Date.now(),
-          summary: packetText.slice(0, 4000),
+          summary: packetText,
         });
-        byId('drawer-workflow-packet')?.classList.remove('open');
-        showToast('Staged Workflow Packet as prior context.');
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+        else byId('drawer-workflow-packet')?.classList.remove('open');
+        showToast('Staged full Workflow Packet as prior context.');
         byId('composer')?.scrollIntoView({ behavior: 'smooth' });
       }
     } else if (actionType === 'insert_composer') {
@@ -1157,7 +1444,8 @@ def workflows_dashboard_scripts() -> str:
         input.value = (input.value.trim() ? `${input.value.trim()}\n\n${packetText}` : packetText).trim();
         input.focus();
         if (typeof triggerReadinessEvaluation === 'function') triggerReadinessEvaluation();
-        byId('drawer-workflow-packet')?.classList.remove('open');
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+        else byId('drawer-workflow-packet')?.classList.remove('open');
         showToast('Inserted Workflow Packet into prompt composer.');
         byId('composer')?.scrollIntoView({ behavior: 'smooth' });
       }
@@ -1172,56 +1460,21 @@ def workflows_dashboard_scripts() -> str:
         input.focus();
         if (typeof triggerReadinessEvaluation === 'function') triggerReadinessEvaluation();
       }
-      byId('drawer-workflow-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+      else byId('drawer-workflow-packet')?.classList.remove('open');
       showToast('Prepared Review Agent request with Workflow Packet.');
       byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     } else if (actionType === 'prepare_decision') {
-      byId('drawer-workflow-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+      else byId('drawer-workflow-packet')?.classList.remove('open');
       if (typeof openDecisionComposer === 'function') {
         openDecisionComposer();
-        const pbInput = byId('decision-problem-input');
+        const pbInput = byId('dec-problem-input');
         if (pbInput && !pbInput.value.trim()) {
           pbInput.value = 'Evaluate tradeoffs and synthesize final direction across workflow findings.';
         }
         showToast('Opened Decision Composer for workflow synthesis.');
       }
-    }
-  }
-
-  function assignResultBoardToWorkflow(rbItemId) {
-    if (!sessionState.playbookSteps.length) {
-      alert('No steps in current workflow. Select or create a playbook first.');
-      return;
-    }
-    const stepOptions = sessionState.playbookSteps.map((s, idx) => `${idx + 1}: ${s.name}`).join('\n');
-    const chosen = prompt(`Select step number (1–${sessionState.playbookSteps.length}) to receive this Result Board item as input:\n\n${stepOptions}`, '1');
-    if (chosen) {
-      const sIdx = parseInt(chosen, 10) - 1;
-      if (sIdx >= 0 && sIdx < sessionState.playbookSteps.length) {
-        sessionState.playbookSteps[sIdx].inputMode = 'result_board';
-        sessionState.playbookSteps[sIdx].inputRef = rbItemId;
-        switchProductivityTab('panel-playbooks');
-        renderPlaybookSteps();
-        showToast(`Assigned Result Board item as input for Step ${sIdx + 1}.`);
-      }
-    }
-  }
-
-  function assignContextKitToCurrentWorkflow() {
-    if (!sessionState.currentWorkflowStepId) {
-      if (sessionState.playbookSteps.length > 0) {
-        sessionState.currentWorkflowStepId = sessionState.playbookSteps[0].stepId;
-      } else {
-        alert('No workflow steps available.');
-        return;
-      }
-    }
-    const step = sessionState.playbookSteps.find(s => s.stepId === sessionState.currentWorkflowStepId);
-    if (step) {
-      step.inputMode = 'context_kit';
-      switchProductivityTab('panel-playbooks');
-      renderPlaybookSteps();
-      showToast(`Assigned Context Kit as input for "${step.name}".`);
     }
   }
 
@@ -1246,29 +1499,63 @@ def workflows_dashboard_scripts() -> str:
 
     // Attach modal bindings
     byId('close-attach-modal-btn')?.addEventListener('click', () => {
-      byId('modal-attach-workflow')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-attach-workflow');
+      else byId('modal-attach-workflow')?.classList.remove('open');
       sessionState.pendingAttachTurn = null;
     });
     byId('cancel-attach-btn')?.addEventListener('click', () => {
-      byId('modal-attach-workflow')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-attach-workflow');
+      else byId('modal-attach-workflow')?.classList.remove('open');
       sessionState.pendingAttachTurn = null;
     });
     byId('confirm-attach-btn')?.addEventListener('click', confirmAttachTurnToWorkflow);
     byId('modal-attach-workflow')?.addEventListener('click', (e) => {
       if (e.target === byId('modal-attach-workflow')) {
-        byId('modal-attach-workflow').classList.remove('open');
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-attach-workflow');
+        else byId('modal-attach-workflow').classList.remove('open');
         sessionState.pendingAttachTurn = null;
+      }
+    });
+
+    // Step target modal bindings
+    byId('close-step-target-modal-btn')?.addEventListener('click', () => {
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-step-target-selector');
+      else byId('modal-step-target-selector')?.classList.remove('open');
+      sessionState.pendingStepTargetCallback = null;
+    });
+    byId('cancel-step-target-btn')?.addEventListener('click', () => {
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-step-target-selector');
+      else byId('modal-step-target-selector')?.classList.remove('open');
+      sessionState.pendingStepTargetCallback = null;
+    });
+    byId('confirm-step-target-btn')?.addEventListener('click', () => {
+      const selected = document.querySelector('input[name="target-step-pick"]:checked');
+      if (selected && typeof sessionState.pendingStepTargetCallback === 'function') {
+        const cb = sessionState.pendingStepTargetCallback;
+        sessionState.pendingStepTargetCallback = null;
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-step-target-selector');
+        else byId('modal-step-target-selector')?.classList.remove('open');
+        cb(selected.value);
+      }
+    });
+    byId('modal-step-target-selector')?.addEventListener('click', (e) => {
+      if (e.target === byId('modal-step-target-selector')) {
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('modal-step-target-selector');
+        else byId('modal-step-target-selector').classList.remove('open');
+        sessionState.pendingStepTargetCallback = null;
       }
     });
 
     // Workflow packet bindings
     byId('open-wf-packet-btn')?.addEventListener('click', openWorkflowPacketDrawer);
     byId('close-wf-packet-btn')?.addEventListener('click', () => {
-      byId('drawer-workflow-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+      else byId('drawer-workflow-packet')?.classList.remove('open');
     });
     byId('drawer-workflow-packet')?.addEventListener('click', (e) => {
       if (e.target === byId('drawer-workflow-packet')) {
-        byId('drawer-workflow-packet').classList.remove('open');
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-workflow-packet');
+        else byId('drawer-workflow-packet').classList.remove('open');
       }
     });
 
@@ -1282,3 +1569,4 @@ def workflows_dashboard_scripts() -> str:
     byId('kit-to-workflow-btn')?.addEventListener('click', assignContextKitToCurrentWorkflow);
   }
   """
+

@@ -1043,12 +1043,35 @@ def results_dashboard_scripts() -> str:
     byId('detail-json-viewer').textContent = JSON.stringify(item.fullResponse || item, null, 2);
     byId('detail-json-panel').style.display = 'none';
 
-    modal.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('drawer-result-detail');
+    } else {
+      modal.classList.add('open');
+    }
   }
 
   // ==========================================
   // Multi-Result Comparison Workspace
   // ==========================================
+
+  function renderComparisonWorkspace() {
+    const wrap = byId('comparison-table-wrap');
+    if (!wrap) return;
+    const selected = (sessionState.resultBoard || []).filter(i => i.selected);
+    if (selected.length < 2) {
+      wrap.innerHTML = `
+        <div class="empty-state" style="padding:24px;">
+          Select 2 to 6 Result Board entries using the checkboxes in Result Board to compare trade-offs, differences, and evidence. Comparison is purely visual and never picks a winner automatically.
+        </div>
+      `;
+      const asymBanner = byId('cmp-asymmetry-banner');
+      const hsBanner = byId('cmp-high-stakes-banner');
+      if (asymBanner) asymBanner.style.display = 'none';
+      if (hsBanner) hsBanner.style.display = 'none';
+      return;
+    }
+    openComparisonWorkspace(selected.slice(0, 6));
+  }
 
   function openComparisonWorkspace(entries) {
     sessionState.activeComparisonEntries = entries;
@@ -1219,7 +1242,11 @@ def results_dashboard_scripts() -> str:
 
     renderPacketEntriesList();
     updateReviewPacketBudget();
-    modal.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('drawer-review-packet');
+    } else {
+      modal.classList.add('open');
+    }
   }
 
   function renderPacketEntriesList() {
@@ -1342,7 +1369,11 @@ def results_dashboard_scripts() -> str:
 
     renderDecisionOptionsList();
     evaluateDecisionComposerReadiness();
-    modal.classList.add('open');
+    if (typeof openOverlayModal === 'function') {
+      openOverlayModal('drawer-decision-composer');
+    } else {
+      modal.classList.add('open');
+    }
   }
 
   function renderDecisionOptionsList() {
@@ -1620,10 +1651,14 @@ def results_dashboard_scripts() -> str:
 
     // Inspector modal
     byId('close-detail-btn')?.addEventListener('click', () => {
-      byId('drawer-result-detail')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-result-detail');
+      else byId('drawer-result-detail')?.classList.remove('open');
     });
     byId('drawer-result-detail')?.addEventListener('click', (e) => {
-      if (e.target === byId('drawer-result-detail')) byId('drawer-result-detail').classList.remove('open');
+      if (e.target === byId('drawer-result-detail')) {
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-result-detail');
+        else byId('drawer-result-detail').classList.remove('open');
+      }
     });
     byId('detail-toggle-json-btn')?.addEventListener('click', () => {
       const p = byId('detail-json-panel');
@@ -1638,14 +1673,16 @@ def results_dashboard_scripts() -> str:
         responseId: (item.fullResponse.responseContext && item.fullResponse.responseContext.responseId) || '',
         summary: item.primaryText,
       });
-      byId('drawer-result-detail')?.classList.remove('open');
-      byId('composer').scrollIntoView({ behavior: 'smooth' });
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-result-detail');
+      else byId('drawer-result-detail')?.classList.remove('open');
+      byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     });
     byId('detail-add-kit-btn')?.addEventListener('click', () => {
       const item = sessionState.activeDetailItem;
       if (!item) return;
       addContextKitItem('result_board', `${item.agentDisplayName} Result`, item.primaryText);
-      byId('drawer-result-detail')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-result-detail');
+      else byId('drawer-result-detail')?.classList.remove('open');
     });
 
     // Comparison workspace buttons
@@ -1672,10 +1709,14 @@ def results_dashboard_scripts() -> str:
     byId('packet-notes-input')?.addEventListener('input', updateReviewPacketBudget);
     byId('packet-unresolved-input')?.addEventListener('input', updateReviewPacketBudget);
     byId('close-review-packet-btn')?.addEventListener('click', () => {
-      byId('drawer-review-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-review-packet');
+      else byId('drawer-review-packet')?.classList.remove('open');
     });
     byId('drawer-review-packet')?.addEventListener('click', (e) => {
-      if (e.target === byId('drawer-review-packet')) byId('drawer-review-packet').classList.remove('open');
+      if (e.target === byId('drawer-review-packet')) {
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-review-packet');
+        else byId('drawer-review-packet').classList.remove('open');
+      }
     });
     byId('packet-insert-composer-btn')?.addEventListener('click', () => {
       const md = buildReviewPacketMarkdown();
@@ -1684,12 +1725,15 @@ def results_dashboard_scripts() -> str:
         return;
       }
       const input = byId('prompt-input');
-      input.value = (input.value.trim() ? `${input.value.trim()}\n\n${md}` : md).trim();
-      input.focus();
-      triggerReadinessEvaluation();
-      byId('drawer-review-packet')?.classList.remove('open');
+      if (input) {
+        input.value = (input.value.trim() ? `${input.value.trim()}\n\n${md}` : md).trim();
+        input.focus();
+      }
+      if (typeof triggerReadinessEvaluation === 'function') triggerReadinessEvaluation();
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-review-packet');
+      else byId('drawer-review-packet')?.classList.remove('open');
       showToast('Inserted Review Packet into prompt composer.');
-      byId('composer').scrollIntoView({ behavior: 'smooth' });
+      byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     });
     byId('packet-stage-prior-btn')?.addEventListener('click', () => {
       const md = buildReviewPacketMarkdown();
@@ -1703,9 +1747,10 @@ def results_dashboard_scripts() -> str:
         responseId: 'packet_' + Date.now(),
         summary: md,
       });
-      byId('drawer-review-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-review-packet');
+      else byId('drawer-review-packet')?.classList.remove('open');
       showToast('Staged Review Packet as prior context.');
-      byId('composer').scrollIntoView({ behavior: 'smooth' });
+      byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     });
     byId('packet-add-kit-btn')?.addEventListener('click', () => {
       const md = buildReviewPacketMarkdown();
@@ -1714,7 +1759,8 @@ def results_dashboard_scripts() -> str:
         return;
       }
       addContextKitItem('review_packet', 'Structured Review Packet', md);
-      byId('drawer-review-packet')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-review-packet');
+      else byId('drawer-review-packet')?.classList.remove('open');
     });
 
     // Decision composer events
@@ -1730,10 +1776,14 @@ def results_dashboard_scripts() -> str:
     byId('dec-notes-input')?.addEventListener('input', evaluateDecisionComposerReadiness);
     byId('dec-style-select')?.addEventListener('change', evaluateDecisionComposerReadiness);
     byId('close-decision-composer-btn')?.addEventListener('click', () => {
-      byId('drawer-decision-composer')?.classList.remove('open');
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-decision-composer');
+      else byId('drawer-decision-composer')?.classList.remove('open');
     });
     byId('drawer-decision-composer')?.addEventListener('click', (e) => {
-      if (e.target === byId('drawer-decision-composer')) byId('drawer-decision-composer').classList.remove('open');
+      if (e.target === byId('drawer-decision-composer')) {
+        if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-decision-composer');
+        else byId('drawer-decision-composer').classList.remove('open');
+      }
     });
     byId('dec-prepare-btn')?.addEventListener('click', () => {
       const options = sessionState.decisionComposerOptions.map(o => o.trim()).filter(Boolean);
@@ -1745,10 +1795,11 @@ def results_dashboard_scripts() -> str:
       selectAgentManually('local_decision_agent');
       byId('prompt-input').value = prompt;
       byId('prompt-input').focus();
-      triggerReadinessEvaluation();
-      byId('drawer-decision-composer')?.classList.remove('open');
+      if (typeof triggerReadinessEvaluation === 'function') triggerReadinessEvaluation();
+      if (typeof closeOverlayModal === 'function') closeOverlayModal('drawer-decision-composer');
+      else byId('drawer-decision-composer')?.classList.remove('open');
       showToast('Prepared Decision Request in composer. Click Send to run.');
-      byId('composer').scrollIntoView({ behavior: 'smooth' });
+      byId('composer')?.scrollIntoView({ behavior: 'smooth' });
     });
   }
   """
