@@ -474,10 +474,6 @@ def assistant_actions_dashboard_html() -> str:
       showToast('Error loading action center data: ' + err.message);
     }
   }
-    } catch (err) {
-      showToast('Error loading action center data: ' + err.message);
-    }
-  }
 
   function updateProjectFilter() {
     const select = byId('filter-task-project');

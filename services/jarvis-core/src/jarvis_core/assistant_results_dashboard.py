@@ -1291,25 +1291,25 @@ def results_dashboard_scripts() -> str:
     entries.forEach((e, idx) => {
       md += `\n### [${idx + 1}] ${e.agentDisplayName} (${e.category})\n${e.primaryText}\n`;
       if (e.keyPoints && e.keyPoints.length) {
-        md += `\n**Key Points:**\n${e.keyPoints.map(kp => `- ${kp}`).join('\n')}\n`;
+        md += `\n**Key Points:**\n${e.keyPoints.map(kp => `- ${kp}`).join('\\n')}\n`;
       }
       const revSrcs = e.evidence?.reviewedSources || [];
       if (revSrcs.length) {
-        md += `\n**Reviewed Sources:**\n${revSrcs.map(s => `- ${s.title || s.citationLabel} (${s.domain || 'web_context'})`).join('\n')}\n`;
+        md += `\n**Reviewed Sources:**\n${revSrcs.map(s => `- ${s.title || s.citationLabel} (${s.domain || 'web_context'})`).join('\\n')}\n`;
       }
       const modCits = e.evidence?.modelCitationLabels || [];
       if (modCits.length) {
-        md += `\n**Model Citation Labels:**\n${modCits.map(c => `- ${c.label}: ${c.supports}`).join('\n')}\n`;
+        md += `\n**Model Citation Labels:**\n${modCits.map(c => `- ${c.label}: ${c.supports}`).join('\\n')}\n`;
       }
       const refKn = e.evidence?.knowledgeContext || [];
       const refMem = e.evidence?.memoryContext || [];
       const refPrior = e.evidence?.priorAgentContext || [];
       if (refKn.length || refMem.length || refPrior.length) {
         const refs = [...refKn, ...refMem, ...refPrior];
-        md += `\n**Referenced Context:**\n${refs.map(r => `- ${r.type}: ${r.detail}`).join('\n')}\n`;
+        md += `\n**Referenced Context:**\n${refs.map(r => `- ${r.type}: ${r.detail}`).join('\\n')}\n`;
       }
       if (e.limitations && e.limitations.length) {
-        md += `\n**Limitations:**\n${e.limitations.map(l => `- ${l}`).join('\n')}\n`;
+        md += `\n**Limitations:**\n${e.limitations.map(l => `- ${l}`).join('\\n')}\n`;
       }
     });
     if (unresolved) md += `\n## Unresolved Questions\n${unresolved}\n`;
@@ -1359,7 +1359,7 @@ def results_dashboard_scripts() -> str:
 
     if (prefillEntries && prefillEntries.length) {
       sessionState.decisionComposerOptions = prefillEntries.map(e => e.agentDisplayName || 'Candidate Option');
-      const excerpts = prefillEntries.map(e => `[${e.agentDisplayName}]: ${e.primaryText.slice(0, 200)}`).join('\n\n');
+      const excerpts = prefillEntries.map(e => `[${e.agentDisplayName}]: ${e.primaryText.slice(0, 200)}`).join('\\n\\n');
       if (byId('dec-notes-input') && !byId('dec-notes-input').value.trim()) {
         byId('dec-notes-input').value = excerpts;
       }
@@ -1511,15 +1511,15 @@ def results_dashboard_scripts() -> str:
     entries.forEach((e, idx) => {
       reportMd += `## ${idx + 1}. ${e.agentDisplayName} (${e.category})\n\n${e.primaryText}\n\n`;
       if (e.keyPoints && e.keyPoints.length) {
-        reportMd += `### Key Takeaways\n${e.keyPoints.map(kp => `- ${kp}`).join('\n')}\n\n`;
+        reportMd += `### Key Takeaways\n${e.keyPoints.map(kp => `- ${kp}`).join('\\n')}\n\n`;
       }
       const revSrcs = e.evidence?.reviewedSources || [];
       if (revSrcs.length) {
-        reportMd += `### Reviewed Sources\n${revSrcs.map(s => `- ${s.title || s.citationLabel} (${s.domain || 'web_context'})`).join('\n')}\n\n`;
+        reportMd += `### Reviewed Sources\n${revSrcs.map(s => `- ${s.title || s.citationLabel} (${s.domain || 'web_context'})`).join('\\n')}\n\n`;
       }
       const modCits = e.evidence?.modelCitationLabels || [];
       if (modCits.length) {
-        reportMd += `### Model Citation Labels\n${modCits.map(c => `- ${c.label}: ${c.supports}`).join('\n')}\n\n`;
+        reportMd += `### Model Citation Labels\n${modCits.map(c => `- ${c.label}: ${c.supports}`).join('\\n')}\n\n`;
       }
     });
 
@@ -1691,7 +1691,7 @@ def results_dashboard_scripts() -> str:
     });
     byId('cmp-to-kit-btn')?.addEventListener('click', () => {
       if (!sessionState.activeComparisonEntries || !sessionState.activeComparisonEntries.length) return;
-      const summary = sessionState.activeComparisonEntries.map((e, idx) => `[Option ${idx + 1}: ${e.agentDisplayName}]\n${e.primaryText.slice(0, 500)}`).join('\n\n');
+      const summary = sessionState.activeComparisonEntries.map((e, idx) => `[Option ${idx + 1}: ${e.agentDisplayName}]\n${e.primaryText.slice(0, 500)}`).join('\\n\\n');
       addContextKitItem('comparison_summary', `Comparison (${sessionState.activeComparisonEntries.length} Options)`, summary);
       showToast('Added comparison summary to Context Kit.');
     });

@@ -592,7 +592,7 @@ def workflows_dashboard_scripts() -> str:
       if (!items.length) {
         return { text: '', label: 'Context Kit is currently empty', valid: false };
       }
-      const combined = items.map(it => `[${it.label}]\n${it.content}`).join('\n\n');
+      const combined = items.map(it => `[${it.label}]\n${it.content}`).join('\\n\\n');
       return {
         text: combined,
         label: `Context Kit (${items.length} items, ${combined.length} chars)`,

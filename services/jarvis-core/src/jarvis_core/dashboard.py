@@ -4448,7 +4448,7 @@ def dashboard_html() -> str:
         lines.push('- Insert reviewed context into the editable request payload or prior_agent_context.');
         lines.push('- Run one selected agent manually only when ready.');
         lines.push('- Review output before using it in another manual step.');
-        return lines.join('\n');
+        return lines.join('\\n');
       }
       function handlePlaybookAction(playbookId, action) {
         const playbook = responseAgentPlaybooks.find((item) => item.id === playbookId);
@@ -4461,7 +4461,7 @@ def dashboard_html() -> str:
         playbookPreview.textContent = playbookPreviewText(playbook, chosenAgents);
         playbookStatus.textContent = `${playbook.title} preview uses ${chosenIds.length} existing local response agents. Manual only - not executed, not chained, and not persisted.`;
         manualWorkflowGoal.value = playbook.goal;
-        manualWorkflowCandidates.value = chosenIds.join('\n');
+        manualWorkflowCandidates.value = chosenIds.join('\\n');
         loadPlaybookIntoManualWorkflow(playbook, chosenAgents);
         if (action === 'load' && chosenIds[0] && selectAgentById(chosenIds[0])) {
           loadSelectedExample();
@@ -4485,7 +4485,7 @@ def dashboard_html() -> str:
             lines.push(`${label}:`, value, '');
           }
         });
-        return lines.join('\n').trim();
+        return lines.join('\\n').trim();
       }
       function renderContextKitPreview() {
         const text = contextKitText();
@@ -4518,7 +4518,7 @@ def dashboard_html() -> str:
         const requestField = ['request', 'prompt', 'user_request', 'userRequest', 'text', 'input', 'content', 'instructions']
           .find((field) => Object.prototype.hasOwnProperty.call(parsedBody, field));
         if (requestField) {
-          parsedBody[requestField] = [parsedBody[requestField], '', text].map((value) => String(value || '').trim()).filter(Boolean).join('\n\n');
+          parsedBody[requestField] = [parsedBody[requestField], '', text].map((value) => String(value || '').trim()).filter(Boolean).join('\\n\\n');
         } else {
           parsedBody.request = text;
         }
@@ -4739,7 +4739,7 @@ def dashboard_html() -> str:
       }
       function localResponseManualWorkflowCandidateIds() {
         return Array.from(new Set((manualWorkflowCandidates.value || '')
-          .split(/[\r\n,]+/)
+          .split(/[\\r\\n,]+/)
           .map((line) => line.trim())
           .filter(Boolean)))
           .slice(0, 8);
@@ -4836,7 +4836,7 @@ def dashboard_html() -> str:
         }
         const existing = latestManualWorkflowSteps.slice();
         existing.push(agentWorkflowStep(agent, existing.length, 'Command Center manual add'));
-        manualWorkflowCandidates.value = Array.from(new Set(localResponseManualWorkflowCandidateIds().concat([agentId]))).join('\n');
+        manualWorkflowCandidates.value = Array.from(new Set(localResponseManualWorkflowCandidateIds().concat([agentId]))).join('\\n');
         setManualWorkflowSteps(existing, 'Command Center manual add', { workflow_steps: existing, manual_only: true });
         manualWorkflowStatus.textContent = 'Agent added to the workflow sequence in this page session only. No agent was invoked and no handoff occurred.';
       }
@@ -4860,7 +4860,7 @@ def dashboard_html() -> str:
         ]
           .filter(([, value]) => String(value || '').trim())
           .map(([label, value]) => `${label}: ${String(value).trim()}`)
-          .join('\n');
+          .join('\\n');
       }
       function workflowContextSourceEnabled(key) {
         const checkbox = document.querySelector(`input[data-workflow-context-source="${key}"]`);
@@ -4875,7 +4875,7 @@ def dashboard_html() -> str:
           `Summary: ${entry.summary || entry.title || 'No summary returned.'}`,
           `Marks: ${entryMarksText(entry)}`,
           `Sources: ${entrySourceText(entry)}`,
-        ].join('\n');
+        ].join('\\n');
       }
       function latestResponseWorkflowText() {
         if (!latestLocalResponseBody) {
@@ -4914,7 +4914,7 @@ def dashboard_html() -> str:
             `Suggested request focus: ${manualWorkflowStepPrompt(step)}`,
             `Expected input/context: ${manualWorkflowStepInput(step)}`,
             `Expected output: ${manualWorkflowStepOutput(step)}`,
-          ].join('\n')]);
+          ].join('\\n')]);
         }
         if (workflowContextSourceEnabled('contextKit')) {
           sections.push(['Context Kit', contextKitText() || 'No Context Kit text entered.']);
@@ -4948,7 +4948,7 @@ def dashboard_html() -> str:
       function buildWorkflowContextText() {
         return workflowContextSections()
           .map(([label, text]) => `${label}\n${text}`)
-          .join('\n\n')
+          .join('\\n\\n')
           .slice(0, 7000);
       }
       function refreshWorkflowContextPreview() {
@@ -4962,8 +4962,7 @@ def dashboard_html() -> str:
           previous_agent_id: manualWorkflowStepAgentId(step) || sourceType,
           previous_agent_name: displayName || manualWorkflowStepName(step || {}) || 'Manual Workflow Context',
           previous_output_type: sourceType,
-          previous_summary: String(text || '').slice(0, 4000),
-          previous_key_points: String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_key_points: String(text || '').split(/[\\r\\n]+/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
           previous_next_actions: [manualWorkflowScratchFields.nextAction.value.trim() || 'Review the selected workflow step manually before invoking an agent.'],
           previous_limitations: [
             'Composed from current dashboard page state only.',
@@ -5211,7 +5210,7 @@ def dashboard_html() -> str:
         lines.push(manualWorkflowScratchFields.unresolved.value.trim() || 'Not provided.');
         lines.push('', 'Next manual action');
         lines.push(manualWorkflowScratchFields.nextAction.value.trim() || 'Select one workflow step, review context, then manually invoke one selected agent if ready.');
-        return lines.join('\n').slice(0, 9000);
+        return lines.join('\\n').slice(0, 9000);
       }
       function buildWorkflowPacket() {
         latestWorkflowPacketText = buildWorkflowPacketText();
@@ -5392,7 +5391,7 @@ def dashboard_html() -> str:
           `Source labels used by latest response: ${trace.sourceLabelsUsed.join(', ') || 'none returned'}`,
           `Response source mapping: ${trace.traceUnavailable ? 'trace unavailable' : JSON.stringify(trace.sourcesUsed).slice(0, 1200)}`,
           `Source cautions/quality warnings: ${trace.sourceCautions.concat(trace.sourceQualityWarnings).join(' ') || 'none returned'}`,
-        ].join('\n');
+        ].join('\\n');
       }
       function renderLatestSourceTrace() {
         latestSourceTrace.className = 'row stack';
@@ -5784,7 +5783,7 @@ def dashboard_html() -> str:
         lines.push('', 'Unresolved questions');
         const unresolved = decisionUnresolved.value.trim();
         if (unresolved) {
-          unresolved.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => lines.push(`- ${line}`));
+          unresolved.split(/[\\r\\n]+/).map((line) => line.trim()).filter(Boolean).forEach((line) => lines.push(`- ${line}`));
         } else {
           lines.push('- Not provided.');
         }
@@ -5792,7 +5791,7 @@ def dashboard_html() -> str:
         lines.push(decisionRiskNotes.value.trim() || 'Not provided.');
         lines.push('', 'Recommended next manual action');
         lines.push(decisionNextAction.value.trim() || 'Review the best output and selected evidence manually before choosing any next step.');
-        return lines.join('\n').slice(0, 6000);
+        return lines.join('\\n').slice(0, 6000);
       }
       function buildDecisionSummary() {
         const entries = selectedDecisionEntries();
@@ -5817,7 +5816,7 @@ def dashboard_html() -> str:
           previous_agent_name: 'Decision Summary Composer',
           previous_output_type: 'decision_summary',
           previous_summary: text.slice(0, 4000),
-          previous_key_points: text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_key_points: text.split(/[\\r\\n]+/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
           previous_next_actions: [decisionNextAction.value.trim() || 'Review manually before using as prior context.'],
           previous_limitations: [
             'Created manually from current dashboard session board entries.',
@@ -5887,7 +5886,7 @@ def dashboard_html() -> str:
         lines.push('It did not use connectors.');
         lines.push('It did not create an automatic handoff.');
         lines.push('Review before using as prior_agent_context.');
-        return lines.join('\n').slice(0, 6000);
+        return lines.join('\\n').slice(0, 6000);
       }
       function buildReviewPacket() {
         const entries = selectedSessionBoardEntries();
@@ -5925,7 +5924,7 @@ def dashboard_html() -> str:
           previous_agent_name: 'Session Review Packet',
           previous_output_type: 'review_packet',
           previous_summary: entries.map((entry) => `${entry.display_name || entry.agent_id}: ${entry.summary || entry.title || 'No summary returned.'}`).join(' | ').slice(0, 4000),
-          previous_key_points: packetText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_key_points: packetText.split(/[\\r\\n]+/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
           previous_next_actions: entries.flatMap((entry) => entry.next_actions).slice(0, 20),
           previous_limitations: [
             'This packet was composed from manually selected session outputs.',
@@ -5992,7 +5991,7 @@ def dashboard_html() -> str:
       }
       function localResponseWebResearchUrls() {
         return Array.from(new Set((webResearchUrls.value || '')
-          .split(/\r?\n/)
+          .split(/[\\r\\n]+/)
           .map((line) => line.trim())
           .filter(Boolean)))
           .slice(0, 5);
@@ -6213,12 +6212,12 @@ def dashboard_html() -> str:
         lines.push('', 'Source cautions');
         (sourceSummary.cautions || ['No source cautions returned.']).slice(0, 12).forEach((item) => lines.push(`- ${item}`));
         lines.push('', 'Source review checklist');
-        lines.push(checklistItems.length ? checklistItems.map((item) => `- ${item}`).join('\n') : '- No checklist items marked.');
+        lines.push(checklistItems.length ? checklistItems.map((item) => `- ${item}`).join('\\n') : '- No checklist items marked.');
         if (sourceContextIsHighStakes()) {
           lines.push('', 'High-stakes reminder');
           lines.push(localResponseSafetyCopy);
         }
-        return lines.join('\n').slice(0, 7000);
+        return lines.join('\\n').slice(0, 7000);
       }
       function buildEvidencePack() {
         latestEvidencePackText = buildEvidencePackText();
@@ -6236,7 +6235,7 @@ def dashboard_html() -> str:
           previous_agent_name: 'Session Evidence Pack',
           previous_output_type: 'evidence_pack',
           previous_summary: text.slice(0, 4000),
-          previous_key_points: text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
+          previous_key_points: text.split(/[\\r\\n]+/).map((line) => line.trim()).filter(Boolean).slice(0, 20),
           previous_next_actions: [evidenceNextStep.value.trim() || 'Review sources manually before using as prior context.'],
           previous_limitations: [
             'Created manually from current dashboard source metadata.',

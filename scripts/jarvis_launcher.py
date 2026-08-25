@@ -253,9 +253,22 @@ def wait_for_readiness(child: subprocess.Popen[object], port: int) -> bool:
     return False
 
 
+def configure_services_if_available(port: int) -> None:
+    try:
+        root = repository_root()
+        bootstrap_py = root / "scripts" / "jarvis_bootstrap.py"
+        if bootstrap_py.is_file():
+            sys.path.insert(0, str(root))
+            from scripts.jarvis_bootstrap import configure_jarvis_services
+            configure_jarvis_services(jarvis_port=port)
+    except Exception:
+        pass
+
+
 def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LANDING_PATH) -> int:
     if jarvis_health_ready(port):
         print(f"Jarvis is already running on port {port}.")
+        configure_services_if_available(port)
         if not no_browser:
             open_landing_page(port, path)
         return 0
@@ -291,6 +304,7 @@ def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LA
         if not wait_for_readiness(child, port):
             stop_owned_child(child)
             return 1
+        configure_services_if_available(port)
         if not no_browser:
             open_landing_page(port, path)
         else:
@@ -309,6 +323,7 @@ def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LA
 def existing_instance_status(port: int, no_browser: bool, path: str = DEFAULT_LANDING_PATH) -> int | None:
     if jarvis_health_ready(port):
         print(f"Jarvis is already running on port {port}.")
+        configure_services_if_available(port)
         if not no_browser:
             open_landing_page(port, path)
         return 0

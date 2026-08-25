@@ -828,43 +828,6 @@ def unified_assistant_html() -> str:
     return data;
   }
 
-  // Load system, generation status, and registered projects
-  async function loadSystemStatus() {
-    try {
-      const genStatus = await apiFetch('/api/generation/status');
-      sessionState.generationStatus = genStatus;
-      const pill = byId('generation-pill');
-      if (genStatus.enabled) {
-        pill.className = 'pill active';
-        pill.textContent = `Local Generation: Active (${genStatus.modelName || 'Ollama'})`;
-      } else {
-        pill.className = 'pill inactive';
-        pill.textContent = 'Local Generation: Off (Deterministic)';
-      }
-    } catch (err) {
-      byId('generation-pill').textContent = 'Local Generation: Unavailable';
-    }
-
-    try {
-      const catalog = await apiFetch('/agents/local-response-agents/discovery');
-      if (catalog && catalog.agents) {
-        sessionState.catalogAgents = catalog.agents;
-        populateAgentOverrideDropdown(catalog.agents);
-        byId('agents-pill').textContent = `${catalog.agents.length} Response Agents Ready`;
-      }
-    } catch (err) {
-      byId('agents-pill').textContent = 'Agents Discovery Error';
-    }
-
-    try {
-      const projects = await apiFetch('/projects');
-      if (Array.isArray(projects)) {
-        sessionState.projects = projects;
-      }
-    } catch (err) {
-      sessionState.projects = [];
-    }
-  }
 
   function populateAgentOverrideDropdown(agents) {
     const select = byId('opt-agent-override');
@@ -908,7 +871,7 @@ def unified_assistant_html() -> str:
     }
   }
 
-  byId('clear-prior-context-btn').addEventListener('click', () => {
+  byId('clear-prior-context-btn')?.addEventListener('click', () => {
     setStagedPriorContext(null);
   });
 
@@ -916,10 +879,10 @@ def unified_assistant_html() -> str:
   async function analyzeRoute(promptText, explicitAgentId = null) {
     const payload = {
       requestText: promptText,
-      explicitAgentId: explicitAgentId || byId('opt-agent-override').value || null,
-      memoryEnabled: byId('opt-memory').checked,
-      knowledgeEnabled: byId('opt-knowledge').checked,
-      generationMode: byId('opt-generation').value,
+      explicitAgentId: explicitAgentId || (byId('opt-agent-override') ? byId('opt-agent-override').value : null) || null,
+      memoryEnabled: !!(byId('opt-memory') && byId('opt-memory').checked),
+      knowledgeEnabled: !!(byId('opt-knowledge') && byId('opt-knowledge').checked),
+      generationMode: (byId('opt-generation') ? byId('opt-generation').value : 'deterministic'),
       priorAgentContext: sessionState.stagedPriorContext ? {
         source_agent_id: sessionState.stagedPriorContext.agentId,
         source_response_id: sessionState.stagedPriorContext.responseId,
@@ -940,83 +903,93 @@ def unified_assistant_html() -> str:
     const route = analysisResult.route;
     const readiness = analysisResult.readiness;
 
-    byId('drawer-agent-name').textContent = route.selected_display_name;
-    byId('drawer-category').textContent = `[${route.category}]`;
-    byId('drawer-rationale').textContent = route.routing_rationale;
+    if (byId('drawer-agent-name')) byId('drawer-agent-name').textContent = route.selected_display_name;
+    if (byId('drawer-category')) byId('drawer-category').textContent = `[${route.category}]`;
+    if (byId('drawer-rationale')) byId('drawer-rationale').textContent = route.routing_rationale;
 
     const confPill = byId('drawer-confidence-pill');
-    confPill.className = `pill ${route.confidence_tier}`;
-    confPill.textContent = `Confidence: ${route.confidence_tier.replace('_', ' ')}`;
+    if (confPill) {
+      confPill.className = `pill ${route.confidence_tier}`;
+      confPill.textContent = `Confidence: ${route.confidence_tier.replace('_', ' ')}`;
+    }
 
     // High stakes banner
     const hsBanner = byId('drawer-high-stakes');
     const includedSrcs = typeof getIncludedReviewedSources === 'function' ? getIncludedReviewedSources() : [];
-    if (route.high_stakes) {
+    if (route.high_stakes && hsBanner) {
       hsBanner.style.display = 'block';
       if (includedSrcs.length === 0) {
         hsBanner.innerHTML = `<strong>High-Stakes Source Gap:</strong> No reviewed public source excerpts are attached to this request. Jarvis can still provide local informational support, but important facts should be checked against appropriate authoritative or qualified sources before acting. <span class="muted">(Category: ${escapeHtml(route.high_stakes_category || route.category)})</span>`;
       } else {
         hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(route.high_stakes_category || route.category)}):</strong> ${escapeHtml(route.safety_reminders.join(' '))} · <em>Reviewed excerpts (${includedSrcs.length}) are supporting context only (not independently verified).</em>`;
       }
-    } else {
+    } else if (hsBanner) {
       hsBanner.style.display = 'none';
     }
 
     // Ambiguity notice
     const ambNotice = byId('drawer-ambiguity-notice');
-    if (route.is_ambiguous) {
+    if (route.is_ambiguous && ambNotice) {
       ambNotice.style.display = 'block';
       ambNotice.innerHTML = `<strong>Ambiguous Match:</strong> ${escapeHtml(route.ambiguity_reason || 'Multiple agents scored similarly.')}`;
-    } else {
+    } else if (ambNotice) {
       ambNotice.style.display = 'none';
     }
 
     // Alternatives grid
     const altGrid = byId('drawer-alternatives-grid');
-    altGrid.replaceChildren();
-    if (route.alternatives && route.alternatives.length) {
-      route.alternatives.forEach(alt => {
-        const card = document.createElement('div');
-        card.className = 'alt-card';
-        card.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong>${escapeHtml(alt.display_name)}</strong>
-            <button class="secondary small" type="button" data-switch-id="${escapeHtml(alt.agent_id)}">Switch</button>
-          </div>
-          <div class="muted" style="font-size:0.8rem;">${escapeHtml(alt.category)} · ${escapeHtml(alt.reason)}</div>
-        `;
-        card.querySelector('button').addEventListener('click', async () => {
-          byId('opt-agent-override').value = alt.agent_id;
-          const reAnalysis = await analyzeRoute(analysisResult.request_text, alt.agent_id);
-          showStagingDrawer(reAnalysis);
+    if (altGrid) {
+      altGrid.replaceChildren();
+      if (route.alternatives && route.alternatives.length) {
+        route.alternatives.forEach(alt => {
+          const card = document.createElement('div');
+          card.className = 'alt-card';
+          card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong>${escapeHtml(alt.display_name)}</strong>
+              <button class="secondary small" type="button" data-switch-id="${escapeHtml(alt.agent_id)}">Switch</button>
+            </div>
+            <div class="muted" style="font-size:0.8rem;">${escapeHtml(alt.category)} · ${escapeHtml(alt.reason)}</div>
+          `;
+          card.querySelector('button')?.addEventListener('click', async () => {
+            if (byId('opt-agent-override')) byId('opt-agent-override').value = alt.agent_id;
+            const reAnalysis = await analyzeRoute(analysisResult.request_text, alt.agent_id);
+            showStagingDrawer(reAnalysis);
+          });
+          altGrid.append(card);
         });
-        altGrid.append(card);
-      });
+      }
     }
 
     // Readiness
     const readPill = byId('drawer-readiness-pill');
-    if (readiness.is_ready) {
-      readPill.className = 'pill active';
-      readPill.textContent = 'Ready';
-    } else {
-      readPill.className = 'pill weak';
-      readPill.textContent = 'Incomplete';
+    if (readPill) {
+      if (readiness.is_ready) {
+        readPill.className = 'pill active';
+        readPill.textContent = 'Ready';
+      } else {
+        readPill.className = 'pill weak';
+        readPill.textContent = 'Incomplete';
+      }
     }
-    byId('drawer-readiness-notes').textContent = readiness.readiness_notes;
+    if (byId('drawer-readiness-notes')) byId('drawer-readiness-notes').textContent = readiness.readiness_notes;
 
     // Editable JSON
-    byId('drawer-payload-editor').value = JSON.stringify(analysisResult.prepared_payload, null, 2);
+    if (byId('drawer-payload-editor')) {
+      byId('drawer-payload-editor').value = JSON.stringify(analysisResult.prepared_payload, null, 2);
+    }
 
-    drawer.style.display = 'grid';
-    drawer.scrollIntoView({ behavior: 'smooth' });
+    if (drawer) {
+      drawer.style.display = 'grid';
+      drawer.scrollIntoView({ behavior: 'smooth' });
+    }
   }
 
-  byId('close-drawer-btn').addEventListener('click', () => {
-    byId('staging-drawer').style.display = 'none';
+  byId('close-drawer-btn')?.addEventListener('click', () => {
+    if (byId('staging-drawer')) byId('staging-drawer').style.display = 'none';
   });
-  byId('drawer-cancel-btn').addEventListener('click', () => {
-    byId('staging-drawer').style.display = 'none';
+  byId('drawer-cancel-btn')?.addEventListener('click', () => {
+    if (byId('staging-drawer')) byId('staging-drawer').style.display = 'none';
   });
 
   // Execute staged agent call
@@ -1027,18 +1000,18 @@ def unified_assistant_html() -> str:
 
     let payloadToExecute = analysis.prepared_payload;
     try {
-      const editedText = byId('drawer-payload-editor').value;
+      const editedText = byId('drawer-payload-editor')?.value || '{}';
       payloadToExecute = JSON.parse(editedText);
     } catch (err) {
       alert('Invalid JSON in request payload editor. Please correct before running.');
       return;
     }
 
-    byId('staging-drawer').style.display = 'none';
+    if (byId('staging-drawer')) byId('staging-drawer').style.display = 'none';
     await runAgent(analysis.request_text, selectedAgentId, analysis.route, payloadToExecute);
   }
 
-  byId('drawer-execute-btn').addEventListener('click', executeStagedAgent);
+  byId('drawer-execute-btn')?.addEventListener('click', executeStagedAgent);
 
   // Core execution flow with active generation control and cancellation
   async function runAgent(promptText, agentId, routeInfo, payload) {
@@ -2916,10 +2889,10 @@ def unified_assistant_html() -> str:
   function renderCommandCenter() {
     const grid = byId('cc-agent-grid');
     if (!grid) return;
-    const query = (byId('cc-search-input').value || '').toLowerCase().trim();
-    const catFilter = byId('cc-category-filter').value;
-    const hsOnly = byId('cc-high-stakes-filter').checked;
-    const pinnedOnly = byId('cc-pinned-filter').checked;
+    const query = (byId('cc-search-input') ? byId('cc-search-input').value || '' : '').toLowerCase().trim();
+    const catFilter = byId('cc-category-filter') ? byId('cc-category-filter').value : '';
+    const hsOnly = !!(byId('cc-high-stakes-filter') && byId('cc-high-stakes-filter').checked);
+    const pinnedOnly = !!(byId('cc-pinned-filter') && byId('cc-pinned-filter').checked);
 
     const filtered = sessionState.catalogAgents.filter(agent => {
       const agentId = agent.agentId || agent.agent_id;
@@ -2977,11 +2950,11 @@ def unified_assistant_html() -> str:
         </div>
       `;
 
-      card.querySelector(`[data-pin-id="${agentId}"]`).addEventListener('click', () => togglePin(agentId));
-      card.querySelector(`[data-action="use"]`).addEventListener('click', () => selectAgentManually(agentId));
-      card.querySelector(`[data-action="starter"]`).addEventListener('click', () => loadAgentStarter(agentId));
-      card.querySelector(`[data-action="add-workflow"]`).addEventListener('click', () => addAgentToWorkflow(agentId));
-      card.querySelector(`[data-action="boundaries"]`).addEventListener('click', () => showAgentBoundaries(agentId));
+      card.querySelector(`[data-pin-id="${agentId}"]`)?.addEventListener('click', () => togglePin(agentId));
+      card.querySelector(`[data-action="use"]`)?.addEventListener('click', () => selectAgentManually(agentId));
+      card.querySelector(`[data-action="starter"]`)?.addEventListener('click', () => loadAgentStarter(agentId));
+      card.querySelector(`[data-action="add-workflow"]`)?.addEventListener('click', () => addAgentToWorkflow(agentId));
+      card.querySelector(`[data-action="boundaries"]`)?.addEventListener('click', () => showAgentBoundaries(agentId));
 
       grid.append(card);
     });
@@ -3072,20 +3045,21 @@ def unified_assistant_html() -> str:
 
   function updateManualOverrideIndicator() {
     const select = byId('opt-agent-override');
+    if (!select) return;
     const val = select.value;
     const indicator = byId('manual-override-indicator');
     const nameSpan = byId('manual-override-agent-name');
     if (val) {
-      nameSpan.textContent = getAgentDisplayName(val);
-      indicator.style.display = 'inline-flex';
+      if (nameSpan) nameSpan.textContent = getAgentDisplayName(val);
+      if (indicator) indicator.style.display = 'inline-flex';
     } else {
-      indicator.style.display = 'none';
+      if (indicator) indicator.style.display = 'none';
     }
   }
 
-  byId('clear-manual-override-btn').addEventListener('click', clearManualAgentOverride);
-  byId('opt-agent-override').addEventListener('change', () => {
-    const val = byId('opt-agent-override').value;
+  byId('clear-manual-override-btn')?.addEventListener('click', clearManualAgentOverride);
+  byId('opt-agent-override')?.addEventListener('change', () => {
+    const val = byId('opt-agent-override')?.value;
     if (val) recordRecentAgent(val);
     updateManualOverrideIndicator();
     triggerReadinessEvaluation();
@@ -3119,9 +3093,11 @@ def unified_assistant_html() -> str:
       starterText = `Help me with ${agent.displayName || agent.name}`;
     }
 
-    byId('prompt-input').value = starterText;
+    if (byId('prompt-input')) {
+      byId('prompt-input').value = starterText;
+      byId('prompt-input').focus();
+    }
     selectAgentManually(agentId);
-    byId('prompt-input').focus();
     showToast(`Loaded starter template for ${getAgentDisplayName(agentId)}`);
   }
 
@@ -3130,51 +3106,57 @@ def unified_assistant_html() -> str:
     if (!agent) return;
     sessionState.activeBoundariesAgent = agent;
     const modal = byId('agent-boundaries-modal');
-    byId('modal-agent-name').textContent = `${agent.displayName || agent.name} — Guardrails & Scope`;
+    if (byId('modal-agent-name')) byId('modal-agent-name').textContent = `${agent.displayName || agent.name} — Guardrails & Scope`;
 
     const badgesContainer = byId('modal-agent-badges');
-    badgesContainer.replaceChildren();
-    (agent.badges || ['local-only', 'manual-input', 'non-persistent']).forEach(b => {
-      const span = document.createElement('span');
-      span.className = 'pill inactive';
-      span.textContent = b;
-      badgesContainer.append(span);
-    });
+    if (badgesContainer) {
+      badgesContainer.replaceChildren();
+      (agent.badges || ['local-only', 'manual-input', 'non-persistent']).forEach(b => {
+        const span = document.createElement('span');
+        span.className = 'pill inactive';
+        span.textContent = b;
+        badgesContainer.append(span);
+      });
+    }
 
-    byId('modal-agent-usewhen').innerHTML = `<strong>Intended Use:</strong> ${escapeHtml(agent.useWhen || 'Specialized response agent.')}`;
+    if (byId('modal-agent-usewhen')) byId('modal-agent-usewhen').innerHTML = `<strong>Intended Use:</strong> ${escapeHtml(agent.useWhen || 'Specialized response agent.')}`;
 
     const notesList = byId('modal-safety-notes');
-    notesList.replaceChildren();
-    (agent.safetyNotes || ['Local execution only. No external services or connectors.']).forEach(n => {
-      const li = document.createElement('li');
-      li.textContent = n;
-      notesList.append(li);
-    });
+    if (notesList) {
+      notesList.replaceChildren();
+      (agent.safetyNotes || ['Local execution only. No external services or connectors.']).forEach(n => {
+        const li = document.createElement('li');
+        li.textContent = n;
+        notesList.append(li);
+      });
+    }
 
     const hsSec = byId('modal-high-stakes-section');
-    if (agent.isHighStakes || agent.high_stakes) {
-      hsSec.style.display = 'block';
-      byId('modal-high-stakes-text').textContent = 'This agent operates in a high-stakes decision domain. Jarvis provides local informational guidance only; no professional certification, live filings, or financial transactions are performed.';
-    } else {
-      hsSec.style.display = 'none';
+    if (hsSec) {
+      if (agent.isHighStakes || agent.high_stakes) {
+        hsSec.style.display = 'block';
+        if (byId('modal-high-stakes-text')) byId('modal-high-stakes-text').textContent = 'This agent operates in a high-stakes decision domain. Jarvis provides local informational guidance only; no professional certification, live filings, or financial transactions are performed.';
+      } else {
+        hsSec.style.display = 'none';
+      }
     }
 
-    modal.classList.add('open');
+    if (modal) modal.classList.add('open');
   }
 
-  byId('close-modal-btn').addEventListener('click', () => {
-    byId('agent-boundaries-modal').classList.remove('open');
+  byId('close-modal-btn')?.addEventListener('click', () => {
+    byId('agent-boundaries-modal')?.classList.remove('open');
   });
-  byId('agent-boundaries-modal').addEventListener('click', (e) => {
+  byId('agent-boundaries-modal')?.addEventListener('click', (e) => {
     if (e.target === byId('agent-boundaries-modal')) {
-      byId('agent-boundaries-modal').classList.remove('open');
+      byId('agent-boundaries-modal')?.classList.remove('open');
     }
   });
 
-  byId('cc-search-input').addEventListener('input', renderCommandCenter);
-  byId('cc-category-filter').addEventListener('change', renderCommandCenter);
-  byId('cc-high-stakes-filter').addEventListener('change', renderCommandCenter);
-  byId('cc-pinned-filter').addEventListener('change', renderCommandCenter);
+  byId('cc-search-input')?.addEventListener('input', renderCommandCenter);
+  byId('cc-category-filter')?.addEventListener('change', renderCommandCenter);
+  byId('cc-high-stakes-filter')?.addEventListener('change', renderCommandCenter);
+  byId('cc-pinned-filter')?.addEventListener('change', renderCommandCenter);
 
   // ==========================================
   // Productivity Layer: Context Kit Builder
@@ -3256,49 +3238,51 @@ def unified_assistant_html() -> str:
         </div>
         <button class="secondary small" data-remove-kit="${item.id}" type="button">✕ Remove</button>
       `;
-      row.querySelector(`[data-remove-kit="${item.id}"]`).addEventListener('click', () => removeContextKitItem(item.id));
+      row.querySelector(`[data-remove-kit="${item.id}"]`)?.addEventListener('click', () => removeContextKitItem(item.id));
       list.append(row);
     });
   }
 
-  byId('add-kit-note-btn').addEventListener('click', () => {
+  byId('add-kit-note-btn')?.addEventListener('click', () => {
     const labelInput = byId('kit-note-label');
     const contentInput = byId('kit-note-content');
-    const label = labelInput.value.trim() || 'User Note';
-    const content = contentInput.value.trim();
+    const label = (labelInput ? labelInput.value.trim() : '') || 'User Note';
+    const content = contentInput ? contentInput.value.trim() : '';
     if (!content) {
       alert('Please enter note content.');
-      contentInput.focus();
+      if (contentInput) contentInput.focus();
       return;
     }
     addContextKitItem('note', label, content);
-    labelInput.value = '';
-    contentInput.value = '';
+    if (labelInput) labelInput.value = '';
+    if (contentInput) contentInput.value = '';
   });
 
-  byId('clear-kit-btn').addEventListener('click', () => {
+  byId('clear-kit-btn')?.addEventListener('click', () => {
     sessionState.contextKit = [];
     renderContextKit();
     triggerReadinessEvaluation();
     showToast('Context Kit cleared.');
   });
 
-  byId('insert-kit-btn').addEventListener('click', () => {
+  byId('insert-kit-btn')?.addEventListener('click', () => {
     if (!sessionState.contextKit.length) {
       alert('Context Kit is empty.');
       return;
     }
-    const formatted = sessionState.contextKit.map(item => `### [${item.label}]\n${item.content}`).join('\n\n');
+    const formatted = sessionState.contextKit.map(item => `### [${item.label}]\n${item.content}`).join('\\n\\n');
     const wrapper = `\n\n[Context Kit]\n${formatted}\n[/Context Kit]\n\n`;
     const input = byId('prompt-input');
-    input.value = (input.value.trim() + wrapper).trim();
-    input.focus();
+    if (input) {
+      input.value = (input.value.trim() + wrapper).trim();
+      input.focus();
+    }
     triggerReadinessEvaluation();
     showToast('Inserted Context Kit into prompt.');
-    byId('composer').scrollIntoView({ behavior: 'smooth' });
+    byId('composer')?.scrollIntoView({ behavior: 'smooth' });
   });
 
-  byId('stage-kit-btn').addEventListener('click', () => {
+  byId('stage-kit-btn')?.addEventListener('click', () => {
     if (!sessionState.contextKit.length) {
       alert('Context Kit is empty.');
       return;
@@ -3311,7 +3295,7 @@ def unified_assistant_html() -> str:
       summary: formatted.slice(0, 500),
     });
     showToast('Staged Context Kit as prior context.');
-    byId('composer').scrollIntoView({ behavior: 'smooth' });
+    byId('composer')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // ==========================================
@@ -3384,30 +3368,31 @@ def unified_assistant_html() -> str:
       }
     }
 
-    if (readiness.isHighStakes) {
+    if (readiness.isHighStakes && hsBanner) {
       hsBanner.style.display = 'block';
       if (includedSrcs.length === 0) {
         hsBanner.innerHTML = `<strong>High-Stakes Source Gap:</strong> No reviewed public source excerpts are attached to this request. Jarvis can still provide local informational support, but important facts should be checked against appropriate authoritative or qualified sources before acting. <span class="muted">(Category: ${escapeHtml(readiness.highStakesCategory || 'Sensitive')})</span>`;
       } else {
         hsBanner.innerHTML = `<strong>High-Stakes Category (${escapeHtml(readiness.highStakesCategory || 'Sensitive')}):</strong> ${escapeHtml(readiness.highStakesWarning || 'Review safety boundaries before acting.')} · <em>Reviewed excerpts (${includedSrcs.length}) are supporting context only (not independently verified).</em>`;
       }
-    } else {
+    } else if (hsBanner) {
       hsBanner.style.display = 'none';
     }
 
-    if (readiness.suggestion) {
+    if (readiness.suggestion && sugBox && sugText) {
       sugBox.style.display = 'flex';
       sugText.textContent = `Suggestion: ${readiness.suggestion.slice(0, 160)}...`;
       sessionState.activeSuggestion = readiness.suggestion;
-    } else {
+    } else if (sugBox) {
       sugBox.style.display = 'none';
       sessionState.activeSuggestion = null;
     }
   }
 
-  byId('apply-suggestion-btn').addEventListener('click', () => {
+  byId('apply-suggestion-btn')?.addEventListener('click', () => {
     if (!sessionState.activeSuggestion) return;
     const input = byId('prompt-input');
+    if (!input) return;
     const current = input.value.trim();
     if (current) {
       input.value = `${current}\n\n${sessionState.activeSuggestion}`;
@@ -3419,7 +3404,7 @@ def unified_assistant_html() -> str:
     showToast('Applied scaffolding suggestion to prompt.');
   });
 
-  byId('prompt-input').addEventListener('input', triggerReadinessEvaluation);
+  byId('prompt-input')?.addEventListener('input', triggerReadinessEvaluation);
 
   // ==========================================
   // System Status & Initialization
@@ -3431,15 +3416,18 @@ def unified_assistant_html() -> str:
       const genStatus = await apiFetch('/api/generation/status');
       sessionState.generationStatus = genStatus;
       const pill = byId('generation-pill');
-      if (genStatus.enabled) {
-        pill.className = 'pill active';
-        pill.textContent = `Local Generation: Active (${genStatus.modelName || 'Ollama'})`;
-      } else {
-        pill.className = 'pill inactive';
-        pill.textContent = 'Local Generation: Off (Deterministic)';
+      if (pill) {
+        if (genStatus.enabled) {
+          pill.className = 'pill active';
+          pill.textContent = `Local Generation: Active (${genStatus.modelName || 'Ollama'})`;
+        } else {
+          pill.className = 'pill inactive';
+          pill.textContent = 'Local Generation: Off (Deterministic)';
+        }
       }
     } catch (err) {
-      byId('generation-pill').textContent = 'Local Generation: Unavailable';
+      const pill = byId('generation-pill');
+      if (pill) pill.textContent = 'Local Generation: Unavailable';
     }
 
     try {
@@ -3449,7 +3437,8 @@ def unified_assistant_html() -> str:
         populateAgentOverrideDropdown(catalog);
         populateAddStepAgentDropdown(catalog);
         renderCommandCenter();
-        byId('agents-pill').textContent = `${catalog.length} Response Agents Ready`;
+        const ap = byId('agents-pill');
+        if (ap) ap.textContent = `${catalog.length} Response Agents Ready`;
       } else {
         const fallbackCatalog = await apiFetch('/agents/local-response-agents/discovery');
         if (fallbackCatalog && fallbackCatalog.agents) {
@@ -3457,11 +3446,13 @@ def unified_assistant_html() -> str:
           populateAgentOverrideDropdown(fallbackCatalog.agents);
           populateAddStepAgentDropdown(fallbackCatalog.agents);
           renderCommandCenter();
-          byId('agents-pill').textContent = `${fallbackCatalog.agents.length} Response Agents Ready`;
+          const ap = byId('agents-pill');
+          if (ap) ap.textContent = `${fallbackCatalog.agents.length} Response Agents Ready`;
         }
       }
     } catch (err) {
-      byId('agents-pill').textContent = 'Agents Discovery Error';
+      const ap = byId('agents-pill');
+      if (ap) ap.textContent = 'Agents Discovery Error';
     }
 
     try {
@@ -3487,16 +3478,21 @@ def unified_assistant_html() -> str:
   async function handleSubmit(previewOnly = false) {
     if (sessionState.isGenerating) return;
     const input = byId('prompt-input');
-    const promptText = input.value.trim();
+    const promptText = input ? input.value.trim() : '';
     if (!promptText) {
       alert('Please enter a request.');
-      input.focus();
+      if (input) input.focus();
       return;
     }
 
     try {
-      byId('submit-btn').disabled = true;
-      byId('preview-route-btn').disabled = true;
+      const submitBtn = byId('submit-btn');
+      const previewBtn = byId('preview-route-btn');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Routing...';
+      }
+      if (previewBtn) previewBtn.disabled = true;
 
       const analysis = await analyzeRoute(promptText);
 
@@ -3510,17 +3506,22 @@ def unified_assistant_html() -> str:
       alert(`Routing analysis failed: ${err.message}`);
     } finally {
       if (!sessionState.isGenerating) {
-        byId('submit-btn').disabled = false;
-        byId('preview-route-btn').disabled = false;
+        const submitBtn = byId('submit-btn');
+        const previewBtn = byId('preview-route-btn');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Ask Jarvis';
+        }
+        if (previewBtn) previewBtn.disabled = false;
       }
     }
   }
 
-  byId('submit-btn').addEventListener('click', () => handleSubmit(false));
-  byId('preview-route-btn').addEventListener('click', () => handleSubmit(true));
+  byId('submit-btn')?.addEventListener('click', () => handleSubmit(false));
+  byId('preview-route-btn')?.addEventListener('click', () => handleSubmit(true));
 
   // Enter to send (Shift+Enter for newline)
-  byId('prompt-input').addEventListener('keydown', (e) => {
+  byId('prompt-input')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(false);
@@ -3530,8 +3531,11 @@ def unified_assistant_html() -> str:
   // Starter chips
   document.querySelectorAll('.starter-chip').forEach(btn => {
     btn.addEventListener('click', () => {
-      byId('prompt-input').value = btn.getAttribute('data-prompt');
-      byId('prompt-input').focus();
+      const promptInput = byId('prompt-input');
+      if (promptInput) {
+        promptInput.value = btn.getAttribute('data-prompt') || '';
+        promptInput.focus();
+      }
       triggerReadinessEvaluation();
     });
   });
