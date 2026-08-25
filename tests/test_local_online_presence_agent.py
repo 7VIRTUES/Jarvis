@@ -46,7 +46,7 @@ def test_local_online_presence_endpoint_returns_structured_plan():
     assert result["reputationReview"]
     assert result["postingDrafts"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided online presence planning and drafting inputs." in result["limitations"]
     assert result["safety"]["localOnly"] is True

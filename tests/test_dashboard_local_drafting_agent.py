@@ -65,7 +65,7 @@ def test_dashboard_local_drafting_agent_section_has_no_unsafe_action_buttons(tmp
 
     page_text = app_module.local_dashboard().body.decode("utf-8").lower()
     start = page_text.index('id="local-drafting-agent"')
-    end = page_text.index('id="vm-validation-prep-center"')
+    end = page_text.index("</section>", start)
     section = page_text[start:end]
     forbidden_labels = [
         "send email",

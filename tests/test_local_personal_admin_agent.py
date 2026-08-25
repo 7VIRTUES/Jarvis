@@ -40,7 +40,7 @@ def test_local_personal_admin_endpoint_returns_structured_plan():
     assert result["submissionReadiness"]
     assert result["followUpPlan"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided personal admin goal" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True

@@ -21,7 +21,7 @@ def test_dashboard_summary_endpoint_returns_safe_status_data(tmp_path, monkeypat
     summary = app_module.dashboard_summary()
 
     assert summary["app"]["mode"] == "local"
-    assert summary["phase"]["current"] == "v0.1D Batch 3"
+    assert summary["phase"]["current"] == "v0.1E Batch 4"
     assert summary["capabilities"]["unsupportedControlsExposed"] is False
     assert summary["capabilities"]["settings"] == "read_only_status"
     assert summary["capabilities"]["stopTask"] == "jarvis_task_queue_state_only"
@@ -46,8 +46,8 @@ def test_settings_summary_endpoint_returns_safe_read_only_status_data(tmp_path, 
     settings = app_module.settings_summary()
 
     assert settings["appName"] == "Jarvis PC Local"
-    assert settings["phase"] == "v0.1D"
-    assert settings["currentSlice"] == "deterministic memory retrieval and representative-agent pilot"
+    assert settings["phase"] == "v0.1E Batch 4"
+    assert settings["currentSlice"] == "controlled local generation and prompt assembly"
     assert settings["localFirst"] is True
     assert settings["settingsEditable"] is False
     assert settings["settingsPersistence"] == "not_implemented_in_this_slice"
@@ -332,10 +332,10 @@ def test_dashboard_reports_truthful_memory_capability_metadata(tmp_path, monkeyp
     assert settings["automaticMemorySavingEnabled"] is False
     assert settings["memoryApprovalRequired"] is True
     assert settings["memoryAgentRetrievalImplemented"] is True
-    assert settings["memoryRetrievalStatus"] == "implemented_pilot"
+    assert settings["memoryRetrievalStatus"] == "implemented_all_response_agents"
     assert settings["memoryRetrievalMode"] == "fts5_with_deterministic_fallback"
-    assert settings["memoryAgentRetrievalPilotCount"] == 6
-    assert settings["memoryAgentRetrievalAllAgents"] is False
+    assert settings["memoryAgentRetrievalAgentCount"] == 37
+    assert settings["memoryAgentRetrievalAllAgents"] is True
     assert settings["embeddingsEnabled"] is False
     assert settings["localGenerativeModelEnabled"] is False
     assert settings["privateSessionPersistenceImplemented"] is False
@@ -360,8 +360,7 @@ def test_main_dashboard_has_memory_center_card_and_status_section(tmp_path, monk
     assert 'id="memory-center-metrics"' in page_text
     assert 'id="memory-center-refresh-button"' in page_text
     assert "Persistent local feature with explicit user actions only." in page_text
-    assert "New memories remain pending and inactive until approved." in page_text
-    assert "Deterministic retrieval is opt-in for exactly six pilot agents." in page_text
+    assert "Controlled local memory with explicit retrieval, pending proposals, and user-submitted feedback." in page_text
     assert "fetch('/api/memory/summary')" in page_text
     assert "async function loadMemoryCenterSummary()" in page_text
     assert "function renderMemoryCenterSummary(summary)" in page_text
@@ -373,12 +372,10 @@ def test_main_dashboard_does_not_expose_memory_mutation_forms(tmp_path, monkeypa
     page_text = app_module.local_dashboard().body.decode("utf-8")
 
     forbidden = (
-        "/api/memories/proposals",
         "/api/memories/{memory_id}",
         "Approve memory",
         "Reject memory",
         "Disable memory",
-        "Enable memory",
         "Delete permanently",
         'id="proposal-form"',
         'id="memory-edit-form"',

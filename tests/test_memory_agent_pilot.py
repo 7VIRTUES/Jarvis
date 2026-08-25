@@ -136,20 +136,20 @@ def test_web_prior_and_memory_context_coexist_without_memory_mutation(api_module
         ("LocalTroubleshootingInput", {"problem": "Normal request"}),
     ],
 )
-def test_unsupported_agents_reject_memory_field_and_normal_models_still_validate(api_module, model_name, normal_body):
+def test_response_agent_models_validate_with_and_without_memory(api_module, model_name, normal_body):
     model = getattr(api_module, model_name)
     validated = model.model_validate(normal_body)
     assert validated is not None
-    with pytest.raises(ValidationError):
-        model.model_validate({**normal_body, "memory": {"enabled": True, "query": "not allowed"}})
+    with_memory = model.model_validate({**normal_body, "memory": {"enabled": True, "query": "memory query"}})
+    assert with_memory.memory.enabled is True
 
 
-def test_exactly_six_models_are_memory_aware_and_catalog_remains_37(api_module):
+def test_all_response_agent_models_are_memory_aware_and_catalog_remains_37(api_module):
     memory_models = {
         name
         for name, value in vars(api_module).items()
         if isinstance(value, type) and name != "MemoryAwareResponseAgentInputBase" and hasattr(value, "model_fields") and "memory" in value.model_fields
     }
-    assert memory_models == {row[0] for row in PILOTS}
+    assert len(memory_models) >= 37
     catalog = api_module.local_response_agents_discovery_catalog()
     assert catalog["agentCount"] == 37

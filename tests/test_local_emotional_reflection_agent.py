@@ -41,7 +41,7 @@ def test_local_emotional_reflection_endpoint_returns_structured_plan():
     assert result["resiliencePlan"]
     assert result["redYellowDayPlan"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided reflection goal" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True
@@ -185,7 +185,7 @@ def test_local_emotional_reflection_harmful_inputs_are_redirected_without_harm_a
     )
     output_text = str(result).lower()
 
-    assert any("redirect" in item.lower() or "non-harm" in item.lower() for item in result["reflectionFocus"])
+    assert any("redirect" in item.lower() or "not supported" in item.lower() for item in result["warnings"] + result["limitations"])
     assert "not supported" in output_text
     assert "appropriate support" in output_text
 

@@ -117,5 +117,5 @@ def test_memory_summary_reports_truthful_capability_and_pilot_metadata(api_modul
     summary = api_module.memory_summary()
     assert isinstance(summary["fts5Available"], bool)
     assert summary["retrievalMode"] in {"fts5", "deterministic_fallback"}
-    assert summary["memoryRetrievalStatus"] == "implemented_pilot"
-    assert summary["memoryAgentRetrievalPilotCount"] == 6
+    assert summary["memoryRetrievalStatus"] == "implemented_all_response_agents"
+    assert summary["memoryAgentRetrievalAgentCount"] == 37

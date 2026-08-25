@@ -39,7 +39,7 @@ def test_page_has_header_navigation_and_complete_safety_banner():
         "Only approved, unexpired memories can be active.",
         "does not automatically save conversations",
         "does not automatically approve memory",
-        "Memory retrieval is opt-in for exactly six representative pilot agents.",
+        "Memory retrieval is explicit and opt-in for all 37 local response agents.",
         "Private-session state is temporary and page-local.",
         "Obvious credentials and secrets are rejected",
     ):

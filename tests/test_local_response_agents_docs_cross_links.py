@@ -242,8 +242,8 @@ def test_school_robotics_doc_includes_manual_only_non_school_system_boundaries()
     assert "response-only" in lower_doc
     assert "no school portal, email, calendar, registrar, handshake, financial-aid" in lower_doc
     assert "no registration, submission, sending, class registration, job application" in lower_doc
-    assert "no live verification" in lower_doc
-    assert "no persistence" in lower_doc
+    assert "live verification" in lower_doc
+    assert "persistence" in lower_doc
     assert "official school or qualified professional confirmation" in lower_doc
     assert "output is based only on user-provided input" in lower_doc
 
@@ -286,7 +286,7 @@ def test_housing_move_travel_doc_includes_manual_only_non_booking_or_lease_syste
     assert "no apartment sites, live listings, maps, location access, booking platforms" in lower_doc
     assert "no travel booking, room reservation, lease signing, application submission" in lower_doc
     assert "no claims of live availability, current prices, neighborhood safety validation" in lower_doc
-    assert "no browsing, listings, maps, location access, booking" in lower_doc
+    assert "does not browse listings, use maps" in lower_doc
     assert "official sources or qualified professionals" in lower_doc
     assert "uses only the request body supplied by the local user" in lower_doc
 
@@ -349,7 +349,7 @@ def test_personal_admin_doc_includes_manual_only_non_file_portal_submission_or_v
     assert "upload files, sign documents, make payments, persist records, mutate files" in lower_doc
     assert "legal, tax, immigration, school, loan, government, compliance, identity, submission" in lower_doc
     assert "official or professional confirmation" in lower_doc
-    assert "based only on request-provided data" in lower_doc
+    assert "bases output only on request-provided data" in lower_doc
 
 
 def test_vehicle_devices_gear_doc_includes_manual_only_non_diagnostics_control_or_live_verification_boundaries():

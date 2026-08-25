@@ -544,7 +544,15 @@ class SecurityReviewService:
         return any(fnmatch.fnmatch(name, pattern.lower()) or fnmatch.fnmatch(normalized, pattern.lower()) for pattern in PROTECTED_FILE_PATTERNS)
 
     def _inside_git(self, root: Path) -> bool:
-        return self._git_text(root, ["rev-parse", "--is-inside-work-tree"]) == "true"
+        if (root / ".git").exists():
+            return True
+        top_level = self._git_text(root, ["rev-parse", "--show-toplevel"])
+        if not top_level:
+            return False
+        try:
+            return Path(top_level).resolve() == root.resolve()
+        except OSError:
+            return False
 
     def _git_text(self, root: Path, args: list[str]) -> str | None:
         if shutil.which("git") is None:

@@ -51,7 +51,7 @@ def test_local_food_cooking_grocery_endpoint_returns_structured_local_plan():
     assert result["time_estimate"]
     assert result["safety_notes"]
     assert result["limitations"]
-    assert result["follow_up_questions"]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["localOnly"] is True
 
 

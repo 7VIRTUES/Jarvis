@@ -58,7 +58,7 @@ def test_dashboard_file_data_agent_section_has_no_unsafe_action_buttons(tmp_path
 
     page_text = app_module.local_dashboard().body.decode("utf-8").lower()
     start = page_text.index('id="file-data-agent"')
-    end = page_text.index('id="vm-validation-prep-center"')
+    end = page_text.index("</section>", start)
     section = page_text[start:end]
     forbidden_labels = [
         "scan pc",

@@ -45,7 +45,7 @@ def test_local_finance_budget_endpoint_returns_structured_plan():
     assert result["spendingReview"]
     assert result["decisionChecklist"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided finance notes" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True

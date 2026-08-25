@@ -44,7 +44,7 @@ def test_local_learning_study_endpoint_returns_structured_plan():
     assert result["bossTest"]
     assert result["progressChecklist"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided learning" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True

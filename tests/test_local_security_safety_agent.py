@@ -43,7 +43,7 @@ def test_local_security_safety_endpoint_returns_structured_review():
     assert result["travelSafetyPlan"]
     assert result["incidentPrepPlan"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided safety and security review inputs." in result["limitations"]
     assert result["safety"]["localOnly"] is True

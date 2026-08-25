@@ -42,7 +42,7 @@ def test_local_relationships_endpoint_returns_structured_plan():
     assert result["giftOccasionPlan"]
     assert result["relationshipMaintenance"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided relationship goal" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True

@@ -37,8 +37,9 @@ def test_local_culture_taste_high_class_lifestyle_endpoint_returns_structured_pl
     assert result["agentId"] == "local_culture_taste_high_class_lifestyle"
     assert result["status"] == "local_only"
     assert result["output_type"] == "event_prep_plan"
-    for field in ["title", "summary", "assumptions", "recommended_plan", "style_or_taste_guidance", "etiquette_notes", "conversation_notes", "learning_plan", "checklist", "budget_notes", "timeline", "limitations", "follow_up_questions"]:
+    for field in ["title", "summary", "assumptions", "recommended_plan", "style_or_taste_guidance", "etiquette_notes", "conversation_notes", "learning_plan", "checklist", "budget_notes", "timeline", "limitations"]:
         assert result[field]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["localOnly"] is True
     assert result["safety"]["storeAccess"] is False
     assert result["safety"]["reservationAccess"] is False
@@ -68,8 +69,9 @@ def test_local_hobbies_adventure_endpoint_returns_structured_plan():
     assert result["agentId"] == "local_hobbies_adventure"
     assert result["status"] == "local_only"
     assert result["output_type"] == "weekend_plan"
-    for field in ["title", "summary", "assumptions", "recommended_plan", "skill_steps", "gear_or_supply_checklist", "safety_notes", "budget_notes", "timeline", "risk_flags", "limitations", "follow_up_questions"]:
+    for field in ["title", "summary", "assumptions", "recommended_plan", "skill_steps", "gear_or_supply_checklist", "safety_notes", "budget_notes", "timeline", "risk_flags", "limitations"]:
         assert result[field]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["localOnly"] is True
     assert result["safety"]["mapAccess"] is False
     assert result["safety"]["weatherServiceAccess"] is False
@@ -97,8 +99,9 @@ def test_local_personal_knowledge_memory_organizer_endpoint_returns_structured_p
     assert result["agentId"] == "local_personal_knowledge_memory_organizer"
     assert result["status"] == "local_only"
     assert result["output_type"] == "memory_index"
-    for field in ["title", "summary", "assumptions", "recommended_structure", "categories", "tags", "key_points", "review_plan", "retrieval_prompts", "checklist", "limitations", "follow_up_questions"]:
+    for field in ["title", "summary", "assumptions", "recommended_structure", "categories", "tags", "key_points", "review_plan", "retrieval_prompts", "checklist", "limitations"]:
         assert result[field]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["localOnly"] is True
     assert result["safety"]["fileReads"] is False
     assert result["safety"]["memoryStoreAccess"] is False
@@ -106,7 +109,7 @@ def test_local_personal_knowledge_memory_organizer_endpoint_returns_structured_p
 
 
 @pytest.mark.parametrize(
-    ("service", "request", "values"),
+    ("service", "agent_request", "values"),
     [
         (
             LocalCultureTasteHighClassLifestyleAgentService(),
@@ -165,9 +168,9 @@ def test_local_personal_knowledge_memory_organizer_endpoint_returns_structured_p
         ),
     ],
 )
-def test_new_local_response_agents_supported_output_types_normalize(service, request, values):
+def test_new_local_response_agents_supported_output_types_normalize(service, agent_request, values):
     for value in values:
-        result = service.create_plan(request.__class__(request="Manual local planning.", output_type=value.upper()))
+        result = service.create_plan(agent_request.__class__(request="Manual local planning.", output_type=value.upper()))
         assert result["output_type"] == value
 
 

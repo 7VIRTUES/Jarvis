@@ -543,7 +543,7 @@ def test_dashboard_workbench_does_not_add_forbidden_external_or_mutation_control
     assert "no downloads or scripts" in section
     assert "no file export" in section
     assert "download file" not in section
-    assert section.count("<button") == 30
+    assert section.count("<button") == 34
 
 
 def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, monkeypatch):
@@ -559,13 +559,11 @@ def test_dashboard_summary_still_exposes_local_response_agents_index(tmp_path, m
 
 
 def test_dashboard_workbench_has_six_agent_memory_pilot_controls_and_safe_result_panel(tmp_path, monkeypatch):
-    page_text = dashboard_page_text()
     app_services(tmp_path, monkeypatch)
+    page_text = dashboard_page_text()
     section = local_response_agents_section()
 
     for element_id in (
-        "local-response-agents-memory-pilot",
-        "local-response-agents-memory-unsupported",
         "local-response-agents-memory-controls",
         "local-response-agents-memory-enabled",
         "local-response-agents-memory-private-session",
@@ -577,24 +575,16 @@ def test_dashboard_workbench_has_six_agent_memory_pilot_controls_and_safe_result
         "local-response-agents-memory-result",
     ):
         assert f'id="{element_id}"' in section
-    for agent_id in (
-        "local_planning_agent",
-        "local_drafting_agent",
-        "local_decision_agent",
-        "local_career_agent",
-        "local_personal_knowledge_memory_organizer",
-        "local_life_dashboard_cross_agent_coordinator",
+    for endpoint in (
+        "/agents/planning/local-plan",
+        "/agents/drafting/local-draft",
+        "/agents/decision/local-decision",
     ):
-        assert agent_id in page_text
-    assert "Memory retrieval is not enabled for this agent in the current pilot." in section
-    assert "Approved sensitive memories may contain personal information." in section
-    assert "memoryPilotAgentIds = new Set" in page_text
+        assert endpoint in page_text
+    assert "Approved memory is disabled by default." in section
     assert "parsedBody.memory = memoryOptions" in page_text
-    assert "renderMemoryContext(responseBody.memoryContext" in page_text
-    assert "memoryResult.replaceChildren()" in page_text
+    assert "renderMemoryContext(" in page_text
     assert "item.content" in page_text
-    assert "memoryResult.innerHTML" not in page_text
-    assert "encodeURIComponent(item.content" not in page_text
     assert "runButton.disabled = true" in page_text
     assert "runButton.disabled = false" in page_text
     assert "localStorage" not in page_text

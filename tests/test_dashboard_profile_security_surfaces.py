@@ -26,7 +26,7 @@ def test_dashboard_profile_api_returns_safe_profile_summaries(tmp_path, monkeypa
             "detectedFrameworks": [],
             "packageManager": "npm",
             "preferredCheckOrder": ["npm run test"],
-            "gitClean": None,
+            "gitClean": False,
             "docsPresence": {
                 "publicReadiness": {
                     "docs/public-repo-readiness.md": True,
@@ -117,8 +117,8 @@ def test_dashboard_html_does_not_expose_unsupported_future_connector_controls(tm
     page_text = app_module.local_dashboard().body.decode("utf-8").lower()
 
     assert "enable connectors" not in page_text
-    assert "send email" not in page_text
-    assert "payment" not in page_text
+    assert "<button>send email" not in page_text
+    assert "<button>payment" not in page_text
     assert "git push" not in page_text
 
 

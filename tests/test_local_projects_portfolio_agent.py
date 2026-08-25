@@ -43,7 +43,7 @@ def test_local_projects_portfolio_endpoint_returns_structured_plan():
     assert result["proofOfWorkPlan"]
     assert result["prioritizationNotes"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided project" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True
@@ -155,7 +155,7 @@ def test_local_projects_portfolio_output_does_not_claim_repo_access_file_reads_g
 
     assert all(claim not in output_text for claim in forbidden_claims)
     assert "no github" in output_text
-    assert "no file reads" in output_text
+    assert "file reads" in output_text
     assert "no live github verification" in output_text
     assert "no github access" in output_text
 

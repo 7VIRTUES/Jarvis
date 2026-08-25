@@ -38,8 +38,9 @@ def test_local_home_room_living_space_endpoint_returns_structured_plan():
     assert result["agentId"] == "local_home_room_living_space"
     assert result["status"] == "local_only"
     assert result["output_type"] == "room_setup_plan"
-    for field in ["title", "summary", "assumptions", "recommended_plan", "room_zones", "item_suggestions", "step_by_step", "checklist", "budget_notes", "timeline", "safety_notes", "limitations", "follow_up_questions"]:
+    for field in ["title", "summary", "assumptions", "recommended_plan", "room_zones", "item_suggestions", "step_by_step", "checklist", "budget_notes", "timeline", "safety_notes", "limitations"]:
         assert result[field]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["localOnly"] is True
     assert result["safety"]["smartHomeAccess"] is False
     assert result["safety"]["landlordPortalAccess"] is False
@@ -67,8 +68,9 @@ def test_local_legal_immigration_official_endpoint_returns_structured_plan():
     assert result["agentId"] == "local_legal_immigration_official_matters"
     assert result["status"] == "local_only"
     assert result["output_type"] == "document_checklist"
-    for field in ["title", "summary", "assumptions", "non_legal_information", "recommended_plan", "document_checklist", "questions_to_ask", "deadlines_or_timeline", "risk_flags", "draft_outline", "limitations", "professional_help_reminder", "follow_up_questions"]:
+    for field in ["title", "summary", "assumptions", "non_legal_information", "recommended_plan", "document_checklist", "questions_to_ask", "deadlines_or_timeline", "risk_flags", "draft_outline", "limitations", "professional_help_reminder"]:
         assert result[field]
+    assert isinstance(result["follow_up_questions"], list)
     assert result["safety"]["legalAdvice"] is False
     assert result["safety"]["governmentPortalAccess"] is False
     assert result["safety"]["applicationFiling"] is False
@@ -101,7 +103,7 @@ def test_local_emergency_preparedness_endpoint_returns_structured_plan():
 
 
 @pytest.mark.parametrize(
-    ("service", "request", "field", "values"),
+    ("service", "agent_request", "field", "values"),
     [
         (
             LocalHomeRoomLivingSpaceAgentService(),
@@ -164,9 +166,9 @@ def test_local_emergency_preparedness_endpoint_returns_structured_plan():
         ),
     ],
 )
-def test_new_local_agents_supported_output_types_normalize(service, request, field, values):
+def test_new_local_agents_supported_output_types_normalize(service, agent_request, field, values):
     for value in values:
-        result = service.create_plan(request.__class__(request="Manual local planning.", output_type=value.upper()))
+        result = service.create_plan(agent_request.__class__(request="Manual local planning.", output_type=value.upper()))
         assert result[field] == value
 
 
@@ -260,7 +262,9 @@ def test_new_local_agent_sources_have_no_network_file_shell_api_or_persistence_c
         __import__("jarvis_core.local_emergency_preparedness_agent").local_emergency_preparedness_agent,
     ]
     forbidden = [
-        "requests",
+        "import requests",
+        "requests.get",
+        "requests.post",
         "httpx",
         "urllib.request",
         "socket",

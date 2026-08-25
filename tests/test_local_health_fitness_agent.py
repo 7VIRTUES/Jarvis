@@ -47,7 +47,7 @@ def test_local_health_fitness_endpoint_returns_structured_local_plan():
     assert result["progressReview"]
     assert result["safetyReview"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided wellness" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True

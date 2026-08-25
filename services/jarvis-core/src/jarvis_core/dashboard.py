@@ -2956,7 +2956,7 @@ def dashboard_html() -> str:
       return String(key || '')
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        .replace(/\\b\\w/g, (letter) => letter.toUpperCase());
     }
     function renderLocalResponseValue(value) {
       if (value === null || value === undefined || value === '') {
@@ -5247,7 +5247,7 @@ def dashboard_html() -> str:
           : value && typeof value === 'object'
             ? JSON.stringify(value)
             : String(value || '');
-        return text.replace(/\s+/g, ' ').trim().slice(0, maxLength);
+        return text.replace(/\\s+/g, ' ').trim().slice(0, maxLength);
       }
       function localResponseList(value, maxItems = 20) {
         if (value === null || value === undefined || value === '') {

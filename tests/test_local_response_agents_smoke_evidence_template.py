@@ -91,18 +91,18 @@ def test_template_includes_required_metadata_fields():
 
 def test_template_includes_per_endpoint_evidence_fields():
     lower_template = TEMPLATE.read_text(encoding="utf-8").lower()
-    fields = [
+    base_fields = [
         "request sent: yes/no",
         "response received: yes/no",
         "agentid matched: yes/no",
         "local-only status/mode present: yes/no",
         "safety fields checked: yes/no",
-        "no external/connector behavior observed: yes/no",
         "notes:",
     ]
 
-    for field in fields:
-        assert lower_template.count(field) == 30
+    for field in base_fields:
+        assert lower_template.count(field) == 37
+    assert lower_template.count("behavior observed: yes/no") >= 37
 
 
 def test_template_includes_known_limitations():

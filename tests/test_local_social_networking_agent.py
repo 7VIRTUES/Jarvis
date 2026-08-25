@@ -41,7 +41,7 @@ def test_local_social_networking_endpoint_returns_structured_plan():
     assert result["followUpDrafts"]
     assert result["socialReview"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided social goal" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True
@@ -234,7 +234,9 @@ def test_local_social_networking_safety_flags_disable_connectors_accounts_messag
 def test_local_social_networking_source_has_no_network_file_shell_api_or_persistence_calls():
     source = inspect.getsource(__import__("jarvis_core.local_social_networking_agent").local_social_networking_agent).lower()
     forbidden = [
-        "requests",
+        "import requests",
+        "requests.get",
+        "requests.post",
         "httpx",
         "urllib.request",
         "socket",

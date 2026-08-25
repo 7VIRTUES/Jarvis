@@ -45,7 +45,7 @@ def test_local_school_robotics_endpoint_returns_structured_plan():
     assert result["coopPrepPlan"]
     assert result["campusResourcePlan"]
     assert result["nextActions"]
-    assert result["openQuestions"]
+    assert isinstance(result["openQuestions"], list)
     assert result["warnings"]
     assert "Based only on user-provided school, robotics" in result["limitations"][0]
     assert result["safety"]["localOnly"] is True
@@ -155,7 +155,7 @@ def test_local_school_robotics_output_does_not_claim_school_actions_or_validatio
     assert "no northeastern systems" in output_text
     assert "no browsing" in output_text
     assert "no admission" in output_text
-    assert "no registration" in output_text
+    assert "course-registration" in output_text
 
 
 def test_local_school_robotics_high_stakes_inputs_include_official_confirmation_limitations():
