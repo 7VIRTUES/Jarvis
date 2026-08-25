@@ -79,26 +79,29 @@ If a healthy Jarvis instance is already running on the selected port, the launch
 
 This is a repository-local convenience launcher, not an installer, Windows service, system-tray app, updater, production Tauri app, or public release artifact.
 
-### Optional desktop shortcut
+### Optional Desktop and Start Menu Shortcuts
 
-`.\jarvis` remains the primary launch path. To create an optional current-user Desktop shortcut that starts the same repository-local launcher, run from the repository root:
-
-```powershell
-.\create-jarvis-shortcut
-```
-
-This creates `Jarvis PC Local.lnk` on the current user's Windows Desktop. The repository must remain in its current location for the shortcut to continue working.
+`.\jarvis` remains the primary launch path. To install optional current-user Desktop and Start Menu shortcuts (`Jarvis.lnk`) that start the same repository-local launcher minimized, run from the repository root:
 
 ```powershell
-.\create-jarvis-shortcut
-.\create-jarvis-shortcut -NoBrowser
-.\create-jarvis-shortcut -Port 8010
-.\create-jarvis-shortcut -NoBrowser -Port 8010
+.\install-jarvis-shortcut
 ```
 
-The CMD wrapper forwards the shown PowerShell-style parameter names. Existing `Jarvis PC Local.lnk` shortcuts are never overwritten. To replace one, manually delete or rename that desktop shortcut and rerun the creator. To remove it, manually delete the desktop shortcut; this does not remove Jarvis or the repository.
+This creates `Jarvis.lnk` on the current user's Windows Desktop and in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Jarvis\`. The repository must remain in its current location for the shortcut to continue working.
 
-The shortcut creator is a convenience utility, not an installer or packaged desktop application. It does not run Jarvis while creating the shortcut, add Windows startup, create a service or Start Menu entry, modify PATH, the registry, or firewall settings, enable LAN access, or add connectors.
+```powershell
+.\install-jarvis-shortcut
+.\install-jarvis-shortcut -NoBrowser
+.\install-jarvis-shortcut -Port 8010
+```
+
+To remove the shortcuts without touching repository files, virtual environment, or data:
+
+```powershell
+.\remove-jarvis-shortcut
+```
+
+The shortcut installer is a convenience utility, not a packaged installer or Windows desktop application. It does not run Jarvis during installation, add Windows startup tasks, create a Windows service, modify PATH, touch the registry, change firewall settings, enable LAN access, or add connectors.
 
 ## Manual Developer Workflow
 

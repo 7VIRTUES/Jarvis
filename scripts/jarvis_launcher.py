@@ -17,6 +17,7 @@ import webbrowser
 APP_NAME = "Jarvis PC Local"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
+DEFAULT_LANDING_PATH = "/assistant"
 MIN_PORT = 1024
 MAX_PORT = 65535
 READINESS_TIMEOUT_SECONDS = 30.0
@@ -32,7 +33,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--no-browser",
         action="store_true",
-        help="Start Jarvis without opening the dashboard in the default browser.",
+        help="Start Jarvis without opening the landing page in the default browser.",
     )
     parser.add_argument(
         "--port",
@@ -40,6 +41,13 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         default=DEFAULT_PORT,
         metavar="PORT",
         help=f"Loopback port to use ({MIN_PORT}-{MAX_PORT}; default: {DEFAULT_PORT}).",
+    )
+    parser.add_argument(
+        "--path",
+        type=str,
+        default=DEFAULT_LANDING_PATH,
+        metavar="PATH",
+        help=f"Landing path to open in the browser (default: {DEFAULT_LANDING_PATH}).",
     )
     parser.add_argument(
         "--setup",
@@ -166,8 +174,17 @@ def health_url(port: int) -> str:
     return f"http://{DEFAULT_HOST}:{port}/health"
 
 
+def landing_url(port: int, path: str = DEFAULT_LANDING_PATH) -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    return f"http://{DEFAULT_HOST}:{port}{normalized}"
+
+
 def dashboard_url(port: int) -> str:
-    return f"http://{DEFAULT_HOST}:{port}/dashboard"
+    return landing_url(port, "/dashboard")
+
+
+def assistant_url(port: int) -> str:
+    return landing_url(port, "/assistant")
 
 
 def jarvis_health_ready(port: int) -> bool:
@@ -195,9 +212,9 @@ def port_accepts_connection(port: int) -> bool:
         return False
 
 
-def open_dashboard(port: int) -> None:
-    url = dashboard_url(port)
-    print(f"Dashboard: {url}")
+def open_landing_page(port: int, path: str = DEFAULT_LANDING_PATH) -> None:
+    url = landing_url(port, path)
+    print(f"Jarvis UI: {url}")
     try:
         opened = webbrowser.open_new_tab(url)
     except Exception as exc:
@@ -205,6 +222,10 @@ def open_dashboard(port: int) -> None:
         return
     if not opened:
         print("Warning: could not open the default browser. Open the URL manually.", file=sys.stderr)
+
+
+def open_dashboard(port: int, path: str = DEFAULT_LANDING_PATH) -> None:
+    open_landing_page(port, path)
 
 
 def stop_owned_child(child: subprocess.Popen[object]) -> None:
@@ -232,11 +253,11 @@ def wait_for_readiness(child: subprocess.Popen[object], port: int) -> bool:
     return False
 
 
-def start_jarvis(root: Path, port: int, no_browser: bool) -> int:
+def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LANDING_PATH) -> int:
     if jarvis_health_ready(port):
         print(f"Jarvis is already running on port {port}.")
         if not no_browser:
-            open_dashboard(port)
+            open_landing_page(port, path)
         return 0
     if port_accepts_connection(port):
         print(
@@ -271,9 +292,9 @@ def start_jarvis(root: Path, port: int, no_browser: bool) -> int:
             stop_owned_child(child)
             return 1
         if not no_browser:
-            open_dashboard(port)
+            open_landing_page(port, path)
         else:
-            print(f"Dashboard: {dashboard_url(port)}")
+            print(f"Jarvis UI: {landing_url(port, path)}")
         print("Jarvis is running. Press Ctrl+C to stop this launcher-owned instance.")
         exit_code = child.wait()
         if exit_code:
@@ -285,11 +306,11 @@ def start_jarvis(root: Path, port: int, no_browser: bool) -> int:
         return 0
 
 
-def existing_instance_status(port: int, no_browser: bool) -> int | None:
+def existing_instance_status(port: int, no_browser: bool, path: str = DEFAULT_LANDING_PATH) -> int | None:
     if jarvis_health_ready(port):
         print(f"Jarvis is already running on port {port}.")
         if not no_browser:
-            open_dashboard(port)
+            open_landing_page(port, path)
         return 0
     if port_accepts_connection(port):
         print(
@@ -316,12 +337,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     root = repository_root()
     if not validate_repository(root):
         return 1
-    existing_status = existing_instance_status(args.port, args.no_browser)
+    landing_path = getattr(args, "path", DEFAULT_LANDING_PATH)
+    existing_status = existing_instance_status(args.port, args.no_browser, landing_path)
     if existing_status is not None:
         return existing_status
     if not ensure_environment(root, sys.executable, args.setup):
         return 1
-    return start_jarvis(root, args.port, args.no_browser)
+    return start_jarvis(root, args.port, args.no_browser, landing_path)
 
 
 if __name__ == "__main__":
