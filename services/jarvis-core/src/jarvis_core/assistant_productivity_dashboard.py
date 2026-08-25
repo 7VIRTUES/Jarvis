@@ -505,32 +505,60 @@ def productivity_html_panels() -> str:
   <section class="productivity-panel" id="panel-playbooks">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
       <div>
-        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Manual Workflow Playbooks</h3>
-        <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Multi-step deliberate thinking patterns. Step execution and advancement are strictly manual.</p>
+        <h3 style="margin:0; font-size:1.05rem; color:var(--accent-dark);">Manual Workflow Playbooks (<span id="wf-step-count">0</span> / 8 steps)</h3>
+        <p class="muted" style="margin:2px 0 0; font-size:0.84rem;">Multi-step deliberate thinking patterns. Step execution, input staging, and output attachment are strictly manual.</p>
       </div>
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <select id="playbook-select" class="cc-filter-select">
           <!-- Built-in playbooks injected via JS -->
         </select>
         <button id="reset-playbook-btn" class="secondary small" type="button">Reset Playbook</button>
+        <button id="open-wf-packet-btn" class="small" type="button">📋 Workflow Packet</button>
       </div>
     </div>
 
-    <div id="playbook-description" class="muted" style="font-size:0.88rem; background:#f8fafc; padding:8px 12px; border-radius:6px; border:1px solid #e2e8f0;"></div>
+    <!-- Workflow Progress & Status Header -->
+    <div class="wf-progress-container">
+      <div id="playbook-description" class="muted" style="font-size:0.88rem;"></div>
 
-    <div class="playbook-steps-list" id="playbook-steps-list">
+      <div class="wf-metric-grid">
+        <span class="wf-metric-pill">Total: <strong id="wf-stat-total">0</strong></span>
+        <span class="wf-metric-pill">Completed: <strong id="wf-stat-completed">0</strong></span>
+        <span class="wf-metric-pill">In Progress: <strong id="wf-stat-in-progress">0</strong></span>
+        <span class="wf-metric-pill">Not Started: <strong id="wf-stat-not-started">0</strong></span>
+        <span class="wf-metric-pill">Needs Review: <strong id="wf-stat-needs-review">0</strong></span>
+        <span class="wf-metric-pill">Outputs Attached: <strong id="wf-stat-attached">0</strong></span>
+        <span class="wf-metric-pill">Current: <strong id="wf-current-step-label">None</strong></span>
+        <span class="wf-metric-pill">Session Sources: <strong id="wf-stat-sources">0</strong></span>
+        <span class="wf-metric-pill">Context Kit: <strong id="wf-stat-kit">0</strong></span>
+      </div>
+
+      <div class="wf-progress-bar-track">
+        <div class="wf-progress-bar-fill" id="wf-progress-bar"></div>
+      </div>
+
+      <div id="wf-completed-banner" class="banner allowed" style="display:none; font-size:0.84rem; margin:0; padding:8px 12px;">
+        <strong>Workflow marked complete for this session.</strong> All steps have been manually marked Completed. Use the Workflow Packet or Decision Composer to synthesize final actions.
+      </div>
+    </div>
+
+    <!-- Steps List Container -->
+    <div class="wf-steps-list" id="playbook-steps-list">
       <!-- Injected via JavaScript -->
     </div>
 
+    <!-- Workflow Artifacts Summary -->
+    <div id="wf-artifacts-summary" class="wf-artifacts-summary"></div>
+
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding-top:6px; border-top:1px solid #e2e8f0;">
       <div style="display:flex; align-items:center; gap:8px;">
-        <span>Insert Step:</span>
+        <span>Insert Step (Max 8):</span>
         <select id="add-step-agent-select" class="cc-filter-select">
           <!-- 37 agents list injected via JS -->
         </select>
         <button id="add-step-btn" class="secondary small" type="button">+ Add Step</button>
       </div>
-      <span class="muted" style="font-size:0.82rem;">No automatic chaining · Step transitions are user-controlled</span>
+      <span class="muted" style="font-size:0.82rem;">Manual advancement only · Zero automated chaining</span>
     </div>
   </section>
 
@@ -572,6 +600,7 @@ def productivity_html_panels() -> str:
 
     <!-- Kit Actions -->
     <div style="display:flex; justify-content:flex-end; gap:8px; padding-top:6px; border-top:1px solid #e2e8f0;">
+      <button id="kit-to-workflow-btn" class="secondary small" type="button">Use in Current Workflow Step</button>
       <button id="stage-kit-btn" class="secondary" type="button">Stage as Prior Context</button>
       <button id="insert-kit-btn" type="button">Insert into Request</button>
     </div>

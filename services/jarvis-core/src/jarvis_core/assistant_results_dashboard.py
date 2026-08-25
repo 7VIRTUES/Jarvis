@@ -883,6 +883,7 @@ def results_dashboard_scripts() -> str:
 
         <div class="rb-card-actions">
           <button class="small" type="button" data-action="inspect-detail" data-item-id="${item.id}">🔍 Inspect Details</button>
+          <button class="secondary small" type="button" data-action="use-workflow" data-item-id="${item.id}">Use in Workflow</button>
           <button class="secondary small" type="button" data-action="use-prior" data-item-id="${item.id}">Use as Prior Context</button>
           <button class="secondary small" type="button" data-action="add-kit" data-item-id="${item.id}">Add to Context Kit</button>
           <button class="secondary small" type="button" data-action="toggle-flag" data-item-id="${item.id}">
@@ -902,6 +903,11 @@ def results_dashboard_scripts() -> str:
       card.querySelector(`[data-action="move-up"]`).addEventListener('click', () => moveResultBoardEntry(item.id, -1));
       card.querySelector(`[data-action="move-down"]`).addEventListener('click', () => moveResultBoardEntry(item.id, 1));
       card.querySelector(`[data-action="inspect-detail"]`).addEventListener('click', () => openResultDetailInspector(item));
+      card.querySelector(`[data-action="use-workflow"]`).addEventListener('click', () => {
+        if (typeof assignResultBoardToWorkflow === 'function') {
+          assignResultBoardToWorkflow(item.id);
+        }
+      });
       card.querySelector(`[data-action="use-prior"]`).addEventListener('click', () => {
         setStagedPriorContext({
           agentId: item.agentId,

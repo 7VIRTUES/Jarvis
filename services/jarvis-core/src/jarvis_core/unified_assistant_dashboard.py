@@ -15,6 +15,11 @@ from .assistant_sources_dashboard import (
     sources_dashboard_scripts,
     sources_dashboard_styles,
 )
+from .assistant_workflows_dashboard import (
+    workflows_dashboard_html,
+    workflows_dashboard_scripts,
+    workflows_dashboard_styles,
+)
 
 
 def unified_assistant_html() -> str:
@@ -1369,6 +1374,7 @@ def unified_assistant_html() -> str:
 
             <div class="turn-actions">
               <button class="secondary small" type="button" data-action="use-prior" data-turn-idx="${index}">Use as prior context for next message</button>
+              <button class="secondary small" type="button" data-action="attach-workflow" data-turn-idx="${index}">📎 Attach to Workflow</button>
               <button class="secondary small" type="button" data-action="add-board" data-turn-idx="${index}">Add to Result Board</button>
               <button class="secondary small" type="button" data-action="add-kit" data-turn-idx="${index}">Add to Context Kit</button>
               <button class="secondary small" type="button" data-action="toggle-json" data-turn-idx="${index}">Inspect Metadata & JSON</button>
@@ -1845,6 +1851,12 @@ def unified_assistant_html() -> str:
               summary: primaryText,
             });
             byId('composer').scrollIntoView({ behavior: 'smooth' });
+          });
+
+          turnDiv.querySelector(`[data-action="attach-workflow"]`)?.addEventListener('click', () => {
+            if (typeof openAttachToWorkflowModal === 'function') {
+              openAttachToWorkflowModal(index);
+            }
           });
 
           turnDiv.querySelector(`[data-action="add-board"]`).addEventListener('click', () => {
@@ -2867,6 +2879,7 @@ def unified_assistant_html() -> str:
           panel.classList.add('open');
           btn.classList.add('active');
           if (id === 'panel-result-board') renderResultBoard();
+          if (id === 'panel-playbooks' && typeof renderPlaybookSteps === 'function') renderPlaybookSteps();
           if (id === 'panel-sources' && typeof renderSourcesGrid === 'function') renderSourcesGrid();
         }
       } else {
@@ -3076,7 +3089,7 @@ def unified_assistant_html() -> str:
       else if (example.goal) starterText = `Goal: ${example.goal}`;
       else if (example.request) starterText = `Request: ${example.request}`;
       else if (example.problem) starterText = `Problem symptom: ${example.problem}`;
-      else if (example.content) starterText = `Content:\n"""\n${example.content}\n"""`;
+      else if (example.content) starterText = `Content:\n\\"\\"\\"\n${example.content}\n\\"\\"\\"`;
       else if (example.situation) starterText = `Situation: ${example.situation}`;
       else if (example.careerGoal) starterText = `Career Goal: ${example.careerGoal}`;
       else if (example.financialGoal) starterText = `Financial Goal: ${example.financialGoal}`;
@@ -3145,181 +3158,6 @@ def unified_assistant_html() -> str:
   byId('cc-category-filter').addEventListener('change', renderCommandCenter);
   byId('cc-high-stakes-filter').addEventListener('change', renderCommandCenter);
   byId('cc-pinned-filter').addEventListener('change', renderCommandCenter);
-
-  // ==========================================
-  // Productivity Layer: Playbooks & Workflows
-  // ==========================================
-
-  async function loadPlaybooks() {
-    try {
-      const playbooks = await apiFetch('/api/assistant/productivity/playbooks');
-      if (Array.isArray(playbooks)) {
-        sessionState.builtInPlaybooks = playbooks;
-        populatePlaybooksDropdown(playbooks);
-        if (playbooks.length) {
-          selectPlaybook(playbooks[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load playbooks from server:', err);
-    }
-  }
-
-  function populatePlaybooksDropdown(playbooks) {
-    const select = byId('playbook-select');
-    if (!select) return;
-    select.replaceChildren();
-    playbooks.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      select.append(opt);
-    });
-    const customOpt = document.createElement('option');
-    customOpt.value = 'custom';
-    customOpt.textContent = 'Custom Workflow';
-    select.append(customOpt);
-  }
-
-  function populateAddStepAgentDropdown(agents) {
-    const select = byId('add-step-agent-select');
-    if (!select) return;
-    select.replaceChildren();
-    agents.forEach(agent => {
-      const opt = document.createElement('option');
-      opt.value = agent.agentId || agent.agent_id;
-      opt.textContent = `${agent.displayName || agent.name} [${agent.category || 'General'}]`;
-      select.append(opt);
-    });
-  }
-
-  function selectPlaybook(playbookId) {
-    sessionState.activePlaybookId = playbookId;
-    byId('playbook-select').value = playbookId;
-    if (playbookId === 'custom') {
-      byId('playbook-description').textContent = 'Custom multi-step workflow. Add steps using the selector below.';
-      if (!sessionState.playbookSteps.length) {
-        sessionState.playbookSteps = [];
-      }
-    } else {
-      const pb = sessionState.builtInPlaybooks.find(p => p.id === playbookId);
-      if (pb) {
-        byId('playbook-description').textContent = pb.description;
-        sessionState.playbookSteps = pb.steps.map((s, idx) => ({
-          stepIndex: idx,
-          agentId: s.agentId,
-          name: s.name || getAgentDisplayName(s.agentId),
-          purpose: s.purpose,
-          suggestedPrompt: s.suggestedPrompt || '',
-          status: 'not_started',
-        }));
-      }
-    }
-    renderPlaybookSteps();
-  }
-
-  byId('playbook-select').addEventListener('change', (e) => {
-    selectPlaybook(e.target.value);
-  });
-
-  byId('reset-playbook-btn').addEventListener('click', () => {
-    selectPlaybook(sessionState.activePlaybookId);
-    showToast('Reset active playbook steps.');
-  });
-
-  function renderPlaybookSteps() {
-    const list = byId('playbook-steps-list');
-    if (!list) return;
-    if (!sessionState.playbookSteps.length) {
-      list.innerHTML = '<div class="muted" style="text-align:center; padding:16px;">No steps in this workflow. Insert steps below.</div>';
-      return;
-    }
-    list.replaceChildren();
-    sessionState.playbookSteps.forEach((step, idx) => {
-      const card = document.createElement('div');
-      card.className = `playbook-step-card ${step.status === 'in_progress' ? 'active-step' : (step.status === 'done' ? 'completed-step' : '')}`;
-      card.innerHTML = `
-        <div class="step-left">
-          <div class="step-num-badge">${idx + 1}</div>
-          <div class="step-details">
-            <div class="step-name">${escapeHtml(step.name || getAgentDisplayName(step.agentId))}</div>
-            <div class="step-purpose">${escapeHtml(step.purpose || 'Execute step')}</div>
-          </div>
-        </div>
-        <div class="step-right">
-          <select class="cc-filter-select" data-step-status="${idx}" style="font-size:0.8rem; padding:4px 6px;">
-            <option value="not_started" ${step.status === 'not_started' ? 'selected' : ''}>Not Started</option>
-            <option value="in_progress" ${step.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
-            <option value="done" ${step.status === 'done' ? 'selected' : ''}>Completed</option>
-          </select>
-          <button type="button" class="small" data-prepare-step="${idx}">Prepare Step</button>
-          <button type="button" class="secondary small" data-step-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="Move Up">↑</button>
-          <button type="button" class="secondary small" data-step-down="${idx}" ${idx === sessionState.playbookSteps.length - 1 ? 'disabled' : ''} title="Move Down">↓</button>
-          <button type="button" class="secondary small" data-step-remove="${idx}" title="Remove Step">✕</button>
-        </div>
-      `;
-
-      card.querySelector(`[data-step-status="${idx}"]`).addEventListener('change', (e) => {
-        step.status = e.target.value;
-        renderPlaybookSteps();
-      });
-      card.querySelector(`[data-prepare-step="${idx}"]`).addEventListener('click', () => preparePlaybookStep(idx));
-      card.querySelector(`[data-step-up="${idx}"]`).addEventListener('click', () => movePlaybookStep(idx, -1));
-      card.querySelector(`[data-step-down="${idx}"]`).addEventListener('click', () => movePlaybookStep(idx, 1));
-      card.querySelector(`[data-step-remove="${idx}"]`).addEventListener('click', () => removePlaybookStep(idx));
-
-      list.append(card);
-    });
-  }
-
-  function preparePlaybookStep(stepIndex) {
-    const step = sessionState.playbookSteps[stepIndex];
-    if (!step) return;
-    step.status = 'in_progress';
-    selectAgentManually(step.agentId);
-    const input = byId('prompt-input');
-    if (!input.value.trim() && step.suggestedPrompt) {
-      input.value = step.suggestedPrompt;
-    }
-    input.focus();
-    renderPlaybookSteps();
-    showToast(`Prepared Step ${stepIndex + 1}: ${step.name}`);
-  }
-
-  function movePlaybookStep(index, direction) {
-    const target = index + direction;
-    if (target < 0 || target >= sessionState.playbookSteps.length) return;
-    const temp = sessionState.playbookSteps[index];
-    sessionState.playbookSteps[index] = sessionState.playbookSteps[target];
-    sessionState.playbookSteps[target] = temp;
-    renderPlaybookSteps();
-  }
-
-  function removePlaybookStep(index) {
-    sessionState.playbookSteps.splice(index, 1);
-    renderPlaybookSteps();
-  }
-
-  function addAgentToWorkflow(agentId) {
-    const name = getAgentDisplayName(agentId);
-    sessionState.playbookSteps.push({
-      stepIndex: sessionState.playbookSteps.length,
-      agentId: agentId,
-      name: name,
-      purpose: `Process with ${name}`,
-      suggestedPrompt: `Task for ${name}: `,
-      status: 'not_started',
-    });
-    switchProductivityTab('panel-playbooks');
-    renderPlaybookSteps();
-    showToast(`Added ${name} to workflow steps.`);
-  }
-
-  byId('add-step-btn').addEventListener('click', () => {
-    const select = byId('add-step-agent-select');
-    const agentId = select.value;
-    if (agentId) addAgentToWorkflow(agentId);
-  });
 
   // ==========================================
   // Productivity Layer: Context Kit Builder
@@ -3620,9 +3458,11 @@ def unified_assistant_html() -> str:
 
     await loadPlaybooks();
     initResultsDashboardEventHandlers();
+    if (typeof initWorkflowsDashboardEventHandlers === 'function') initWorkflowsDashboardEventHandlers();
     if (typeof initSourcesDashboardEventHandlers === 'function') initSourcesDashboardEventHandlers();
     if (typeof updateSourcesCounters === 'function') updateSourcesCounters();
     if (typeof renderSourcesGrid === 'function') renderSourcesGrid();
+    if (typeof renderPlaybookSteps === 'function') renderPlaybookSteps();
     triggerReadinessEvaluation();
   }
 
@@ -3685,8 +3525,8 @@ def unified_assistant_html() -> str:
 </script>
 </body>
 </html>"""
-    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles() + "\n" + results_dashboard_styles() + "\n" + sources_dashboard_styles())
-    html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels() + "\n" + results_dashboard_html_panels() + "\n" + sources_dashboard_html())
+    html = html.replace("/* PRODUCTIVITY_STYLES_PLACEHOLDER */", productivity_styles() + "\n" + results_dashboard_styles() + "\n" + sources_dashboard_styles() + "\n" + workflows_dashboard_styles())
+    html = html.replace("<!-- PRODUCTIVITY_PANELS_PLACEHOLDER -->", productivity_html_panels() + "\n" + results_dashboard_html_panels() + "\n" + sources_dashboard_html() + "\n" + workflows_dashboard_html())
     html = html.replace("<!-- PRODUCTIVITY_READINESS_COACH_PLACEHOLDER -->", productivity_readiness_coach_html())
-    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", results_dashboard_scripts() + "\n" + sources_dashboard_scripts())
+    html = html.replace("/* RESULTS_SCRIPTS_PLACEHOLDER */", results_dashboard_scripts() + "\n" + sources_dashboard_scripts() + "\n" + workflows_dashboard_scripts())
     return html
