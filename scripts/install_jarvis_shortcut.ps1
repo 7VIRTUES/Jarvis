@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$NoBrowser,
+    [switch]$SkipPreparation,
     [int]$Port = 8000,
     [string]$DesktopPath,
     [string]$StartMenuProgramsPath
@@ -48,58 +49,57 @@ function Test-RepositoryLayout {
 function Resolve-DesktopDirectory {
     param([string]$CustomPath)
 
-    if (-not [string]::IsNullOrWhiteSpace($CustomPath)) {
+    if ($CustomPath) {
         if (-not (Test-Path -LiteralPath $CustomPath -PathType Container)) {
-            New-Item -ItemType Directory -Path $CustomPath -Force | Out-Null
+            Write-Failure "Desktop path does not exist: $CustomPath"
         }
         return (Resolve-Path -LiteralPath $CustomPath).Path
     }
 
     $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory)
-    if ([string]::IsNullOrWhiteSpace($desktop) -or -not (Test-Path -LiteralPath $desktop -PathType Container)) {
-        Write-Failure 'The current user Windows Desktop directory could not be resolved. No shortcut was created.'
+    if (-not $desktop) {
+        $desktop = Join-Path -Path $env:USERPROFILE -ChildPath 'Desktop'
     }
-    return (Resolve-Path -LiteralPath $desktop).Path
+    if (-not (Test-Path -LiteralPath $desktop -PathType Container)) {
+        Write-Failure "Desktop directory could not be resolved: $desktop"
+    }
+    return $desktop
 }
 
 function Resolve-StartMenuProgramsDirectory {
     param([string]$CustomPath)
 
-    if (-not [string]::IsNullOrWhiteSpace($CustomPath)) {
+    if ($CustomPath) {
         if (-not (Test-Path -LiteralPath $CustomPath -PathType Container)) {
-            New-Item -ItemType Directory -Path $CustomPath -Force | Out-Null
+            Write-Failure "Start Menu programs path does not exist: $CustomPath"
         }
         return (Resolve-Path -LiteralPath $CustomPath).Path
     }
 
     $programs = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
-    if ([string]::IsNullOrWhiteSpace($programs)) {
-        $appData = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)
-        if (-not [string]::IsNullOrWhiteSpace($appData)) {
-            $programs = Join-Path -Path $appData -ChildPath 'Microsoft\Windows\Start Menu\Programs'
-        }
+    if (-not $programs) {
+        $programs = Join-Path -Path $env:APPDATA -ChildPath 'Microsoft\Windows\Start Menu\Programs'
     }
-    if ([string]::IsNullOrWhiteSpace($programs) -or -not (Test-Path -LiteralPath $programs -PathType Container)) {
-        Write-Failure 'The current user Windows Start Menu Programs directory could not be resolved. No shortcut was created.'
+    if (-not (Test-Path -LiteralPath $programs -PathType Container)) {
+        Write-Failure "Start Menu programs directory could not be resolved: $programs"
     }
-    return (Resolve-Path -LiteralPath $programs).Path
+    return $programs
 }
 
 function Get-LauncherArguments {
     param(
-        [Parameter(Mandatory = $true)][bool]$DisableBrowser,
-        [Parameter(Mandatory = $true)][int]$SelectedPort
+        [bool]$DisableBrowser,
+        [int]$SelectedPort
     )
 
-    $launcherArguments = @()
-    if ($DisableBrowser) {
-        $launcherArguments += '--no-browser'
-    }
+    $parts = @()
     if ($SelectedPort -ne $DefaultPort) {
-        $launcherArguments += '--port'
-        $launcherArguments += $SelectedPort.ToString()
+        $parts += "--port $SelectedPort"
     }
-    return ($launcherArguments -join ' ')
+    if ($DisableBrowser) {
+        $parts += '--no-browser'
+    }
+    return ($parts -join ' ')
 }
 
 function Save-Shortcut {
@@ -107,14 +107,19 @@ function Save-Shortcut {
         [Parameter(Mandatory = $true)][string]$ShortcutPath,
         [Parameter(Mandatory = $true)][string]$TargetPath,
         [Parameter(Mandatory = $true)][string]$WorkingDirectory,
-        [AllowEmptyString()][string]$Arguments = '',
-        [Parameter(Mandatory = $true)][string]$Description,
+        [string]$Arguments,
+        [string]$Description,
         [int]$WindowStyle = 7
     )
 
+    $parentDir = Split-Path -Path $ShortcutPath -Parent
+    if (-not (Test-Path -LiteralPath $parentDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+    }
+
     try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($ShortcutPath)
+        $wscriptShell = New-Object -ComObject WScript.Shell
+        $shortcut = $wscriptShell.CreateShortcut($ShortcutPath)
         $shortcut.TargetPath = $TargetPath
         $shortcut.Arguments = $Arguments
         $shortcut.WorkingDirectory = $WorkingDirectory
@@ -147,6 +152,15 @@ try {
 
     $launcherPath = Join-Path -Path $repositoryRoot -ChildPath 'jarvis.cmd'
     $arguments = Get-LauncherArguments -DisableBrowser $NoBrowser.IsPresent -SelectedPort $Port
+
+    # First-time preparation (unless explicitly skipped)
+    if (-not $SkipPreparation.IsPresent) {
+        Write-Output 'Running first-time Jarvis setup and preparation...'
+        & $launcherPath --prepare-only --no-browser
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "Setup notice: Preparation returned exit code $LASTEXITCODE. Proceeding with shortcut creation."
+        }
+    }
 
     # 1. Desktop shortcut
     $desktopDir = Resolve-DesktopDirectory -CustomPath $DesktopPath

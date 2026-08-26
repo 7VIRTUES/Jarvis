@@ -75,6 +75,7 @@ def test_launcher_url_helpers():
 
 def test_launcher_existing_instance_when_healthy(monkeypatch):
     monkeypatch.setattr(launcher, "jarvis_health_ready", lambda port: True)
+    monkeypatch.setattr(launcher, "configure_services_if_available", lambda port: {"generation": {"status": "ready"}})
     opened = []
     monkeypatch.setattr(launcher, "open_landing_page", lambda port, path: opened.append((port, path)))
 

@@ -1200,18 +1200,76 @@ def unified_assistant_html() -> str:
     }
   }
 
+  function getOrCreateEmptyStateNode() {
+    let empty = byId('empty-state');
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.id = 'empty-state';
+      empty.className = 'empty-state';
+      empty.innerHTML = `
+        <h3>Welcome to the Unified Jarvis Assistant</h3>
+        <p>Supervised conversational interface over 37 local response agents. Local-only, private, and fully under your control.</p>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; max-width:850px; margin:0 auto 18px; text-align:left;">
+          <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+            <strong style="color:var(--accent); font-size:0.9rem;">1. Describe Needs</strong><br>
+            Type your natural-language task in the composer below.
+          </div>
+          <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+            <strong style="color:var(--accent); font-size:0.9rem;">2. Choose Agent</strong><br>
+            Use auto-routing or pick from the 37 Command Center agents.
+          </div>
+          <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+            <strong style="color:var(--accent); font-size:0.9rem;">3. Context Kit</strong><br>
+            Assemble optional notes, prior answers, or project context.
+          </div>
+          <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+            <strong style="color:var(--accent); font-size:0.9rem;">4. Check Readiness</strong><br>
+            Verify deterministic readiness before dispatching.
+          </div>
+          <div style="background:#fff; border:1px solid var(--border); border-radius:7px; padding:10px 12px; font-size:0.84rem;">
+            <strong style="color:var(--accent); font-size:0.9rem;">5. Dispatch Safely</strong><br>
+            Execute locally with complete auditability.
+          </div>
+        </div>
+
+        <div style="font-weight:600; font-size:0.88rem; margin-bottom:8px; color:var(--text);">Quick Starters:</div>
+        <div class="starter-chips">
+          <button class="starter-chip" data-prompt="Help me plan a 3-month strength training and nutrition routine" type="button">Fitness & Nutrition Plan</button>
+          <button class="starter-chip" data-prompt="Draft an executive summary of our Q3 product roadmap update" type="button">Drafting Executive Brief</button>
+          <button class="starter-chip" data-prompt="Inspect the Jarvis registered project and check workspace structure" type="button">Inspect Jarvis Project</button>
+          <button class="starter-chip" data-prompt="We need to evaluate moving to a new apartment vs renewing current lease" type="button">Decision Analysis</button>
+          <button class="starter-chip" data-prompt="Troubleshoot intermittent Wi-Fi disconnection on Windows 11 PC" type="button">PC Troubleshooting</button>
+          <button class="starter-chip" data-prompt="Organize my project files and personal notes structure" type="button">Knowledge Organizer</button>
+          <button class="starter-chip" data-prompt="Coordinate my weekly commitments across career, fitness, and home" type="button">Life Dashboard Coordinator</button>
+        </div>
+      `;
+      empty.querySelectorAll('.starter-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const promptInput = byId('prompt-input');
+          if (promptInput) {
+            promptInput.value = btn.getAttribute('data-prompt') || '';
+            promptInput.focus();
+          }
+          triggerReadinessEvaluation();
+        });
+      });
+    }
+    return empty;
+  }
+
   // Render complete conversation transcript in page memory
   function renderTranscript() {
     const container = byId('chat-container');
-    const empty = byId('empty-state');
+    if (!container) return;
 
     if (!sessionState.transcript.length) {
+      const empty = getOrCreateEmptyStateNode();
       empty.style.display = 'block';
       container.replaceChildren(empty);
       return;
     }
 
-    empty.style.display = 'none';
     container.replaceChildren();
 
     sessionState.transcript.forEach((turn, index) => {
@@ -3419,15 +3477,25 @@ def unified_assistant_html() -> str:
       if (pill) {
         if (genStatus.enabled) {
           pill.className = 'pill active';
-          pill.textContent = `Local Generation: Active (${genStatus.modelName || 'Ollama'})`;
+          pill.textContent = `Local Generation: Ready · ${genStatus.modelName || 'qwen3:8b'}`;
         } else {
           pill.className = 'pill inactive';
-          pill.textContent = 'Local Generation: Off (Deterministic)';
+          pill.textContent = 'Local Generation: Off · Deterministic fallback';
         }
       }
     } catch (err) {
       const pill = byId('generation-pill');
-      if (pill) pill.textContent = 'Local Generation: Unavailable';
+      if (pill) {
+        pill.className = 'pill weak';
+        const msg = String(err && err.message ? err.message : '').toLowerCase();
+        if (msg.includes('model') || msg.includes('model_unavailable')) {
+          pill.textContent = 'Local Generation: Model unavailable';
+        } else if (msg.includes('provider') || msg.includes('503') || msg.includes('connection')) {
+          pill.textContent = 'Local Generation: Provider unavailable';
+        } else {
+          pill.textContent = 'Local Generation: Setup failed';
+        }
+      }
     }
 
     try {
@@ -3485,40 +3553,69 @@ def unified_assistant_html() -> str:
       return;
     }
 
+    let analysis = null;
+    const submitBtn = byId('submit-btn');
+    const previewBtn = byId('preview-route-btn');
+
     try {
-      const submitBtn = byId('submit-btn');
-      const previewBtn = byId('preview-route-btn');
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Routing...';
       }
       if (previewBtn) previewBtn.disabled = true;
 
-      const analysis = await analyzeRoute(promptText);
-
-      if (previewOnly || analysis.route.is_ambiguous || !analysis.readiness.is_ready) {
-        showStagingDrawer(analysis);
-      } else {
-        // Direct transparent execution
-        await runAgent(promptText, analysis.route.selected_agent_id, analysis.route, analysis.prepared_payload);
-      }
+      analysis = await analyzeRoute(promptText);
     } catch (err) {
-      alert(`Routing analysis failed: ${err.message}`);
-    } finally {
-      if (!sessionState.isGenerating) {
-        const submitBtn = byId('submit-btn');
-        const previewBtn = byId('preview-route-btn');
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Ask Jarvis';
+      console.error('Routing analysis error:', err);
+      alert(`Routing analysis failed: ${err.message || 'Could not reach routing service.'}`);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Ask Jarvis';
+      }
+      if (previewBtn) previewBtn.disabled = false;
+      return;
+    }
+
+    if (!analysis) return;
+
+    if (previewOnly || analysis.route.is_ambiguous || !analysis.readiness.is_ready) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Ask Jarvis';
+      }
+      if (previewBtn) previewBtn.disabled = false;
+      try {
+        showStagingDrawer(analysis);
+      } catch (err) {
+        console.error('Staging drawer rendering error:', err);
+        alert(`Failed to display routing preview: ${err.message}`);
+      }
+    } else {
+      // Direct transparent execution
+      try {
+        await runAgent(promptText, analysis.route.selected_agent_id, analysis.route, analysis.prepared_payload);
+      } catch (err) {
+        console.error('Execution error:', err);
+        alert(`Execution failed: ${err.message || 'Unknown execution error.'}`);
+      } finally {
+        if (!sessionState.isGenerating) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Ask Jarvis';
+          }
+          if (previewBtn) previewBtn.disabled = false;
         }
-        if (previewBtn) previewBtn.disabled = false;
       }
     }
   }
 
   byId('submit-btn')?.addEventListener('click', () => handleSubmit(false));
   byId('preview-route-btn')?.addEventListener('click', () => handleSubmit(true));
+  byId('clear-session-btn')?.addEventListener('click', () => {
+    sessionState.transcript = [];
+    renderTranscript();
+    showToast('Transcript cleared.');
+  });
 
   // Enter to send (Shift+Enter for newline)
   byId('prompt-input')?.addEventListener('keydown', (e) => {

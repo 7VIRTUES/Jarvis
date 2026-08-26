@@ -253,16 +253,27 @@ def wait_for_readiness(child: subprocess.Popen[object], port: int) -> bool:
     return False
 
 
-def configure_services_if_available(port: int) -> None:
+def configure_services_if_available(port: int) -> dict[str, Any] | None:
     try:
         root = repository_root()
         bootstrap_py = root / "scripts" / "jarvis_bootstrap.py"
         if bootstrap_py.is_file():
             sys.path.insert(0, str(root))
             from scripts.jarvis_bootstrap import configure_jarvis_services
-            configure_jarvis_services(jarvis_port=port)
-    except Exception:
-        pass
+            res = configure_jarvis_services(jarvis_port=port)
+            gen_status = res.get("generation", {}).get("status")
+            if gen_status == "ready":
+                print(f"Local AI generation ready: {res.get('generation', {}).get('model')}")
+            else:
+                reason = res.get("generation", {}).get("message", "unknown reason")
+                print("Jarvis started in deterministic fallback mode.")
+                print(f"Local AI setup notice: {reason}")
+            return res
+    except Exception as exc:
+        print("Jarvis started in deterministic fallback mode.")
+        print(f"Local AI setup notice: {exc}")
+        return None
+    return None
 
 
 def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LANDING_PATH) -> int:
