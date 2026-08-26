@@ -1046,6 +1046,7 @@ class UnifiedRequestAdapter:
 
         if generation_mode:
             payload["generation"] = {
+                "enabled": generation_mode in ("local_model", "local_model_with_fallback"),
                 "mode": generation_mode,
             }
 

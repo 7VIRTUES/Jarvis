@@ -67,6 +67,7 @@ def test_shortcut_install_idempotent_and_remove_flow(tmp_path: Path):
         str(desktop_dir),
         "-StartMenuProgramsPath",
         str(start_dir),
+        "-SkipPreparation",
     ]
 
     # 1. Install
@@ -131,3 +132,86 @@ def test_shortcut_install_idempotent_and_remove_flow(tmp_path: Path):
     remove_noop = subprocess.run(remove_cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
     assert remove_noop.returncode == 0
     assert "No Jarvis shortcuts were found to remove." in remove_noop.stdout
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows shortcut tests require Windows PowerShell and WScript.Shell")
+def test_shortcut_install_fails_closed_when_preparation_fails(tmp_path: Path):
+    desktop_dir = tmp_path / "Desktop"
+    start_dir = tmp_path / "StartMenu"
+    desktop_dir.mkdir(parents=True, exist_ok=True)
+    start_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-existing shortcut that must be preserved
+    pre_existing_lnk = desktop_dir / "Jarvis.lnk"
+    pre_existing_lnk.write_text("existing shortcut content", encoding="utf-8")
+
+    # Call install_jarvis_shortcut.ps1 directly with invalid port (which triggers failure before shortcut creation)
+    ps_script = REPO_ROOT / "scripts" / "install_jarvis_shortcut.ps1"
+    install_cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(ps_script),
+        "-DesktopPath",
+        str(desktop_dir),
+        "-StartMenuProgramsPath",
+        str(start_dir),
+        "-Port",
+        "99999",  # Invalid port causes failure
+    ]
+
+    result = subprocess.run(install_cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode != 0
+
+    # Pre-existing shortcut was preserved and not deleted or corrupted
+    assert pre_existing_lnk.is_file()
+    assert pre_existing_lnk.read_text(encoding="utf-8") == "existing shortcut content"
+
+    # Start menu shortcut was not created
+    start_lnk = start_dir / "Jarvis" / "Jarvis.lnk"
+    assert not start_lnk.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows shortcut tests require Windows PowerShell and WScript.Shell")
+def test_existing_shortcut_not_deleted_on_failed_reinstall(tmp_path: Path):
+    desktop_dir = tmp_path / "Desktop"
+    start_dir = tmp_path / "StartMenu"
+    desktop_dir.mkdir(parents=True, exist_ok=True)
+    start_dir.mkdir(parents=True, exist_ok=True)
+
+    pre_existing_desktop = desktop_dir / "Jarvis.lnk"
+    pre_existing_desktop.write_text("original desktop shortcut", encoding="utf-8")
+
+    pre_existing_start_dir = start_dir / "Jarvis"
+    pre_existing_start_dir.mkdir(parents=True, exist_ok=True)
+    pre_existing_start = pre_existing_start_dir / "Jarvis.lnk"
+    pre_existing_start.write_text("original start shortcut", encoding="utf-8")
+
+    ps_script = REPO_ROOT / "scripts" / "install_jarvis_shortcut.ps1"
+    install_cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(ps_script),
+        "-DesktopPath",
+        str(desktop_dir),
+        "-StartMenuProgramsPath",
+        str(start_dir),
+        "-Port",
+        "100",  # Port < MinimumPort (1024) causes fail-closed exit
+    ]
+
+    result = subprocess.run(install_cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode != 0
+
+    # Verify both shortcuts are completely preserved
+    assert pre_existing_desktop.is_file()
+    assert pre_existing_desktop.read_text(encoding="utf-8") == "original desktop shortcut"
+    assert pre_existing_start.is_file()
+    assert pre_existing_start.read_text(encoding="utf-8") == "original start shortcut"
+
+

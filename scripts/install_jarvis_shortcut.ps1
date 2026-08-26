@@ -158,7 +158,7 @@ try {
         Write-Output 'Running first-time Jarvis setup and preparation...'
         & $launcherPath --prepare-only --no-browser
         if ($LASTEXITCODE -ne 0) {
-            Write-Output "Setup notice: Preparation returned exit code $LASTEXITCODE. Proceeding with shortcut creation."
+            Write-Failure 'Jarvis setup did not complete, so shortcuts were not installed.'
         }
     }
 

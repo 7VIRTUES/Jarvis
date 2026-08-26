@@ -530,13 +530,25 @@ def run_bootstrap_pipeline(
         if not is_ollama_running():
             start_ollama_service(ollama_bin)
             if not wait_for_ollama(timeout=15.0):
-                print("[3/7] Notice: Ollama service did not respond within timeout. Continuing in deterministic mode.")
+                print("[3/7] Notice: Ollama service did not respond within timeout.")
+                if prepare_only:
+                    print("\n==================================================", file=sys.stderr)
+                    print("  Jarvis setup incomplete.", file=sys.stderr)
+                    print("  Reason: Ollama background service did not respond on port 11434.", file=sys.stderr)
+                    print("==================================================\n", file=sys.stderr)
+                    return 1
             else:
                 print("[3/7] Ollama Service: Running and healthy on port 11434.")
         else:
             print("[3/7] Ollama Service: Already running on port 11434.")
     else:
         print("[3/7] Ollama Binary: Not found. Jarvis will operate in deterministic fallback mode.")
+        if prepare_only:
+            print("\n==================================================", file=sys.stderr)
+            print("  Jarvis setup incomplete.", file=sys.stderr)
+            print("  Reason: Ollama binary not found and automatic installation did not succeed.", file=sys.stderr)
+            print("==================================================\n", file=sys.stderr)
+            return 1
 
     # 4. Local Model Pulling & Disk Check
     if is_ollama_running() and not skip_models:
@@ -548,24 +560,48 @@ def run_bootstrap_pipeline(
             disk_ok, disk_msg = check_disk_space(root, MIN_FREE_DISK_GB)
             print(f"[4/7] Free Disk Space: {disk_msg}")
             if not disk_ok:
-                print(f"Notice: Disk space insufficient for model downloads. Continuing in deterministic mode.")
+                print(f"Notice: Disk space insufficient for model downloads.")
+                if prepare_only:
+                    print("\n==================================================", file=sys.stderr)
+                    print("  Jarvis setup incomplete.", file=sys.stderr)
+                    print(f"  Reason: Insufficient disk space for required model downloads ({disk_msg}).", file=sys.stderr)
+                    print("==================================================\n", file=sys.stderr)
+                    return 1
             else:
                 print(f"[4/7] Verifying AI Models ({DEFAULT_GENERATION_MODEL}, {DEFAULT_EMBEDDING_MODEL})...")
                 if needs_gen:
                     ok_gen, msg_gen = ensure_ollama_model(DEFAULT_GENERATION_MODEL, ollama_bin=ollama_bin)
                     print(f"      - Generation Model: {msg_gen}")
+                    if not ok_gen and prepare_only:
+                        print("\n==================================================", file=sys.stderr)
+                        print("  Jarvis setup incomplete.", file=sys.stderr)
+                        print(f"  Reason: Generation model pull failed: {msg_gen}", file=sys.stderr)
+                        print("==================================================\n", file=sys.stderr)
+                        return 1
                 else:
                     print(f"      - Generation Model: Already present ({DEFAULT_GENERATION_MODEL}).")
 
                 if needs_emb:
                     ok_emb, msg_emb = ensure_ollama_model(DEFAULT_EMBEDDING_MODEL, ollama_bin=ollama_bin)
                     print(f"      - Embedding Model:  {msg_emb}")
+                    if not ok_emb and prepare_only:
+                        print("\n==================================================", file=sys.stderr)
+                        print("  Jarvis setup incomplete.", file=sys.stderr)
+                        print(f"  Reason: Embedding model pull failed: {msg_emb}", file=sys.stderr)
+                        print("==================================================\n", file=sys.stderr)
+                        return 1
                 else:
                     print(f"      - Embedding Model:  Already present ({DEFAULT_EMBEDDING_MODEL}).")
         else:
             print(f"[4/7] AI Models: Both required models are already installed locally.")
     else:
         print("[4/7] AI Models: Skipped (Ollama unavailable or model downloads skipped).")
+        if prepare_only and not skip_models:
+            print("\n==================================================", file=sys.stderr)
+            print("  Jarvis setup incomplete.", file=sys.stderr)
+            print("  Reason: Ollama is unavailable for AI model verification.", file=sys.stderr)
+            print("==================================================\n", file=sys.stderr)
+            return 1
 
     if check_only:
         print("\n[Bootstrap] Preflight check completed successfully.")
@@ -597,10 +633,20 @@ def run_bootstrap_pipeline(
             if not wait_for_jarvis(jarvis_port):
                 print("Error: Jarvis Core did not become healthy within timeout.", file=sys.stderr)
                 jarvis_process.terminate()
+                if prepare_only:
+                    print("\n==================================================", file=sys.stderr)
+                    print("  Jarvis setup incomplete.", file=sys.stderr)
+                    print("  Reason: Jarvis Core service failed to start.", file=sys.stderr)
+                    print("==================================================\n", file=sys.stderr)
                 return 1
             print(f"[5/7] Jarvis Core is running and healthy at http://{DEFAULT_HOST}:{jarvis_port}/health.")
         except OSError as exc:
             print(f"Error starting Jarvis Core: {exc}", file=sys.stderr)
+            if prepare_only:
+                print("\n==================================================", file=sys.stderr)
+                print("  Jarvis setup incomplete.", file=sys.stderr)
+                print(f"  Reason: Error starting Jarvis Core: {exc}", file=sys.stderr)
+                print("==================================================\n", file=sys.stderr)
             return 1
     else:
         print(f"[5/7] Jarvis Core is already active and healthy on port {jarvis_port}.")
@@ -625,7 +671,37 @@ def run_bootstrap_pipeline(
         print("      - Knowledge Embeddings: Off")
         print(f"        Notice: {reason}")
 
-    # 7. Browser Landing
+    # 7. Validation for --prepare-only (Fail-Closed)
+    if prepare_only:
+        if started_child and _STARTED_JARVIS_PROCESS is not None:
+            _STARTED_JARVIS_PROCESS.terminate()
+            try:
+                _STARTED_JARVIS_PROCESS.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                _STARTED_JARVIS_PROCESS.kill()
+
+        if gen_status != "ready" or emb_status != "ready":
+            reasons = []
+            if gen_status != "ready":
+                reasons.append(f"Generation ({DEFAULT_GENERATION_MODEL}): {cfg_res.get('generation', {}).get('message', 'not ready')}")
+            if emb_status != "ready":
+                reasons.append(f"Embeddings ({DEFAULT_EMBEDDING_MODEL}): {cfg_res.get('embeddings', {}).get('message', 'not ready')}")
+            print("\n==================================================", file=sys.stderr)
+            print("  Jarvis setup incomplete.", file=sys.stderr)
+            print(f"  Reason: {'; '.join(reasons)}", file=sys.stderr)
+            print("==================================================\n", file=sys.stderr)
+            return 1
+
+        normalized_path = landing_path if landing_path.startswith("/") else f"/{landing_path}"
+        landing_full_url = f"http://{DEFAULT_HOST}:{jarvis_port}{normalized_path}"
+        print("\n==================================================")
+        print(f"  {APP_NAME} is Ready!")
+        print(f"  Landing UI: {landing_full_url}")
+        print("==================================================\n")
+        print("[Bootstrap] Environment preparation completed.")
+        return 0
+
+    # 7. Browser Landing (Normal Runtime Launch)
     normalized_path = landing_path if landing_path.startswith("/") else f"/{landing_path}"
     landing_full_url = f"http://{DEFAULT_HOST}:{jarvis_port}{normalized_path}"
 
@@ -633,16 +709,6 @@ def run_bootstrap_pipeline(
     print(f"  {APP_NAME} is Ready!")
     print(f"  Landing UI: {landing_full_url}")
     print("==================================================\n")
-
-    if prepare_only:
-        print("[Bootstrap] Environment preparation completed.")
-        if started_child and _STARTED_JARVIS_PROCESS is not None:
-            _STARTED_JARVIS_PROCESS.terminate()
-            try:
-                _STARTED_JARVIS_PROCESS.wait(timeout=3.0)
-            except subprocess.TimeoutExpired:
-                _STARTED_JARVIS_PROCESS.kill()
-        return 0
 
     if not no_browser:
         try:

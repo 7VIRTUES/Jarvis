@@ -271,3 +271,81 @@ def test_run_bootstrap_pipeline_check_only(monkeypatch, tmp_path: Path):
 
     exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, check_only=True)
     assert exit_code == 0
+
+
+def test_prepare_only_fails_when_generation_unavailable(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: "C:\\ollama.exe")
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: True)
+    monkeypatch.setattr(bootstrap, "list_ollama_models", lambda host=None, port=None: ["qwen3:8b", "nomic-embed-text"])
+    monkeypatch.setattr(bootstrap, "is_jarvis_healthy", lambda port: True)
+    monkeypatch.setattr(bootstrap, "configure_jarvis_services", lambda port: {
+        "generation": {"status": "failed", "message": "Probe failed"},
+        "embeddings": {"status": "ready", "message": "OK"},
+    })
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, prepare_only=True)
+    assert exit_code == 1
+
+
+def test_prepare_only_fails_when_embeddings_unavailable(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: "C:\\ollama.exe")
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: True)
+    monkeypatch.setattr(bootstrap, "list_ollama_models", lambda host=None, port=None: ["qwen3:8b", "nomic-embed-text"])
+    monkeypatch.setattr(bootstrap, "is_jarvis_healthy", lambda port: True)
+    monkeypatch.setattr(bootstrap, "configure_jarvis_services", lambda port: {
+        "generation": {"status": "ready", "message": "OK"},
+        "embeddings": {"status": "failed", "message": "Embedding config failed"},
+    })
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, prepare_only=True)
+    assert exit_code == 1
+
+
+def test_prepare_only_fails_when_model_pull_fails(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: "C:\\ollama.exe")
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: True)
+    monkeypatch.setattr(bootstrap, "list_ollama_models", lambda host=None, port=None: [])
+    monkeypatch.setattr(bootstrap, "check_disk_space", lambda root, min_gb: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_ollama_model", lambda name, **kwargs: (False, "Network connection error"))
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, prepare_only=True)
+    assert exit_code == 1
+
+
+def test_prepare_only_succeeds_when_services_ready(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: "C:\\ollama.exe")
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: True)
+    monkeypatch.setattr(bootstrap, "list_ollama_models", lambda host=None, port=None: ["qwen3:8b", "nomic-embed-text"])
+    monkeypatch.setattr(bootstrap, "is_jarvis_healthy", lambda port: True)
+    monkeypatch.setattr(bootstrap, "configure_jarvis_services", lambda port: {
+        "generation": {"status": "ready", "message": "OK"},
+        "embeddings": {"status": "ready", "message": "OK"},
+    })
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, prepare_only=True)
+    assert exit_code == 0
+
+
+def test_normal_launch_may_use_degraded_mode(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: None)
+    monkeypatch.setattr(bootstrap, "is_winget_available", lambda: False)
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: False)
+    monkeypatch.setattr(bootstrap, "is_jarvis_healthy", lambda port: True)
+    monkeypatch.setattr(bootstrap, "configure_jarvis_services", lambda port: {
+        "generation": {"status": "unavailable", "message": "Ollama not running"},
+        "embeddings": {"status": "unavailable", "message": "Ollama not running"},
+    })
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, prepare_only=False, no_browser=True)
+    assert exit_code == 0
+
