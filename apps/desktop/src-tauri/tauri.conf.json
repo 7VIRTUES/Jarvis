@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Jarvis PC Local",
+  "version": "0.1.0",
+  "identifier": "local.jarvis.desktop",
+  "build": { "frontendDist": "../ui" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "capabilities": [{
+        "identifier": "startup-only",
+        "description": "Only the bundled startup screen may request fixed Jarvis startup.",
+        "local": true,
+        "windows": ["startup"],
+        "permissions": ["allow-start-jarvis"]
+      }]
+    }
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.ico"] }
+}
