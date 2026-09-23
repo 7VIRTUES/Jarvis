@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 from uuid import uuid4
@@ -144,7 +145,13 @@ from .web_research import (
 )
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
-DATA_ROOT = WORKSPACE_ROOT / "data" / "jarvis"
+_layout_spec = importlib.util.spec_from_file_location(
+    "jarvis_desktop_layout", WORKSPACE_ROOT / "apps" / "desktop" / "runtime_layout.py"
+)
+_layout_module = importlib.util.module_from_spec(_layout_spec)
+_layout_spec.loader.exec_module(_layout_module)
+# The resource/workspace boundary stays fixed; only writable state moves.
+DATA_ROOT = _layout_module.resolve_layout(WORKSPACE_ROOT).data
 conn = init_db(DATA_ROOT / "jarvis.sqlite")
 logger = JsonlLogger(DATA_ROOT / "logs")
 events = EventBus(conn, logger)

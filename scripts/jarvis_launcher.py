@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -73,6 +74,15 @@ def repository_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def runtime_layout(root: Path):
+    spec = importlib.util.spec_from_file_location(
+        "jarvis_desktop_layout", root / "apps" / "desktop" / "runtime_layout.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.resolve_layout(root)
+
+
 def validate_repository(root: Path) -> bool:
     expected_paths = (
         root / "requirements.txt",
@@ -115,7 +125,7 @@ def run_setup_command(command: Sequence[str], root: Path, failure_message: str) 
 def runtime_imports_available(venv_python: Path, root: Path) -> bool:
     try:
         completed = subprocess.run(
-            [str(venv_python), "-c", "import fastapi; import uvicorn"],
+            [str(venv_python), "-I", "-B", "-c", "import fastapi; import uvicorn"],
             cwd=root,
             shell=False,
             check=False,
@@ -128,24 +138,26 @@ def runtime_imports_available(venv_python: Path, root: Path) -> bool:
 
 
 def ensure_environment(root: Path, system_python: str, setup_requested: bool) -> bool:
-    venv_python = root / ".venv" / "Scripts" / "python.exe"
+    layout = runtime_layout(root)
+    venv_python = layout.python
     requirements = root / "requirements.txt"
 
     if not venv_python.is_file():
-        print("Jarvis needs a repository-local virtual environment at .venv.")
-        print(f"Setup will run: {system_python} -m venv .venv")
+        print(f"Jarvis needs a local virtual environment at {layout.venv}.")
+        print(f"Setup will run: {system_python} -m venv {layout.venv}")
         print("Then it will install the committed requirements.txt with the new .venv interpreter.")
         if not confirm_setup("Create the local Jarvis environment and install requirements.txt? [y/N] "):
             print("Setup was declined. Rerun .\\jarvis when you are ready to create the local environment.", file=sys.stderr)
             return False
-        if not run_setup_command([system_python, "-m", "venv", ".venv"], root, "Virtual-environment creation failed"):
+        layout.prepare_directories()
+        if not run_setup_command([system_python, "-I", "-B", "-m", "venv", str(layout.venv)], layout.runtime, "Virtual-environment creation failed"):
             return False
         if not venv_python.is_file():
             print("Virtual-environment creation completed without .venv\\Scripts\\python.exe.", file=sys.stderr)
             return False
         return run_setup_command(
-            [str(venv_python), "-m", "pip", "install", "-r", str(requirements)],
-            root,
+            [str(venv_python), "-I", "-B", "-m", "pip", "install", "-r", str(requirements)],
+            layout.runtime,
             "Requirements installation failed",
         )
 
@@ -164,8 +176,8 @@ def ensure_environment(root: Path, system_python: str, setup_requested: bool) ->
         print("Setup was declined. Rerun .\\jarvis --setup when you are ready to repair the environment.", file=sys.stderr)
         return False
     return run_setup_command(
-        [str(venv_python), "-m", "pip", "install", "-r", str(requirements)],
-        root,
+        [str(venv_python), "-I", "-B", "-m", "pip", "install", "-r", str(requirements)],
+        layout.runtime,
         "Requirements installation failed",
     )
 
@@ -291,10 +303,13 @@ def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LA
         )
         return 1
 
-    venv_python = root / ".venv" / "Scripts" / "python.exe"
+    layout = runtime_layout(root)
+    venv_python = layout.python
     app_dir = root / "services" / "jarvis-core" / "src"
     command = [
         str(venv_python),
+        "-I",
+        "-B",
         "-m",
         "uvicorn",
         "--app-dir",
@@ -306,7 +321,10 @@ def start_jarvis(root: Path, port: int, no_browser: bool, path: str = DEFAULT_LA
         str(port),
     ]
     try:
-        child: subprocess.Popen[object] = subprocess.Popen(command, cwd=root, shell=False)
+        layout.prepare_directories()
+        child: subprocess.Popen[object] = subprocess.Popen(
+            command, cwd=layout.runtime, env=layout.environment(), shell=False
+        )
     except OSError as exc:
         print(f"Jarvis could not be started: {exc}", file=sys.stderr)
         return 1

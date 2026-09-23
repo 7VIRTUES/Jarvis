@@ -21,7 +21,7 @@ use windows::{
                 JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE},
             Pipes::CreatePipe,
             Threading::{CreateProcessW, GetExitCodeProcess, OpenProcess, ResumeThread, TerminateProcess,
-                WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, STARTF_USESTDHANDLES,
+                WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, STARTF_USESTDHANDLES,
                 PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, STARTUPINFOW},
         },
     },
@@ -35,6 +35,18 @@ fn handle(value: &OwnedHandle) -> HANDLE {
     HANDLE(value.as_raw_handle())
 }
 
+fn environment_block(layout: &crate::runtime::RuntimeLayout) -> Vec<u16> {
+    let mut block = Vec::new();
+    for (key, value) in layout.environment() {
+        block.extend(key.encode_wide());
+        block.push('=' as u16);
+        block.extend(value.encode_wide());
+        block.push(0);
+    }
+    block.push(0);
+    block
+}
+
 pub struct OwnedLauncher {
     // Closing the non-inherited job kills only this launcher's descendants,
     // including on desktop crash. No PID-based termination or process-name kill.
@@ -43,17 +55,19 @@ pub struct OwnedLauncher {
 }
 
 impl OwnedLauncher {
-    pub fn spawn(root: &Path) -> Result<Self, String> {
-        let python = root.join(".venv/Scripts/python.exe");
+    pub fn spawn(layout: &crate::runtime::RuntimeLayout) -> Result<Self, String> {
+        let root = &layout.resources;
+        let python = layout.python();
         let adapter = root.join("apps/desktop/launcher_adapter.py");
         if !python.is_file() {
             return Err("The local Python environment is missing. Prepare Jarvis with its existing launcher, then retry.".into());
         }
         // Windows paths cannot contain quotes. Both arguments are fixed files
-        // beneath the validated repository, never supplied by web content.
+        // selected by the fixed runtime layout, never supplied by web content.
         let application = wide(python.as_os_str());
         let mut command = wide(OsStr::new(&format!("\"{}\" -I -B \"{}\"", python.display(), adapter.display())));
         let directory = wide(root.as_os_str());
+        let environment = environment_block(layout);
         unsafe {
             let job = CreateJobObjectW(None, PCWSTR::null()).map_err(|e| e.to_string())?;
             let job = OwnedHandle::from_raw_handle(job.0);
@@ -68,8 +82,8 @@ impl OwnedLauncher {
             let mut info: PROCESS_INFORMATION = zeroed();
             CreateProcessW(
                 PCWSTR(application.as_ptr()), Some(PWSTR(command.as_mut_ptr())),
-                None, None, false, CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                None, PCWSTR(directory.as_ptr()), &startup, &mut info,
+                None, None, false, CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                Some(environment.as_ptr().cast()), PCWSTR(directory.as_ptr()), &startup, &mut info,
             ).map_err(|e| format!("Could not start the existing Jarvis launcher: {e}"))?;
             let process = OwnedHandle::from_raw_handle(info.hProcess.0);
             let thread = OwnedHandle::from_raw_handle(info.hThread.0);
@@ -113,18 +127,19 @@ pub struct OwnedBootstrap {
 }
 
 impl OwnedBootstrap {
-    pub fn spawn_prepare(root: &Path, python: &Path) -> Result<Self, String> {
-        Self::spawn(root, python, "--desktop-prepare")
+    pub fn spawn_prepare(layout: &crate::runtime::RuntimeLayout, python: &Path) -> Result<Self, String> {
+        Self::spawn(layout, python, "--desktop-prepare")
     }
 
-    pub fn spawn_runtime(root: &Path, python: &Path) -> Result<Self, String> {
-        Self::spawn(root, python, "--desktop-runtime")
+    pub fn spawn_runtime(layout: &crate::runtime::RuntimeLayout, python: &Path) -> Result<Self, String> {
+        Self::spawn(layout, python, "--desktop-runtime")
     }
 
-    fn spawn(root: &Path, python: &Path, mode: &'static str) -> Result<Self, String> {
+    fn spawn(layout: &crate::runtime::RuntimeLayout, python: &Path, mode: &'static str) -> Result<Self, String> {
+        let root = &layout.resources;
         let bootstrap = root.join("scripts/jarvis_bootstrap.py");
         if !bootstrap.is_file() {
-            return Err("The repository bootstrap script is missing.".into());
+            return Err("The Jarvis bootstrap resource is missing.".into());
         }
         let application = wide(python.as_os_str());
         let mut command = wide(OsStr::new(&format!(
@@ -132,6 +147,7 @@ impl OwnedBootstrap {
             python.display(), bootstrap.display(),
         )));
         let directory = wide(root.as_os_str());
+        let environment = environment_block(layout);
         unsafe {
             let job = CreateJobObjectW(None, PCWSTR::null()).map_err(|e| e.to_string())?;
             let job = OwnedHandle::from_raw_handle(job.0);
@@ -165,8 +181,8 @@ impl OwnedBootstrap {
             let mut info: PROCESS_INFORMATION = zeroed();
             CreateProcessW(
                 PCWSTR(application.as_ptr()), Some(PWSTR(command.as_mut_ptr())),
-                None, None, true, CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                None, PCWSTR(directory.as_ptr()), &mut startup, &mut info,
+                None, None, true, CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                Some(environment.as_ptr().cast()), PCWSTR(directory.as_ptr()), &mut startup, &mut info,
             ).map_err(|e| format!("Could not start the local bootstrap: {e}"))?;
             drop(write_pipe);
             let process = OwnedHandle::from_raw_handle(info.hProcess.0);

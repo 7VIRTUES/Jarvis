@@ -55,14 +55,14 @@ async fn inspect_startup(app: tauri::AppHandle, window: tauri::WebviewWindow) ->
                 runtime_active: true,
             });
         }
-        let root = runtime::repository_root()?;
-        let report = runtime::preflight(&root)?;
+        let layout = runtime::resolve_layout(&worker_app)?;
+        let report = runtime::preflight(&layout)?;
         if !report.ready || report.runtime_active {
             return Ok(report);
         }
         // Setup is present. Start only the installed Ollama runtime inside a
         // desktop-owned job; the Python bootstrap verifies models without pulls.
-        let child = Arc::new(process::OwnedBootstrap::spawn_runtime(&root, &report.python_executable)?);
+        let child = Arc::new(process::OwnedBootstrap::spawn_runtime(&layout, &report.python_executable)?);
         {
             let state = worker_app.state::<Mutex<Lifecycle>>();
             let mut state = state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?;
@@ -88,7 +88,7 @@ async fn inspect_startup(app: tauri::AppHandle, window: tauri::WebviewWindow) ->
                 runtime_active: true,
             });
         }
-        let verified = runtime::preflight(&root)?;
+        let verified = runtime::preflight(&layout)?;
         if !verified.runtime_active {
             return Err("Ollama stopped during verification. Retry startup.".into());
         }
@@ -129,10 +129,10 @@ async fn prepare_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> 
         if matches!(runtime::health(&client)?, runtime::HealthState::Ready) {
             return Ok(());
         }
-        let root = runtime::repository_root()?;
-        let preflight = runtime::preflight(&root)?;
+        let layout = runtime::resolve_layout(&worker_app)?;
+        let preflight = runtime::preflight(&layout)?;
         if preflight.ready { return Ok(()); }
-        let child = Arc::new(process::OwnedBootstrap::spawn_prepare(&root, &preflight.python_executable)?);
+        let child = Arc::new(process::OwnedBootstrap::spawn_prepare(&layout, &preflight.python_executable)?);
         {
             let state = worker_app.state::<Mutex<Lifecycle>>();
             let mut state = state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?;
@@ -155,7 +155,7 @@ async fn prepare_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> 
         if matches!(runtime::health(&client)?, runtime::HealthState::Ready) {
             return Err("Another Jarvis instance started during preparation. No instance was reconfigured.".into());
         }
-        let remaining = runtime::preflight(&root)?;
+        let remaining = runtime::preflight(&layout)?;
         if !remaining.ready {
             return Err(remaining.missing.into_iter().map(|item| item.message)
                 .collect::<Vec<_>>().join("\n"));
@@ -184,7 +184,7 @@ async fn start_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Re
     let result = tauri::async_runtime::spawn_blocking(move || {
         let client = runtime::client()?;
         if matches!(runtime::health(&client)?, runtime::HealthState::Absent) {
-            let report = runtime::preflight(&runtime::repository_root()?)?;
+            let report = runtime::preflight(&runtime::resolve_layout(&worker_app)?)?;
             if !report.ready {
                 return Err("Jarvis prerequisites changed. Check again before startup.".into());
             }
@@ -192,7 +192,7 @@ async fn start_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Re
                 return Err("Ollama stopped before Jarvis startup. Check again to restart it.".into());
             }
         }
-        let owned = runtime::connect()?;
+        let owned = runtime::connect(&worker_app)?;
         let owns_runtime = owned.is_some();
         {
             let state = worker_app.state::<Mutex<Lifecycle>>();

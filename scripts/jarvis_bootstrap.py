@@ -8,6 +8,7 @@ without manual user configuration.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,15 @@ def repository_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def runtime_layout(root: Path):
+    spec = importlib.util.spec_from_file_location(
+        "jarvis_desktop_layout", root / "apps" / "desktop" / "runtime_layout.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.resolve_layout(root)
+
+
 def get_free_disk_space_gb(path: Path) -> float:
     try:
         stat = shutil.disk_usage(str(path))
@@ -53,6 +63,10 @@ def get_free_disk_space_gb(path: Path) -> float:
 
 
 def check_disk_space(root: Path, min_gb: float = MIN_FREE_DISK_GB) -> tuple[bool, str]:
+    root = runtime_layout(root).runtime
+    # Preflight remains read-only before the first preparation.
+    while not root.exists() and root != root.parent:
+        root = root.parent
     free_gb = get_free_disk_space_gb(root)
     if free_gb >= min_gb:
         return True, f"Free disk space: {free_gb:.1f} GB (minimum: {min_gb:.1f} GB required)."
@@ -74,7 +88,7 @@ def validate_python_version() -> tuple[bool, str]:
 
 
 def find_venv_python(root: Path) -> Path:
-    return root / ".venv" / "Scripts" / "python.exe"
+    return runtime_layout(root).python
 
 
 def is_venv_complete(root: Path) -> bool:
@@ -97,16 +111,18 @@ def is_venv_complete(root: Path) -> bool:
 
 
 def ensure_virtualenv(root: Path, system_python: str = sys.executable) -> tuple[bool, str]:
-    venv_python = find_venv_python(root)
+    layout = runtime_layout(root)
+    venv_python = layout.python
     requirements = root / "requirements.txt"
 
     if is_venv_complete(root):
         return True, f"Virtual environment ready at: {venv_python}"
 
     print("[Bootstrap] Setting up local Python virtual environment (.venv)...")
+    layout.prepare_directories()
     if not venv_python.is_file():
         try:
-            res = subprocess.run([system_python, "-m", "venv", ".venv"], cwd=root, check=False)
+            res = subprocess.run([system_python, "-I", "-B", "-m", "venv", str(layout.venv)], cwd=layout.runtime, env=layout.environment(), check=False)
             if res.returncode != 0:
                 return False, f"Failed to create virtual environment (exit code {res.returncode})."
         except OSError as exc:
@@ -118,8 +134,9 @@ def ensure_virtualenv(root: Path, system_python: str = sys.executable) -> tuple[
     print("[Bootstrap] Installing dependencies from requirements.txt...")
     try:
         res = subprocess.run(
-            [str(venv_python), "-m", "pip", "install", "-r", str(requirements)],
-            cwd=root,
+            [str(venv_python), "-I", "-B", "-m", "pip", "install", "-r", str(requirements)],
+            cwd=layout.runtime,
+            env=layout.environment(),
             check=False,
         )
         if res.returncode != 0:
@@ -207,6 +224,8 @@ def start_ollama_service(ollama_bin: str) -> subprocess.Popen[object] | None:
         return None
 
     print("[Bootstrap] Starting background Ollama model server...")
+    layout = runtime_layout(repository_root())
+    layout.prepare_directories()
     try:
         creationflags = 0
         if os.name == "nt":
@@ -214,6 +233,8 @@ def start_ollama_service(ollama_bin: str) -> subprocess.Popen[object] | None:
 
         process = subprocess.Popen(
             [ollama_bin, "serve"],
+            cwd=layout.runtime,
+            env=layout.ollama_environment(),
             shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -304,6 +325,7 @@ def pull_ollama_model(
         try:
             completed = subprocess.run(
                 [ollama_bin, "pull", model_name],
+                env=runtime_layout(repository_root()).ollama_environment(),
                 shell=False,
                 check=False,
             )
@@ -529,7 +551,7 @@ def preflight_environment(root: Path | None = None) -> dict[str, Any]:
         require("python", python_message)
     venv_python = find_venv_python(root)
     if not venv_python.is_file():
-        require("venv", "The repository-local .venv\\Scripts\\python.exe is missing.")
+        require("venv", f"The local Python environment is missing at {venv_python}.")
     elif not is_venv_complete(root):
         require("venv_dependencies", "The local .venv is present but required Jarvis Python packages are incomplete.")
 
@@ -812,10 +834,14 @@ def run_bootstrap_pipeline(
     started_child = False
     if not is_jarvis_healthy(jarvis_port):
         print(f"[5/7] Starting Jarvis Core on port {jarvis_port}...")
-        venv_python = find_venv_python(root)
+        layout = runtime_layout(root)
+        layout.prepare_directories()
+        venv_python = layout.python
         app_dir = root / "services" / "jarvis-core" / "src"
         command = [
             str(venv_python),
+            "-I",
+            "-B",
             "-m",
             "uvicorn",
             "--app-dir",
@@ -827,7 +853,7 @@ def run_bootstrap_pipeline(
             str(jarvis_port),
         ]
         try:
-            jarvis_process = subprocess.Popen(command, cwd=root, shell=False)
+            jarvis_process = subprocess.Popen(command, cwd=layout.runtime, env=layout.environment(), shell=False)
             _STARTED_JARVIS_PROCESS = jarvis_process
             started_child = True
             if not wait_for_jarvis(jarvis_port):
