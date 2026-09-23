@@ -103,23 +103,32 @@ impl OwnedLauncher {
     }
 }
 
-pub struct OwnedPreparation {
-    // The job remains open after bootstrap exits so any Ollama child started
-    // during preparation stays desktop-owned until this desktop exits.
+pub struct OwnedBootstrap {
+    // Keep the job open after bootstrap exits so any Ollama child it started
+    // remains desktop-owned until this desktop exits.
     job: OwnedHandle,
     process: OwnedHandle,
     output: Mutex<File>,
+    operation: &'static str,
 }
 
-impl OwnedPreparation {
-    pub fn spawn(root: &Path, python: &Path) -> Result<Self, String> {
+impl OwnedBootstrap {
+    pub fn spawn_prepare(root: &Path, python: &Path) -> Result<Self, String> {
+        Self::spawn(root, python, "--desktop-prepare")
+    }
+
+    pub fn spawn_runtime(root: &Path, python: &Path) -> Result<Self, String> {
+        Self::spawn(root, python, "--desktop-runtime")
+    }
+
+    fn spawn(root: &Path, python: &Path, mode: &'static str) -> Result<Self, String> {
         let bootstrap = root.join("scripts/jarvis_bootstrap.py");
         if !bootstrap.is_file() {
             return Err("The repository bootstrap script is missing.".into());
         }
         let application = wide(python.as_os_str());
         let mut command = wide(OsStr::new(&format!(
-            "\"{}\" -I -B -u \"{}\" --desktop-prepare",
+            "\"{}\" -I -B -u \"{}\" {mode}",
             python.display(), bootstrap.display(),
         )));
         let directory = wide(root.as_os_str());
@@ -158,7 +167,7 @@ impl OwnedPreparation {
                 PCWSTR(application.as_ptr()), Some(PWSTR(command.as_mut_ptr())),
                 None, None, true, CREATE_SUSPENDED | CREATE_NO_WINDOW,
                 None, PCWSTR(directory.as_ptr()), &mut startup, &mut info,
-            ).map_err(|e| format!("Could not start local preparation: {e}"))?;
+            ).map_err(|e| format!("Could not start the local bootstrap: {e}"))?;
             drop(write_pipe);
             let process = OwnedHandle::from_raw_handle(info.hProcess.0);
             let thread = OwnedHandle::from_raw_handle(info.hThread.0);
@@ -170,7 +179,8 @@ impl OwnedPreparation {
                 let _ = TerminateJobObject(handle(&job), 1);
                 return Err("Could not resume local preparation.".into());
             }
-            Ok(Self { job, process, output: Mutex::new(File::from(read_pipe)) })
+            let operation = if mode == "--desktop-runtime" { "Ollama runtime startup" } else { "Preparation" };
+            Ok(Self { job, process, output: Mutex::new(File::from(read_pipe)), operation })
         }
     }
 
@@ -210,14 +220,14 @@ impl OwnedPreparation {
         let mut exit_code = 0;
         unsafe {
             if WaitForSingleObject(handle(&self.process), u32::MAX) != WAIT_OBJECT_0 {
-                return Err("Could not confirm preparation process exit.".into());
+                return Err(format!("Could not confirm {} process exit.", self.operation));
             }
             GetExitCodeProcess(handle(&self.process), &mut exit_code).map_err(|e| e.to_string())?;
         }
         if exit_code != 0 {
             let reason = recent.lines().rev().find(|line| !line.trim().is_empty())
-                .unwrap_or("Preparation stopped without a detailed error.");
-            return Err(format!("Preparation failed (exit code {exit_code}): {reason}"));
+                .unwrap_or("The local bootstrap stopped without a detailed error.");
+            return Err(format!("{} failed (exit code {exit_code}): {reason}", self.operation));
         }
         Ok(())
     }

@@ -78,6 +78,7 @@ pub struct Preflight {
     pub ready: bool,
     pub missing: Vec<MissingPrerequisite>,
     pub python_executable: PathBuf,
+    pub runtime_active: bool,
 }
 
 pub fn preflight(root: &std::path::Path) -> Result<Preflight, String> {

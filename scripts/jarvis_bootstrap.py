@@ -239,32 +239,41 @@ def wait_for_ollama(
     return False
 
 
+def query_ollama_models(
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_OLLAMA_PORT,
+    timeout: float = REQUEST_TIMEOUT_SECONDS,
+) -> list[str] | None:
+    """Return None when the local model list cannot be verified."""
+    try:
+        req = Request(f"http://{host}:{port}/api/tags", headers={"User-Agent": APP_NAME})
+        with _LOCAL_OPENER.open(req, timeout=timeout) as res:
+            if res.status != 200:
+                return None
+            payload = res.read(1024 * 1024 + 1)
+            if len(payload) > 1024 * 1024:
+                return None
+            data = json.loads(payload)
+            if not isinstance(data, dict) or not isinstance(data.get("models"), list):
+                return None
+            models = []
+            for item in data["models"]:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name") or item.get("model")
+                if isinstance(name, str) and name:
+                    models.append(name)
+            return models
+    except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
 def list_ollama_models(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_OLLAMA_PORT,
     timeout: float = REQUEST_TIMEOUT_SECONDS,
 ) -> list[str]:
-    try:
-        req = Request(f"http://{host}:{port}/api/tags", headers={"User-Agent": APP_NAME})
-        with _LOCAL_OPENER.open(req, timeout=timeout) as res:
-            if res.status != 200:
-                return []
-            payload = res.read(1024 * 1024 + 1)
-            if len(payload) > 1024 * 1024:
-                return []
-            data = json.loads(payload)
-            models = []
-            if not isinstance(data, dict):
-                return []
-            for item in data.get("models", []):
-                if not isinstance(item, dict):
-                    continue
-                name = item.get("name") or item.get("model")
-                if name:
-                    models.append(name)
-            return models
-    except (HTTPError, URLError, OSError, ValueError, json.JSONDecodeError):
-        return []
+    return query_ollama_models(host, port, timeout) or []
 
 
 def is_exact_model_match(target_model: str, candidate_model: str) -> bool:
@@ -508,7 +517,7 @@ def configure_jarvis_services(
 
 
 def preflight_environment(root: Path | None = None) -> dict[str, Any]:
-    """Inspect desktop prerequisites without changing the machine."""
+    """Read setup prerequisites; a stopped installed runtime is not missing setup."""
     root = root or repository_root()
     missing: list[dict[str, str]] = []
 
@@ -527,22 +536,29 @@ def preflight_environment(root: Path | None = None) -> dict[str, Any]:
     ollama_bin = find_ollama_binary()
     if not ollama_bin:
         require("ollama", "Ollama is not installed in a supported local location.")
-    if not is_ollama_running():
-        require("ollama_service", "The local Ollama service is not running on 127.0.0.1:11434.")
-    else:
-        models = list_ollama_models(timeout=3.0)
-        for code, model in (
-            ("generation_model", DEFAULT_GENERATION_MODEL),
-            ("embedding_model", DEFAULT_EMBEDDING_MODEL),
-        ):
-            if not any(is_exact_model_match(model, candidate) for candidate in models):
-                require(code, f"The local Ollama model '{model}' is missing.")
-        if any(item["code"].endswith("_model") for item in missing):
-            disk_ok, disk_message = check_disk_space(root)
-            if not disk_ok:
-                require("disk", disk_message)
+    runtime_active = is_ollama_running()
+    if runtime_active:
+        models = query_ollama_models(timeout=3.0)
+        if models is None:
+            require("runtime_unavailable", "The running Ollama service did not return a verifiable local model list. Retry startup.")
+        else:
+            for code, model in (
+                ("generation_model", DEFAULT_GENERATION_MODEL),
+                ("embedding_model", DEFAULT_EMBEDDING_MODEL),
+            ):
+                if not any(is_exact_model_match(model, candidate) for candidate in models):
+                    require(code, f"The local Ollama model '{model}' is missing.")
+            if any(item["code"].endswith("_model") for item in missing):
+                disk_ok, disk_message = check_disk_space(root)
+                if not disk_ok:
+                    require("disk", disk_message)
 
-    return {"ready": not missing, "missing": missing, "python_executable": sys.executable}
+    return {
+        "ready": not missing,
+        "missing": missing,
+        "python_executable": sys.executable,
+        "runtime_active": runtime_active,
+    }
 
 
 def desktop_port_available(port: int = DEFAULT_JARVIS_PORT) -> bool:
@@ -553,6 +569,41 @@ def desktop_port_available(port: int = DEFAULT_JARVIS_PORT) -> bool:
         return True
     except OSError:
         return False
+
+
+def start_desktop_ollama_runtime() -> int:
+    """Start only an installed local Ollama service; never install or pull models."""
+    if not desktop_port_available():
+        print("Jarvis is already running or port 8000 is occupied. Runtime startup stopped.", file=sys.stderr, flush=True)
+        return 1
+    ollama_bin = find_ollama_binary()
+    if not ollama_bin:
+        print("Ollama is not installed. Use Prepare Jarvis.", file=sys.stderr, flush=True)
+        return 1
+    if not is_ollama_running():
+        try:
+            with socket.create_connection((DEFAULT_HOST, DEFAULT_OLLAMA_PORT), timeout=1.5):
+                print("Port 11434 is occupied by an unverified service. No process was changed.", file=sys.stderr, flush=True)
+                return 1
+        except ConnectionRefusedError:
+            pass
+        except OSError:
+            print("The Ollama port could not be checked safely. No process was changed.", file=sys.stderr, flush=True)
+            return 1
+        print("[Runtime] Starting installed local Ollama...", flush=True)
+        start_ollama_service(ollama_bin)
+        if not wait_for_ollama(timeout=15.0):
+            print("Installed Ollama did not become ready on 127.0.0.1:11434.", file=sys.stderr, flush=True)
+            return 1
+    models = query_ollama_models(timeout=3.0)
+    if models is None:
+        print("Ollama did not return a verifiable local model list.", file=sys.stderr, flush=True)
+        return 1
+    for model in (DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL):
+        if not any(is_exact_model_match(model, candidate) for candidate in models):
+            print(f"[Runtime] Required model missing: {model}. Use Prepare Jarvis.", flush=True)
+    print("[Runtime] Ollama model verification complete.", flush=True)
+    return 0
 
 
 def prepare_desktop_environment(root: Path | None = None) -> int:
@@ -913,6 +964,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Print read-only desktop readiness as JSON.",
     )
     parser.add_argument(
+        "--desktop-runtime",
+        action="store_true",
+        help="Start only installed local Ollama and inspect models for desktop runtime.",
+    )
+    parser.add_argument(
         "--desktop-prepare",
         action="store_true",
         help="Prepare local prerequisites after an explicit desktop request; do not start Jarvis Core.",
@@ -935,6 +991,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.preflight_json:
         print(json.dumps(preflight_environment()))
         return 0
+    if args.desktop_runtime:
+        return start_desktop_ollama_runtime()
     if args.desktop_prepare:
         return prepare_desktop_environment()
     return run_bootstrap_pipeline(

@@ -47,16 +47,20 @@ async function inspect() {
   retry.hidden = true;
   showMissing([]);
   heading.textContent = "Checking your workspace";
-  status.textContent = "Reading local prerequisites…";
+  status.textContent = "Checking local prerequisites and starting installed Ollama if needed…";
   try {
     const result = await window.__TAURI__.core.invoke("inspect_startup");
     if (result.ready) {
       await launch();
     } else {
-      heading.textContent = "Prepare Jarvis";
-      status.textContent = "These local prerequisites are missing. Preparation will create the Python environment and may install Ollama and download the listed models.";
+      const needsSetup = result.missing.some(item =>
+        ["venv", "venv_dependencies", "ollama", "generation_model", "embedding_model", "disk"].includes(item.code));
+      heading.textContent = needsSetup ? "Prepare Jarvis" : "Jarvis needs attention";
+      status.textContent = needsSetup
+        ? "These local prerequisites are missing. Preparation may create the Python environment, install Ollama, or download the listed models."
+        : "The local runtime could not be verified. Check its state and retry.";
       showMissing(result.missing);
-      prepare.hidden = false;
+      prepare.hidden = !needsSetup;
       retry.hidden = false;
     }
   } catch (error) {
@@ -74,20 +78,24 @@ async function runPreparation() {
   heading.textContent = "Preparing Jarvis";
   status.textContent = "Checking local prerequisites…";
   let poll;
+  let polling = true;
   try {
     poll = setInterval(async () => {
       try {
         const progress = await window.__TAURI__.core.invoke("preparation_status");
-        if (progress) status.textContent = progress;
+        if (polling && progress) status.textContent = progress;
       } catch (_) {
         // The preparation command reports the actionable failure.
       }
     }, 500);
     await window.__TAURI__.core.invoke("prepare_jarvis");
+    polling = false;
     clearInterval(poll);
-    status.textContent = "Preparation complete. Starting Jarvis…";
-    await launch();
+    status.textContent = "Preparation complete. Checking runtime…";
+    busy = false;
+    await inspect();
   } catch (error) {
+    polling = false;
     clearInterval(poll);
     showError(error, true);
   } finally {
