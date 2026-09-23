@@ -10,3 +10,7 @@ button { background: #9be4cc; color: #10251e; padding: .8rem 1.2rem; border: 0; 
 button:focus-visible { outline: 3px solid white; outline-offset: 4px; }
 button:disabled { opacity: .6; cursor: wait; }
 [hidden] { display: none; }
+
+ul { color: #cad6dc; line-height: 1.5; padding-left: 1.4rem; }
+li + li { margin-top: .4rem; }
+button + button { margin-left: .6rem; }

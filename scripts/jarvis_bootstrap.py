@@ -18,7 +18,7 @@ import sys
 import time
 from typing import Any, Sequence
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener, urlopen
 import webbrowser
 
 
@@ -83,15 +83,16 @@ def is_venv_complete(root: Path) -> bool:
         return False
     try:
         completed = subprocess.run(
-            [str(venv_python), "-c", "import fastapi; import uvicorn; import starlette"],
+            [str(venv_python), "-I", "-B", "-c", "import sys; assert sys.version_info >= (3, 10); import fastapi; import uvicorn; import starlette"],
             cwd=root,
             shell=False,
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=10,
         )
         return completed.returncode == 0
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -183,10 +184,18 @@ def find_ollama_binary() -> str | None:
     return None
 
 
+class LocalNoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        return None
+
+
+_LOCAL_OPENER = build_opener(ProxyHandler({}), LocalNoRedirect())
+
+
 def is_ollama_running(host: str = DEFAULT_HOST, port: int = DEFAULT_OLLAMA_PORT) -> bool:
     try:
         req = Request(f"http://{host}:{port}/api/tags", headers={"User-Agent": APP_NAME})
-        with urlopen(req, timeout=1.5) as res:
+        with _LOCAL_OPENER.open(req, timeout=1.5) as res:
             return res.status == 200
     except (HTTPError, URLError, OSError, ValueError):
         return False
@@ -230,15 +239,26 @@ def wait_for_ollama(
     return False
 
 
-def list_ollama_models(host: str = DEFAULT_HOST, port: int = DEFAULT_OLLAMA_PORT) -> list[str]:
+def list_ollama_models(
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_OLLAMA_PORT,
+    timeout: float = REQUEST_TIMEOUT_SECONDS,
+) -> list[str]:
     try:
         req = Request(f"http://{host}:{port}/api/tags", headers={"User-Agent": APP_NAME})
-        with urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as res:
+        with _LOCAL_OPENER.open(req, timeout=timeout) as res:
             if res.status != 200:
                 return []
-            data = json.load(res)
+            payload = res.read(1024 * 1024 + 1)
+            if len(payload) > 1024 * 1024:
+                return []
+            data = json.loads(payload)
             models = []
+            if not isinstance(data, dict):
+                return []
             for item in data.get("models", []):
+                if not isinstance(item, dict):
+                    continue
                 name = item.get("name") or item.get("model")
                 if name:
                     models.append(name)
@@ -293,7 +313,7 @@ def pull_ollama_model(
         method="POST",
     )
     try:
-        with urlopen(req, timeout=PULL_TIMEOUT_SECONDS) as res:
+        with _LOCAL_OPENER.open(req, timeout=PULL_TIMEOUT_SECONDS) as res:
             if res.status == 200:
                 return True, f"Model '{model_name}' successfully downloaded."
             return False, f"Model download returned status code {res.status}."
@@ -487,6 +507,133 @@ def configure_jarvis_services(
     return summary
 
 
+def preflight_environment(root: Path | None = None) -> dict[str, Any]:
+    """Inspect desktop prerequisites without changing the machine."""
+    root = root or repository_root()
+    missing: list[dict[str, str]] = []
+
+    def require(code: str, message: str) -> None:
+        missing.append({"code": code, "message": message})
+
+    python_ok, python_message = validate_python_version()
+    if not python_ok:
+        require("python", python_message)
+    venv_python = find_venv_python(root)
+    if not venv_python.is_file():
+        require("venv", "The repository-local .venv\\Scripts\\python.exe is missing.")
+    elif not is_venv_complete(root):
+        require("venv_dependencies", "The local .venv is present but required Jarvis Python packages are incomplete.")
+
+    ollama_bin = find_ollama_binary()
+    if not ollama_bin:
+        require("ollama", "Ollama is not installed in a supported local location.")
+    if not is_ollama_running():
+        require("ollama_service", "The local Ollama service is not running on 127.0.0.1:11434.")
+    else:
+        models = list_ollama_models(timeout=3.0)
+        for code, model in (
+            ("generation_model", DEFAULT_GENERATION_MODEL),
+            ("embedding_model", DEFAULT_EMBEDDING_MODEL),
+        ):
+            if not any(is_exact_model_match(model, candidate) for candidate in models):
+                require(code, f"The local Ollama model '{model}' is missing.")
+        if any(item["code"].endswith("_model") for item in missing):
+            disk_ok, disk_message = check_disk_space(root)
+            if not disk_ok:
+                require("disk", disk_message)
+
+    return {"ready": not missing, "missing": missing, "python_executable": sys.executable}
+
+
+def desktop_port_available(port: int = DEFAULT_JARVIS_PORT) -> bool:
+    try:
+        with socket.create_connection((DEFAULT_HOST, port), timeout=1.5):
+            return False
+    except ConnectionRefusedError:
+        return True
+    except OSError:
+        return False
+
+
+def prepare_desktop_environment(root: Path | None = None) -> int:
+    """Prepare prerequisites after an explicit desktop action; never start Jarvis Core."""
+    root = root or repository_root()
+
+    def stage(label: str) -> None:
+        print(f"[Prepare] {label}", flush=True)
+
+    def guard_instance() -> bool:
+        if desktop_port_available():
+            return True
+        print(
+            "Jarvis or another service is already using port 8000. "
+            "Preparation stopped without changing that instance.",
+            file=sys.stderr, flush=True,
+        )
+        return False
+
+    if not guard_instance():
+        return 1
+    python_ok, python_message = validate_python_version()
+    if not python_ok:
+        print(python_message, file=sys.stderr, flush=True)
+        return 1
+    stage("Checking the local Python environment...")
+    ok, message = ensure_virtualenv(root)
+    if not ok:
+        print(message, file=sys.stderr, flush=True)
+        return 1
+    if not guard_instance():
+        return 1
+
+    stage("Checking Ollama installation...")
+    ollama_bin = find_ollama_binary()
+    if not ollama_bin and os.name == "nt":
+        if not is_winget_available():
+            print("Ollama is missing and Windows Package Manager is unavailable.", file=sys.stderr, flush=True)
+            return 1
+        if not install_ollama_via_winget():
+            print("Ollama installation did not complete. Retry preparation.", file=sys.stderr, flush=True)
+            return 1
+        ollama_bin = find_ollama_binary()
+    if not ollama_bin:
+        print("Ollama is still unavailable after installation.", file=sys.stderr, flush=True)
+        return 1
+    if not guard_instance():
+        return 1
+
+    stage("Checking the local Ollama service...")
+    if not is_ollama_running():
+        start_ollama_service(ollama_bin)
+        if not wait_for_ollama(timeout=15.0):
+            print("Ollama did not become ready on 127.0.0.1:11434.", file=sys.stderr, flush=True)
+            return 1
+    models = list_ollama_models()
+    for model in (DEFAULT_GENERATION_MODEL, DEFAULT_EMBEDDING_MODEL):
+        if any(is_exact_model_match(model, candidate) for candidate in models):
+            continue
+        if not guard_instance():
+            return 1
+        disk_ok, disk_message = check_disk_space(root)
+        if not disk_ok:
+            print(disk_message, file=sys.stderr, flush=True)
+            return 1
+        stage(f"Downloading local model {model}...")
+        ok, message = ensure_ollama_model(model, ollama_bin=ollama_bin)
+        if not ok:
+            print(message, file=sys.stderr, flush=True)
+            return 1
+    if not guard_instance():
+        return 1
+    readiness = preflight_environment(root)
+    if not readiness["ready"]:
+        for item in readiness["missing"]:
+            print(item["message"], file=sys.stderr, flush=True)
+        return 1
+    stage("Preparation complete. Starting Jarvis...")
+    return 0
+
+
 def run_bootstrap_pipeline(
     root: Path | None = None,
     jarvis_port: int = DEFAULT_JARVIS_PORT,
@@ -499,6 +646,11 @@ def run_bootstrap_pipeline(
     global _STARTED_JARVIS_PROCESS
     if root is None:
         root = repository_root()
+    if check_only:
+        readiness = preflight_environment(root)
+        for item in readiness["missing"]:
+            print(item["message"])
+        return 0 if readiness["ready"] else 1
 
     print("==================================================")
     print(f"  {APP_NAME} — Automatic Setup & Bootstrap")
@@ -603,9 +755,6 @@ def run_bootstrap_pipeline(
             print("==================================================\n", file=sys.stderr)
             return 1
 
-    if check_only:
-        print("\n[Bootstrap] Preflight check completed successfully.")
-        return 0
 
     # 5. Jarvis Core Server Readiness
     print(f"[5/7] Jarvis Core Server: Checking port {jarvis_port}...")
@@ -759,6 +908,16 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Skip pulling Ollama generation and embedding models.",
     )
     parser.add_argument(
+        "--preflight-json",
+        action="store_true",
+        help="Print read-only desktop readiness as JSON.",
+    )
+    parser.add_argument(
+        "--desktop-prepare",
+        action="store_true",
+        help="Prepare local prerequisites after an explicit desktop request; do not start Jarvis Core.",
+    )
+    parser.add_argument(
         "--check-only",
         action="store_true",
         help="Run environment and prerequisite checks without starting services.",
@@ -773,6 +932,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
+    if args.preflight_json:
+        print(json.dumps(preflight_environment()))
+        return 0
+    if args.desktop_prepare:
+        return prepare_desktop_environment()
     return run_bootstrap_pipeline(
         jarvis_port=args.port,
         no_browser=args.no_browser,

@@ -1,6 +1,7 @@
-use std::{io::{ErrorKind, Read}, net::{SocketAddr, TcpStream}, path::PathBuf, thread, time::{Duration, Instant}};
+use std::{io::{ErrorKind, Read}, net::{SocketAddr, TcpStream}, os::windows::process::CommandExt, path::PathBuf, process::Command, thread, time::{Duration, Instant}};
 use reqwest::blocking::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 use crate::process::{listener_pid, OwnedLauncher};
 
 pub const ORIGIN: &str = "http://127.0.0.1:8000";
@@ -50,9 +51,10 @@ pub fn health(client: &Client) -> Result<HealthState, String> {
     Ok(HealthState::Ready)
 }
 
-fn repository_root() -> Result<PathBuf, String> {
+pub fn repository_root() -> Result<PathBuf, String> {
     // Repository-run foundation: no user-supplied executable or URL, registry,
-    // private configuration, PATH executable lookup, or alternate bootstrap.
+    // private configuration, or alternate bootstrap. Preflight uses only fixed
+    // Python launcher names; preparation uses the interpreter path they report.
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     for ancestor in executable.ancestors().skip(1) {
         if ancestor.join("apps/desktop/launcher_adapter.py").is_file()
@@ -62,9 +64,53 @@ fn repository_root() -> Result<PathBuf, String> {
             return Ok(ancestor.to_path_buf());
         }
     }
-    Err("Run the desktop executable from its build directory inside the Jarvis repository. A prepared .venv is required.".into())
+    Err("Run the desktop executable from its build directory inside the Jarvis repository.".into())
 }
 
+#[derive(Clone, Deserialize, Serialize)]
+pub struct MissingPrerequisite {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct Preflight {
+    pub ready: bool,
+    pub missing: Vec<MissingPrerequisite>,
+    pub python_executable: PathBuf,
+}
+
+pub fn preflight(root: &std::path::Path) -> Result<Preflight, String> {
+    let script = root.join("scripts/jarvis_bootstrap.py");
+    if !script.is_file() {
+        return Err("The repository bootstrap script is missing.".into());
+    }
+    let mut last_error = String::from("Python 3.10 or newer could not be launched.");
+    for (program, launcher_args) in [("python.exe", &[][..]), ("py.exe", &["-3"][..])] {
+        let output = Command::new(program)
+            .args(launcher_args)
+            .arg("-I").arg("-B").arg(&script).arg("--preflight-json")
+            .current_dir(root).creation_flags(CREATE_NO_WINDOW.0)
+            .output();
+        let Ok(output) = output else { continue };
+        if !output.status.success() {
+            last_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            continue;
+        }
+        if output.stdout.len() > 65536 {
+            return Err("The preflight response exceeded the desktop size limit.".into());
+        }
+        let report: Preflight = serde_json::from_slice(&output.stdout)
+            .map_err(|_| "The bootstrap returned invalid preflight data.".to_string())?;
+        if report.missing.iter().any(|item| item.code == "python") {
+            last_error = report.missing.iter().find(|item| item.code == "python")
+                .map(|item| item.message.clone()).unwrap_or_default();
+            continue;
+        }
+        return Ok(report);
+    }
+    Err(format!("{last_error} Install Python 3.10 or newer, then retry."))
+}
 pub fn connect() -> Result<Option<OwnedLauncher>, String> {
     let client = client()?;
     if matches!(health(&client)?, HealthState::Ready) { return Ok(None); }

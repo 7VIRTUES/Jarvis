@@ -14,7 +14,7 @@
         "description": "Only the bundled startup screen may request fixed Jarvis startup.",
         "local": true,
         "windows": ["startup"],
-        "permissions": ["allow-start-jarvis"]
+        "permissions": ["allow-inspect-startup", "allow-preparation-status", "allow-prepare-jarvis", "allow-start-jarvis"]
       }]
     }
   },
