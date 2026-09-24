@@ -30,7 +30,22 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    },
     "icon": [
       "icons/icon.ico"
     ],
