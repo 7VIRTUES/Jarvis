@@ -56,6 +56,7 @@ pub struct RuntimeLayout {
     pub resources: PathBuf,
     pub runtime: PathBuf,
     pub installed: bool,
+    pub local_data: PathBuf,
 }
 
 impl RuntimeLayout {
@@ -88,6 +89,7 @@ fn valid_resources(root: &std::path::Path) -> bool {
 pub fn resolve_layout(app: &tauri::AppHandle) -> Result<RuntimeLayout, String> {
     // Preserve repository-local operation even when Tauri has staged resources
     // alongside a development executable. Never search cwd or an environment path.
+    let local_data = app.path().local_data_dir().map_err(|e| e.to_string())?;
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     for ancestor in executable.ancestors().skip(1) {
         if ancestor.join(".git").exists()
@@ -96,6 +98,7 @@ pub fn resolve_layout(app: &tauri::AppHandle) -> Result<RuntimeLayout, String> {
         {
             return Ok(RuntimeLayout {
                 resources: ancestor.to_path_buf(), runtime: ancestor.to_path_buf(), installed: false,
+                local_data,
             });
         }
     }
@@ -119,7 +122,7 @@ pub fn resolve_layout(app: &tauri::AppHandle) -> Result<RuntimeLayout, String> {
             _ => {}
         }
     }
-    Ok(RuntimeLayout { resources, runtime, installed: true })
+    Ok(RuntimeLayout { resources, runtime, installed: true, local_data })
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -136,44 +139,115 @@ pub struct Preflight {
     pub runtime_active: bool,
 }
 
+fn path_executables(name: &str) -> Vec<PathBuf> {
+    std::env::var_os("PATH").map(|path| {
+        std::env::split_paths(&path).filter(|directory| directory.is_absolute())
+            .map(|directory| directory.join(name)).collect()
+    }).unwrap_or_default()
+}
+
+fn python_candidates(layout: &RuntimeLayout) -> Vec<(PathBuf, bool)> {
+    let mut candidates = vec![(layout.python(), false)];
+    candidates.extend(path_executables("python.exe").into_iter().map(|path| (path, false)));
+    candidates.extend(path_executables("py.exe").into_iter().map(|path| (path, true)));
+    // Winget's current-user Python install is discoverable immediately, even
+    // though this desktop process still has the PATH from before installation.
+    let user_python = layout.local_data.join("Programs/Python");
+    candidates.push((user_python.join("Python312/python.exe"), false));
+    candidates.push((user_python.join("Launcher/py.exe"), true));
+    if let Some(windows) = std::env::var_os("SystemRoot").map(PathBuf::from).filter(|path| path.is_absolute()) {
+        candidates.push((windows.join("py.exe"), true));
+    }
+    // Also reuse runtimes already installed by Python Install Manager directly,
+    // without invoking its WindowsApps aliases.
+    let mut roots = vec![user_python, layout.local_data.join("Python")];
+    for variable in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(path) = std::env::var_os(variable).map(PathBuf::from).filter(|path| path.is_absolute()) {
+            roots.push(path);
+        }
+    }
+    // Only immediate, conventionally named Python installation directories.
+    for root in roots {
+        if let Ok(entries) = std::fs::read_dir(root) {
+            let mut paths: Vec<_> = entries.flatten()
+                .filter(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase().starts_with("python"))
+                .map(|entry| entry.path().join("python.exe")).collect();
+            paths.sort();
+            candidates.extend(paths.into_iter().map(|path| (path, false)));
+        }
+    }
+    candidates
+}
+
+fn find_python(layout: &RuntimeLayout) -> Option<PathBuf> {
+    let mut seen = std::collections::HashSet::new();
+    for (program, launcher) in python_candidates(layout) {
+        if !program.is_absolute() || !program.is_file() || !seen.insert(program.clone()) {
+            continue;
+        }
+        // Do not invoke Store aliases or Python Install Manager: inspection must
+        // never open the Store or trigger automatic runtime installation.
+        if program.components().any(|part| part.as_os_str().to_string_lossy().eq_ignore_ascii_case("WindowsApps")) {
+            continue;
+        }
+        let mut command = Command::new(&program);
+        if launcher { command.arg("-3"); }
+        // Probe the version before loading bootstrap, which needs Python 3.10+.
+        // -S also prevents site customizations during this discovery probe.
+        let output = command.args(["-I", "-S", "-B", "-c",
+            "import json, sys; sys.exit(3) if sys.version_info < (3, 10) else print(json.dumps(sys.executable))"])
+            .current_dir(&layout.resources).env_clear().envs(layout.environment())
+            .env_remove("PYLAUNCHER_ALLOW_INSTALL").env_remove("PYLAUNCHER_ALWAYS_INSTALL")
+            .env("PYTHON_MANAGER_AUTOMATIC_INSTALL", "false")
+            .creation_flags(CREATE_NO_WINDOW.0).output();
+        let Ok(output) = output else { continue };
+        if !output.status.success() || output.stdout.len() > 32768 { continue; }
+        if let Ok(path) = serde_json::from_slice::<PathBuf>(&output.stdout) {
+            if path.is_absolute() && path.is_file() { return Some(path); }
+        }
+    }
+    None
+}
+
+pub fn winget(layout: &RuntimeLayout) -> Result<PathBuf, String> {
+    let mut candidates = vec![layout.local_data.join("Microsoft/WindowsApps/winget.exe")];
+    candidates.extend(path_executables("winget.exe"));
+    candidates.into_iter().find(|path| path.is_absolute() && path.is_file()).ok_or_else(||
+        "Python is missing and Windows Package Manager (winget) is unavailable. Install or update Microsoft's App Installer, then click Prepare Jarvis again; alternatively install Python 3.10+ for your user and click Check again. Jarvis will not use a fallback download URL.".into())
+}
+
 pub fn preflight(layout: &RuntimeLayout) -> Result<Preflight, String> {
     let root = &layout.resources;
     let script = root.join("scripts/jarvis_bootstrap.py");
     if !script.is_file() {
         return Err("The Jarvis bootstrap resource is missing.".into());
     }
-    let mut last_error = String::from("Python 3.10 or newer could not be launched.");
-    // Reuse the prepared interpreter first; fall back to system Python for setup.
-    let candidates = [
-        (layout.python(), &[][..]),
-        (PathBuf::from("python.exe"), &[][..]),
-        (PathBuf::from("py.exe"), &["-3"][..]),
-    ];
-    for (program, launcher_args) in candidates {
-        let output = Command::new(program)
-            .args(launcher_args)
-            .arg("-I").arg("-B").arg(&script).arg("--preflight-json")
-            .current_dir(root).env_clear().envs(layout.environment())
-            .creation_flags(CREATE_NO_WINDOW.0)
-            .output();
-        let Ok(output) = output else { continue };
-        if !output.status.success() {
-            last_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            continue;
-        }
-        if output.stdout.len() > 65536 {
-            return Err("The preflight response exceeded the desktop size limit.".into());
-        }
-        let report: Preflight = serde_json::from_slice(&output.stdout)
-            .map_err(|_| "The bootstrap returned invalid preflight data.".to_string())?;
-        if report.missing.iter().any(|item| item.code == "python") {
-            last_error = report.missing.iter().find(|item| item.code == "python")
-                .map(|item| item.message.clone()).unwrap_or_default();
-            continue;
-        }
-        return Ok(report);
+    let Some(python) = find_python(layout) else {
+        return Ok(Preflight {
+            ready: false, python_executable: PathBuf::new(), runtime_active: false,
+            missing: vec![MissingPrerequisite {
+                code: "python".into(),
+                message: "Compatible Python 3.10+ was not found. Click Prepare Jarvis to install Python 3.12 for your Windows user with Windows Package Manager. Remaining prerequisites will be checked after Python is available.".into(),
+            }],
+        });
+    };
+    let output = Command::new(&python)
+        .arg("-I").arg("-B").arg(&script).arg("--preflight-json")
+        .current_dir(root).env_clear().envs(layout.environment())
+        .creation_flags(CREATE_NO_WINDOW.0).output()
+        .map_err(|e| format!("Could not inspect prerequisites with the detected Python: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("Python was found, but prerequisite inspection failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()));
     }
-    Err(format!("{last_error} Install Python 3.10 or newer, then retry."))
+    if output.stdout.len() > 65536 {
+        return Err("The preflight response exceeded the desktop size limit.".into());
+    }
+    let mut report: Preflight = serde_json::from_slice(&output.stdout)
+        .map_err(|_| "The bootstrap returned invalid preflight data.".to_string())?;
+    // Use only the interpreter verified by discovery for subsequent processes.
+    report.python_executable = python;
+    Ok(report)
 }
 pub fn connect(app: &tauri::AppHandle) -> Result<Option<OwnedLauncher>, String> {
     let client = client()?;

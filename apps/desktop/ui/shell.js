@@ -54,10 +54,10 @@ async function inspect() {
       await launch();
     } else {
       const needsSetup = result.missing.some(item =>
-        ["venv", "venv_dependencies", "ollama", "generation_model", "embedding_model", "disk"].includes(item.code));
+        ["python", "venv", "venv_dependencies", "ollama", "generation_model", "embedding_model", "disk"].includes(item.code));
       heading.textContent = needsSetup ? "Prepare Jarvis" : "Jarvis needs attention";
       status.textContent = needsSetup
-        ? "These local prerequisites are missing. Preparation may create the Python environment, install Ollama, or download the listed models."
+        ? "Preparation may install Python 3.12 for your Windows user through Windows Package Manager, create the Python environment, install Ollama, and download required models. This requires internet access and accepts the package/source agreements. Nothing is installed until you click Prepare Jarvis."
         : "The local runtime could not be verified. Check its state and retry.";
       showMissing(result.missing);
       prepare.hidden = !needsSetup;

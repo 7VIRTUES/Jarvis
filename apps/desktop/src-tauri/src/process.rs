@@ -141,12 +141,30 @@ impl OwnedBootstrap {
         if !bootstrap.is_file() {
             return Err("The Jarvis bootstrap resource is missing.".into());
         }
-        let application = wide(python.as_os_str());
-        let mut command = wide(OsStr::new(&format!(
-            "\"{}\" -I -B -u \"{}\" {mode}",
-            python.display(), bootstrap.display(),
-        )));
-        let directory = wide(root.as_os_str());
+        let arguments = format!("-I -B -u \"{}\" {mode}", bootstrap.display());
+        let operation = if mode == "--desktop-runtime" { "Ollama runtime startup" } else { "Preparation" };
+        Self::spawn_command(layout, python, &arguments, operation)
+    }
+
+    // This entry point has no UI-supplied executable, arguments, package, or URL.
+    // Only prepare_jarvis may call it, after confirming Python is missing.
+    pub fn spawn_python_install(layout: &crate::runtime::RuntimeLayout) -> Result<Self, String> {
+        let winget = crate::runtime::winget(layout)?;
+        Self::spawn_command(layout, &winget,
+            "install --id Python.Python.3.12 --exact --source winget --scope user --silent --disable-interactivity --accept-package-agreements --accept-source-agreements",
+            "Python installation")
+    }
+
+    fn spawn_command(
+        layout: &crate::runtime::RuntimeLayout, program: &Path, arguments: &str,
+        operation: &'static str,
+    ) -> Result<Self, String> {
+        if !program.is_absolute() || !program.is_file() {
+            return Err(format!("The executable for {operation} is unavailable."));
+        }
+        let application = wide(program.as_os_str());
+        let mut command = wide(OsStr::new(&format!("\"{}\" {arguments}", program.display())));
+        let directory = wide(layout.resources.as_os_str());
         let environment = environment_block(layout);
         unsafe {
             let job = CreateJobObjectW(None, PCWSTR::null()).map_err(|e| e.to_string())?;
@@ -183,7 +201,7 @@ impl OwnedBootstrap {
                 PCWSTR(application.as_ptr()), Some(PWSTR(command.as_mut_ptr())),
                 None, None, true, CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
                 Some(environment.as_ptr().cast()), PCWSTR(directory.as_ptr()), &mut startup, &mut info,
-            ).map_err(|e| format!("Could not start the local bootstrap: {e}"))?;
+            ).map_err(|e| format!("Could not start {operation}: {e}"))?;
             drop(write_pipe);
             let process = OwnedHandle::from_raw_handle(info.hProcess.0);
             let thread = OwnedHandle::from_raw_handle(info.hThread.0);
@@ -195,7 +213,6 @@ impl OwnedBootstrap {
                 let _ = TerminateJobObject(handle(&job), 1);
                 return Err("Could not resume local preparation.".into());
             }
-            let operation = if mode == "--desktop-runtime" { "Ollama runtime startup" } else { "Preparation" };
             Ok(Self { job, process, output: Mutex::new(File::from(read_pipe)), operation })
         }
     }

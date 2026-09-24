@@ -111,6 +111,29 @@ fn preparation_status(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Re
     Ok(state.progress.clone())
 }
 
+fn run_preparation(
+    app: &tauri::AppHandle, progress: &str,
+    spawn: impl FnOnce() -> Result<process::OwnedBootstrap, String>,
+) -> Result<(), String> {
+    let child = {
+        let state = app.state::<Mutex<Lifecycle>>();
+        let mut state = state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?;
+        if state.exiting { return Err("Desktop is closing.".into()); }
+        state.progress = progress.into();
+        // Register ownership while holding the lifecycle lock so desktop exit
+        // cannot race an unregistered installer/bootstrap process.
+        let child = Arc::new(spawn()?);
+        state.preparation = Some(child.clone());
+        child
+    };
+    child.run(|message| {
+        let state = app.state::<Mutex<Lifecycle>>();
+        if let Ok(mut state) = state.lock() {
+            state.progress = message.to_string();
+        };
+    })
+}
+
 #[tauri::command]
 async fn prepare_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     startup_caller(&window)?;
@@ -130,24 +153,34 @@ async fn prepare_jarvis(app: tauri::AppHandle, window: tauri::WebviewWindow) -> 
             return Ok(());
         }
         let layout = runtime::resolve_layout(&worker_app)?;
-        let preflight = runtime::preflight(&layout)?;
+        let mut preflight = runtime::preflight(&layout)?;
         if preflight.ready { return Ok(()); }
-        let child = Arc::new(process::OwnedBootstrap::spawn_prepare(&layout, &preflight.python_executable)?);
-        {
-            let state = worker_app.state::<Mutex<Lifecycle>>();
-            let mut state = state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?;
-            if state.exiting {
-                child.terminate();
-                return Err("Desktop is closing.".into());
+        if preflight.missing.iter().any(|item| item.code == "python") {
+            // The only Python install path is this explicit Prepare Jarvis action.
+            if matches!(runtime::health(&client)?, runtime::HealthState::Ready) {
+                return Err("Another Jarvis instance started. Preparation stopped without changing it.".into());
             }
-            state.preparation = Some(child.clone());
+            run_preparation(&worker_app, "Installing Python 3.12 for your Windows user...",
+                || process::OwnedBootstrap::spawn_python_install(&layout))
+                .map_err(|error| format!("{error}\nIf installation failed, check your internet connection and Microsoft's App Installer, then retry Prepare Jarvis. You can also install Python 3.10+ for your user and click Check again."))?;
+            {
+                let state = worker_app.state::<Mutex<Lifecycle>>();
+                let mut state = state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?;
+                if state.exiting { return Err("Desktop is closing.".into()); }
+                state.preparation.take();
+                state.progress = "Locating Python and checking remaining prerequisites...".into();
+            }
+            if matches!(runtime::health(&client)?, runtime::HealthState::Ready) {
+                return Err("Another Jarvis instance started during Python installation. No instance was reconfigured.".into());
+            }
+            preflight = runtime::preflight(&layout)?;
+            if preflight.missing.iter().any(|item| item.code == "python") {
+                return Err("Python installation finished, but a compatible executable was not found. Check or repair the Python 3.12 current-user installation, then click Check again. If Python was installed in a custom location, restart Jarvis after adding it to PATH.".into());
+            }
         }
-        child.run(|message| {
-            let state = worker_app.state::<Mutex<Lifecycle>>();
-            if let Ok(mut state) = state.lock() {
-                state.progress = message.to_string();
-            }
-        })?;
+        if preflight.ready { return Ok(()); }
+        run_preparation(&worker_app, "Preparing the local Python environment and Ollama...",
+            || process::OwnedBootstrap::spawn_prepare(&layout, &preflight.python_executable))?;
         let state = worker_app.state::<Mutex<Lifecycle>>();
         if state.lock().map_err(|_| "Desktop lifecycle is unavailable.")?.exiting {
             return Err("Desktop is closing.".into());

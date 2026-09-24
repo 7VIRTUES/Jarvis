@@ -36,8 +36,10 @@
     ],
     "createUpdaterArtifacts": false,
     "windows": {
+      "bundleVCRuntime": true,
       "webviewInstallMode": {
-        "type": "skip"
+        "type": "embedBootstrapper",
+        "silent": true
       },
       "nsis": {
         "installMode": "currentUser",
