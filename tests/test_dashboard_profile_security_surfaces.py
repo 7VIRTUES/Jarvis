@@ -15,6 +15,11 @@ from jarvis_core.security_review_agent import SecurityReviewService
 def test_dashboard_profile_api_returns_safe_profile_summaries(tmp_path, monkeypatch):
     project = registered_project(tmp_path, monkeypatch)
     (project / "package.json").write_text('{"scripts":{"test":"node test.js"}}', encoding="utf-8")
+    monkeypatch.setattr(
+        app_module.project_profiles,
+        "_git_summary",
+        lambda root: {"isRepository": True, "branch": "main", "clean": False},
+    )
 
     profiles = app_module.dashboard_project_profiles()
 

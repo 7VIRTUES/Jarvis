@@ -76,23 +76,25 @@ def test_is_ollama_running_true(monkeypatch):
     mock_res = MagicMock()
     mock_res.status = 200
     mock_res.__enter__.return_value = mock_res
-    monkeypatch.setattr(bootstrap, "urlopen", lambda req, timeout=1.5: mock_res)
+    monkeypatch.setattr(bootstrap._LOCAL_OPENER, "open", lambda req, timeout=1.5: mock_res)
     assert bootstrap.is_ollama_running() is True
 
 
 def test_is_ollama_running_false(monkeypatch):
     def _raise(*args, **kwargs):
         raise OSError("Connection refused")
-    monkeypatch.setattr(bootstrap, "urlopen", _raise)
+    monkeypatch.setattr(bootstrap._LOCAL_OPENER, "open", _raise)
     assert bootstrap.is_ollama_running() is False
 
 
 def test_list_ollama_models(monkeypatch):
     mock_res = MagicMock()
     mock_res.status = 200
+    mock_res.read.return_value = json.dumps(
+        {"models": [{"name": "qwen3:8b"}, {"name": "nomic-embed-text:latest"}]}
+    ).encode("utf-8")
     mock_res.__enter__.return_value = mock_res
-    monkeypatch.setattr(bootstrap, "urlopen", lambda req, timeout=10.0: mock_res)
-    monkeypatch.setattr("json.load", lambda res: {"models": [{"name": "qwen3:8b"}, {"name": "nomic-embed-text:latest"}]})
+    monkeypatch.setattr(bootstrap._LOCAL_OPENER, "open", lambda req, timeout=10.0: mock_res)
 
     models = bootstrap.list_ollama_models()
     assert models == ["qwen3:8b", "nomic-embed-text:latest"]
@@ -263,14 +265,28 @@ def test_parse_args():
 
 
 def test_run_bootstrap_pipeline_check_only(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(bootstrap, "check_disk_space", lambda root: (True, "OK"))
-    monkeypatch.setattr(bootstrap, "ensure_virtualenv", lambda root: (True, "OK"))
+    venv_py = tmp_path / ".venv" / "Scripts" / "python.exe"
+    venv_py.parent.mkdir(parents=True, exist_ok=True)
+    venv_py.touch()
+
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_venv_python", lambda root: venv_py)
+    monkeypatch.setattr(bootstrap, "is_venv_complete", lambda root: True)
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: "C:\\Program Files\\Ollama\\ollama.exe")
     monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: False)
-    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: None)
-    monkeypatch.setattr(bootstrap, "is_winget_available", lambda: False)
 
     exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, check_only=True)
     assert exit_code == 0
+
+
+def test_run_bootstrap_pipeline_check_only_missing_prereqs(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(bootstrap, "validate_python_version", lambda: (True, "OK"))
+    monkeypatch.setattr(bootstrap, "find_venv_python", lambda root: tmp_path / "missing" / "python.exe")
+    monkeypatch.setattr(bootstrap, "find_ollama_binary", lambda: None)
+    monkeypatch.setattr(bootstrap, "is_ollama_running", lambda host=None, port=None: False)
+
+    exit_code = bootstrap.run_bootstrap_pipeline(root=tmp_path, check_only=True)
+    assert exit_code == 1
 
 
 def test_prepare_only_fails_when_generation_unavailable(monkeypatch, tmp_path: Path):

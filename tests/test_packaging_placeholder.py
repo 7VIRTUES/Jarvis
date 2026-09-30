@@ -66,13 +66,13 @@ def test_packaging_docs_exist_and_state_no_installer_is_produced():
     assert "manual local run remains the current path" in text
 
 
-def test_packaging_placeholder_does_not_add_executable_packaging_files():
-    forbidden = [
-        REPO_ROOT / "apps" / "desktop" / "package.json",
-        REPO_ROOT / "apps" / "desktop" / "src-tauri" / "tauri.conf.json",
-        REPO_ROOT / "apps" / "desktop" / "src-tauri" / "Cargo.toml",
-        REPO_ROOT / ".github" / "workflows" / "release.yml",
-    ]
+def test_packaging_configuration_exists_and_retains_safety_boundaries():
+    tauri_conf = REPO_ROOT / "apps" / "desktop" / "src-tauri" / "tauri.conf.json"
+    cargo_toml = REPO_ROOT / "apps" / "desktop" / "src-tauri" / "Cargo.toml"
 
-    for path in forbidden:
-        assert not path.exists()
+    assert tauri_conf.is_file()
+    assert cargo_toml.is_file()
+
+    # Confirms prohibited automated cloud release workflows and node dependencies remain absent
+    assert not (REPO_ROOT / ".github" / "workflows" / "release.yml").exists()
+    assert not (REPO_ROOT / "apps" / "desktop" / "package.json").exists()
