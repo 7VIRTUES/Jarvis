@@ -47,7 +47,8 @@ def repository_root() -> Path:
 
 def runtime_layout(root: Path):
     spec = importlib.util.spec_from_file_location(
-        "jarvis_desktop_layout", root / "apps" / "desktop" / "runtime_layout.py"
+        "jarvis_desktop_layout",
+        repository_root() / "apps" / "desktop" / "runtime_layout.py",
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
